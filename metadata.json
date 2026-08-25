@@ -1,0 +1,6 @@
+{
+  "name": "RALLY",
+  "description": "A Nigerian-first real-world community app where people can ASK, HELP, or JOIN.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
