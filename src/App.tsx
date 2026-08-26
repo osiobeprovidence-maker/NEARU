@@ -9,6 +9,7 @@ import AppShell from './layouts/AppShell';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LocationProvider } from './contexts/LocationContext';
 import Login from './pages/Login';
+import Landing from './pages/Landing';
 
 // Lazy load pages for now
 const Home = React.lazy(() => import('./pages/Home'));
@@ -47,7 +48,12 @@ const AppRoutes = () => {
   const { isLoggedIn } = useAuth();
   
   if (!isLoggedIn) {
-    return <Login />;
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Landing />} />
+      </Routes>
+    );
   }
 
   return (
