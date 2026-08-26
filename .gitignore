@@ -23,5 +23,17 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Capacitor native build artifacts
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/src/main/assets/public/
+android/capacitor-cordova-android-plugins/
+ios/App/Pods/
+ios/App/App/public/
+ios/DerivedData/
+ios/App/App/capacitor.config.json
+
 # Misc
 *.tsbuildinfo
