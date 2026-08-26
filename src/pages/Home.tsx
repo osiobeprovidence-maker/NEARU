@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AlertCircle, Heart, Users, Zap, Sparkles, Share2, Compass, MapPin } from 'lucide-react';
+import { AlertCircle, Heart, Users, Zap, Sparkles, Share2, Compass, MapPin, Bell, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { mockRallies } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
@@ -7,10 +7,21 @@ import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import AdCard from '../components/AdCard';
 
+const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
+
 export default function Home() {
   const [activeFilter, setActiveFilter] = useState('All');
   const { city, radius } = useLocation();
   const [isLoading, setIsLoading] = useState(true);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem(NOTIF_DISMISSED_KEY);
+    if (!dismissed && 'Notification' in window && Notification.permission === 'default') {
+      const timer = setTimeout(() => setShowNotifPrompt(true), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
@@ -22,6 +33,27 @@ export default function Home() {
 
   const openCreateModal = () => {
     window.dispatchEvent(new CustomEvent('open-create-rally'));
+  };
+
+  const handleEnableNotifications = async () => {
+    if ('Notification' in window) {
+      const result = await Notification.requestPermission();
+      if (result === 'granted') {
+        window.dispatchEvent(new CustomEvent('show-toast', {
+          detail: {
+            title: 'Notifications enabled!',
+            subtitle: 'You\'ll get alerted when someone rallies near you.'
+          }
+        }));
+      }
+    }
+    localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
+    setShowNotifPrompt(false);
+  };
+
+  const handleDismissNotif = () => {
+    localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
+    setShowNotifPrompt(false);
   };
 
   const handleInvite = async () => {
@@ -90,6 +122,43 @@ export default function Home() {
 
   return (
     <div className="w-full pt-4 md:pt-6">
+      {/* Notification Prompt */}
+      {showNotifPrompt && (
+        <div className="px-4 md:px-6 mb-4">
+          <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl p-4 flex items-start gap-3 shadow-lg shadow-indigo-500/20">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 mt-0.5">
+              <Bell className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-white text-sm">Stay in the loop</h4>
+              <p className="text-xs text-indigo-100 mt-0.5 leading-relaxed">
+                Get notified when someone rallies near you or responds to your post.
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={handleEnableNotifications}
+                  className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-50 active:scale-95 transition-all"
+                >
+                  Turn On
+                </button>
+                <button
+                  onClick={handleDismissNotif}
+                  className="px-3 py-2 text-indigo-100 text-xs font-bold hover:text-white transition-colors"
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={handleDismissNotif}
+              className="p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+            >
+              <X className="w-4 h-4 text-indigo-200" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Around You Feed */}
       <div className="px-0 md:px-6 pb-24 md:pb-6">
         <div className="px-6 md:px-0">
