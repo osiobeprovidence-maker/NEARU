@@ -1,30 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
   ArrowRight,
   Check,
   MapPin,
+  Mail,
+  Lock,
+  User as UserIcon,
+  KeyRound,
   ShieldCheck,
-  Zap,
-  Users,
-  Heart,
+  Shield,
+  Dumbbell,
   Music,
   Gamepad2,
-  Dumbbell,
   Coffee,
   Briefcase,
   GraduationCap,
   Palette,
   Camera,
   Compass,
+  Heart,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 type Step =
   | 'welcome'
-  | 'phone'
-  | 'otp'
+  | 'email'
+  | 'password'
+  | 'verify-email'
+  | 'totp-setup'
+  | 'totp-verify'
+  | 'username'
   | 'profile'
   | 'interests'
   | 'location'
@@ -43,48 +52,32 @@ const INTERESTS = [
   { id: 'fitness', label: 'Fitness & Health', icon: Heart, color: 'bg-pink-50 border-pink-200 text-pink-700' },
 ];
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 9;
 
 export default function Onboarding() {
-  const { sendOTP, updateUser } = useAuth();
+  const { register, updateUser, waitForEmailVerification, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [stepIndex, setStepIndex] = useState(0);
   const [direction, setDirection] = useState(1);
 
-  // Form state
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const [locationGranted, setLocationGranted] = useState(false);
 
-  const [otpError, setOtpError] = useState('');
-  const [otpConfirmation, setOtpConfirmation] = useState<{ confirm: (code: string) => Promise<void> } | null>(null);
-  const [isSendingOTP, setIsSendingOTP] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [totpSecret, setTotpSecret] = useState('');
+  const [totpQrCode, setTotpQrCode] = useState('');
+  const [totpToken, setTotpToken] = useState('');
 
-  function normalizeNigerianPhone(raw: string): string | null {
-    const cleaned = raw.replace(/[\s\-()+ ]/g, '');
-    if (/^234\d{10}$/.test(cleaned)) return cleaned;
-    if (/^0\d{10}$/.test(cleaned)) return '234' + cleaned.slice(1);
-    if (/^[789]\d{9}$/.test(cleaned)) return '234' + cleaned;
-    return null;
-  }
-
-  function formatPhoneDisplay(normalized: string): string {
-    const local = normalized.replace(/^234/, '');
-    return `+234 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
-  }
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   const goNext = () => {
     setDirection(1);
     setStepIndex((i) => i + 1);
-  };
-
-  const goBack = () => {
-    setDirection(-1);
-    setStepIndex((i) => Math.max(0, i - 1));
   };
 
   const navigateTo = (s: Step, idx: number) => {
@@ -93,66 +86,83 @@ export default function Onboarding() {
     setStep(s);
   };
 
-  // --- Step handlers ---
-
-  const handleSendOTP = async (e: React.FormEvent) => {
+  const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    setOtpError('');
-
-    const normalized = normalizeNigerianPhone(phone);
-    if (!normalized) {
-      setOtpError('Please enter a valid Nigerian phone number.');
+    setError('');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
-
-    setIsSendingOTP(true);
+    setIsLoading(true);
     try {
-      const confirmation = await sendOTP(normalized);
-      setOtpConfirmation(confirmation);
-      navigateTo('otp', 2);
+      await register(email, password);
+      navigateTo('verify-email', 3);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unable to send verification code. Please try again.';
-      setOtpError(msg);
-      console.error('OTP error:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to create account';
+      setError(msg.includes('already') ? 'An account with this email already exists.' : msg);
     } finally {
-      setIsSendingOTP(false);
+      setIsLoading(false);
     }
   };
 
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpError('');
-    setIsVerifying(true);
+  const handleCheckEmailVerified = async () => {
+    setIsLoading(true);
+    setError('');
     try {
-      await otpConfirmation?.confirm(otp);
-      navigateTo('profile', 3);
+      const verified = await waitForEmailVerification();
+      if (verified) {
+        setEmailVerified(true);
+        navigateTo('totp-setup', 4);
+      } else {
+        setError('Email not yet verified. Check your inbox and click the link.');
+      }
     } catch {
-      setOtpError('Invalid code. Try again.');
+      setError('Something went wrong. Please try again.');
     } finally {
-      setIsVerifying(false);
+      setIsLoading(false);
     }
   };
 
-  const handleResendOTP = async () => {
-    setOtpError('');
-    const normalized = normalizeNigerianPhone(phone);
-    if (!normalized) return;
-    setIsSendingOTP(true);
+  const handleSkipTOTP = () => {
+    navigateTo('username', 6);
+  };
+
+  const handleSetupTOTP = async () => {
+    setIsLoading(true);
+    setError('');
     try {
-      const confirmation = await sendOTP(normalized);
-      setOtpConfirmation(confirmation);
+      const result = await setupTOTP(email);
+      setTotpSecret(result.secret);
+      setTotpQrCode(result.qrCode);
+      navigateTo('totp-verify', 5);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unable to resend code. Please try again.';
-      setOtpError(msg);
+      setError('Failed to setup authenticator. You can skip this for now.');
     } finally {
-      setIsSendingOTP(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyTOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      await verifyTOTP(totpSecret, totpToken);
+      navigateTo('username', 6);
+    } catch {
+      setError('Invalid code. Check your authenticator app.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser({ name: `${firstName} ${lastName}`.trim() });
-    navigateTo('interests', 4);
+    if (!firstName.trim()) return;
+    const fullName = `${firstName} ${lastName}`.trim();
+    setDisplayName(fullName);
+    updateUser({ name: fullName });
+    navigateTo('interests', 7);
   };
 
   const toggleInterest = (id: string) => {
@@ -166,28 +176,38 @@ export default function Onboarding() {
       .map((id) => INTERESTS.find((i) => i.id === id)?.label)
       .filter(Boolean) as string[];
     updateUser({ interests: labels });
-    navigateTo('location', 5);
+    navigateTo('location', 8);
   };
 
   const handleLocationAllow = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         () => {
-          setLocationGranted(true);
-          setTimeout(() => navigateTo('done', 6), 600);
+          setTimeout(() => navigateTo('done', 9), 600);
         },
         () => {
-          setLocationGranted(true);
-          setTimeout(() => navigateTo('done', 6), 600);
+          setTimeout(() => navigateTo('done', 9), 600);
         }
       );
     } else {
-      setLocationGranted(true);
-      setTimeout(() => navigateTo('done', 6), 600);
+      setTimeout(() => navigateTo('done', 9), 600);
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    try {
+      await saveUserToConvex({
+        name: displayName || firstName,
+        username: email.split('@')[0].toLowerCase(),
+        email,
+        passwordHash: '',
+        totpSecret: totpSecret || undefined,
+        totpEnabled: !!totpSecret,
+        isEmailVerified: true,
+      });
+    } catch {
+      // user may already exist
+    }
     window.location.href = '/';
   };
 
@@ -196,8 +216,6 @@ export default function Onboarding() {
     center: { x: 0, opacity: 1 },
     exit: (d: number) => ({ x: d > 0 ? -80 : 80, opacity: 0 }),
   };
-
-  // --- Render helpers ---
 
   const ProgressBar = () => (
     <div className="flex items-center gap-1.5 px-5 pt-5">
@@ -220,8 +238,6 @@ export default function Onboarding() {
       <ArrowLeft className="w-5 h-5 text-zinc-700" />
     </button>
   );
-
-  // --- Step renders ---
 
   const renderWelcome = () => (
     <div className="flex flex-col items-center justify-center text-center px-6">
@@ -257,7 +273,7 @@ export default function Onboarding() {
         className="mt-10 w-full max-w-xs space-y-3"
       >
         <button
-          onClick={() => navigateTo('phone', 1)}
+          onClick={() => navigateTo('email', 1)}
           className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2"
         >
           Get Started
@@ -270,110 +286,275 @@ export default function Onboarding() {
     </div>
   );
 
-  const renderPhone = () => (
+  const renderEmail = () => (
     <div className="px-6 w-full max-w-md mx-auto">
       <BackButton onClick={() => navigateTo('welcome', 0)} />
       <div className="pt-16">
         <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
-          What's your number?
+          What's your email?
         </h2>
         <p className="mt-2 text-sm text-zinc-500 mb-8">
-          We'll send you a verification code via SMS.
+          We'll send you a verification link to confirm your email.
         </p>
-        <form onSubmit={handleSendOTP} className="space-y-5">
-          <div>
-            <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-4">
-                <span className="text-sm font-bold text-zinc-700 bg-zinc-100 px-2.5 py-1 rounded-lg">
-                  NG +234
-                </span>
-              </div>
-              <input
-                type="tel"
-                autoFocus
-                required
-                value={phone}
-                onChange={(e) => { setPhone(e.target.value); setOtpError(''); }}
-                className="block w-full pl-28 pr-4 py-4 sm:text-lg border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
-                placeholder="801 234 5678"
-              />
+        <form onSubmit={(e) => { e.preventDefault(); navigateTo('password', 2); }} className="space-y-5">
+          <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-4">
+              <Mail className="w-5 h-5 text-zinc-400" />
             </div>
+            <input
+              type="email"
+              autoFocus
+              required
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
+              className="block w-full pl-12 pr-4 py-4 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
+              placeholder="you@example.com"
+            />
           </div>
           <button
             type="submit"
-            disabled={phone.length < 10 || isSendingOTP}
+            disabled={!email.includes('@') || !email.includes('.')}
             className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
-            {isSendingOTP ? (
+            Continue <ArrowRight className="w-4 h-4" />
+          </button>
+        </form>
+        <p className="mt-4 text-center text-xs text-zinc-400">
+          Already have an account?{' '}
+          <a href="/login" className="font-bold text-indigo-600 hover:underline">Log in</a>
+        </p>
+      </div>
+    </div>
+  );
+
+  const renderPassword = () => (
+    <div className="px-6 w-full max-w-md mx-auto">
+      <BackButton onClick={() => navigateTo('email', 1)} />
+      <div className="pt-16">
+        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
+          Create a password
+        </h2>
+        <p className="mt-2 text-sm text-zinc-500 mb-8">
+          Use at least 6 characters with a mix of letters and numbers.
+        </p>
+        <form onSubmit={handleCreateAccount} className="space-y-5">
+          <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-4">
+              <Lock className="w-5 h-5 text-zinc-400" />
+            </div>
+            <input
+              type="password"
+              autoFocus
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
+              className="block w-full pl-12 pr-4 py-4 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
+              placeholder="Min. 6 characters"
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-rose-600 font-medium text-center">{error}</p>
+          )}
+          <button
+            type="submit"
+            disabled={password.length < 6 || isLoading}
+            className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              <>Continue <ArrowRight className="w-4 h-4" /></>
+              <>Create Account <ArrowRight className="w-4 h-4" /></>
             )}
           </button>
-          {otpError && (
-            <p className="text-sm text-rose-600 font-medium text-center">{otpError}</p>
+        </form>
+      </div>
+    </div>
+  );
+
+  const renderVerifyEmail = () => (
+    <div className="px-6 w-full max-w-md mx-auto flex flex-col items-center text-center">
+      <BackButton onClick={() => navigateTo('password', 2)} />
+      <div className="pt-20">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="w-20 h-20 rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-6"
+        >
+          <Mail className="w-9 h-9 text-indigo-600" />
+        </motion.div>
+        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
+          Check your inbox
+        </h2>
+        <p className="mt-3 text-sm text-zinc-500 max-w-xs mx-auto leading-relaxed">
+          We sent a verification link to<br />
+          <span className="font-bold text-zinc-900">{email}</span>
+        </p>
+        <div className="mt-8 space-y-3 w-full max-w-xs mx-auto">
+          <button
+            onClick={handleCheckEmailVerified}
+            disabled={isLoading}
+            className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>I've Verified <ArrowRight className="w-4 h-4" /></>
+            )}
+          </button>
+          <button
+            onClick={handleCheckEmailVerified}
+            className="w-full py-3.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors flex items-center justify-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" /> Refresh Status
+          </button>
+        </div>
+        {error && (
+          <p className="mt-4 text-sm text-rose-600 font-medium text-center">{error}</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderTOTPSetup = () => (
+    <div className="px-6 w-full max-w-md mx-auto flex flex-col items-center text-center">
+      <BackButton onClick={() => navigateTo('verify-email', 3)} />
+      <div className="pt-16">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="w-20 h-20 rounded-3xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-6"
+        >
+          <Shield className="w-9 h-9 text-emerald-600" />
+        </motion.div>
+        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
+          Secure your account
+        </h2>
+        <p className="mt-3 text-sm text-zinc-500 max-w-xs mx-auto leading-relaxed">
+          Set up Google Authenticator for an extra layer of security. You can skip this and add it later in settings.
+        </p>
+        <div className="mt-8 space-y-3 w-full max-w-xs mx-auto">
+          <button
+            onClick={handleSetupTOTP}
+            disabled={isLoading}
+            className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <ShieldCheck className="w-4 h-4" /> Set Up Authenticator
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleSkipTOTP}
+            className="w-full py-3.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
+          >
+            Skip for now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTOTPVerify = () => (
+    <div className="px-6 w-full max-w-md mx-auto">
+      <BackButton onClick={() => navigateTo('totp-setup', 4)} />
+      <div className="pt-16">
+        <div className="flex flex-col items-center mb-8">
+          {totpQrCode && (
+            <img
+              src={totpQrCode}
+              alt="Scan with Google Authenticator"
+              className="w-48 h-48 rounded-2xl border border-zinc-200 mb-4"
+            />
+          )}
+          <p className="text-xs text-zinc-500 max-w-[250px]">
+            Open Google Authenticator and scan this code
+          </p>
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight text-center">
+          Enter the 6-digit code
+        </h2>
+        <p className="mt-2 text-sm text-zinc-500 mb-8 text-center">
+          Enter the code shown in your authenticator app.
+        </p>
+        <form onSubmit={handleVerifyTOTP} className="space-y-5">
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            autoFocus
+            required
+            value={totpToken}
+            onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, ''))}
+            className="block w-full text-center tracking-[0.5em] text-2xl font-bold py-4 border-0 bg-zinc-100 rounded-2xl focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all"
+            placeholder="------"
+          />
+          <button
+            type="submit"
+            disabled={totpToken.length < 6 || isLoading}
+            className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>Verify & Continue <ArrowRight className="w-4 h-4" /></>
+            )}
+          </button>
+          {error && (
+            <p className="text-sm text-rose-600 font-medium text-center">{error}</p>
           )}
         </form>
       </div>
     </div>
   );
 
-  const renderOTP = () => {
-    const normalized = normalizeNigerianPhone(phone);
-    const displayPhone = normalized ? formatPhoneDisplay(normalized) : `+234 ${phone}`;
-
-    return (
-      <div className="px-6 w-full max-w-md mx-auto">
-        <BackButton onClick={() => navigateTo('phone', 1)} />
-        <div className="pt-16">
-          <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
-            Verify your number
-          </h2>
-          <p className="mt-2 text-sm text-zinc-500 mb-8">
-            We sent a verification code to<br />
-            <span className="font-bold text-zinc-900">{displayPhone}</span>
-          </p>
-          <form onSubmit={handleVerifyOTP} className="space-y-5">
+  const renderUsername = () => (
+    <div className="px-6 w-full max-w-md mx-auto">
+      <BackButton onClick={() => navigateTo('totp-setup', 4)} />
+      <div className="pt-16">
+        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
+          Choose a username
+        </h2>
+        <p className="mt-2 text-sm text-zinc-500 mb-8">
+          This is how people will find you on RALLY.
+        </p>
+        <form onSubmit={(e) => { e.preventDefault(); navigateTo('profile', 7); }} className="space-y-5">
+          <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-4">
+              <span className="text-sm font-bold text-zinc-400">@</span>
+            </div>
             <input
               type="text"
-              inputMode="numeric"
-              maxLength={6}
               autoFocus
               required
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-              className="block w-full text-center tracking-[0.5em] text-2xl font-bold py-4 border-0 bg-zinc-100 rounded-2xl focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all"
-              placeholder="------"
+              minLength={3}
+              maxLength={20}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              className="block w-full pl-10 pr-4 py-4 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
+              placeholder="yourusername"
             />
-            <button
-              type="submit"
-              disabled={otp.length < 6 || isVerifying}
-              className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            >
-              {isVerifying ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>Verify <ArrowRight className="w-4 h-4" /></>
-              )}
-            </button>
-            {otpError && (
-              <p className="text-sm text-rose-600 font-medium text-center">{otpError}</p>
-            )}
-          </form>
+          </div>
           <button
-            onClick={handleResendOTP}
-            className="mt-4 w-full text-center text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors py-2"
+            type="submit"
+            disabled={displayName.length < 3}
+            className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
-            Didn't receive a code? Resend
+            Continue <ArrowRight className="w-4 h-4" />
           </button>
-        </div>
+        </form>
       </div>
-    );
-  };
+    </div>
+  );
 
   const renderProfile = () => (
     <div className="px-6 w-full max-w-md mx-auto">
-      <BackButton onClick={() => navigateTo('otp', 2)} />
+      <BackButton onClick={() => navigateTo('username', 6)} />
       <div className="pt-16">
         <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
           Tell us your name
@@ -401,7 +582,7 @@ export default function Onboarding() {
           />
           <button
             type="submit"
-            disabled={!firstName || !lastName}
+            disabled={!firstName.trim()}
             className="w-full mt-2 py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             Continue <ArrowRight className="w-4 h-4" />
@@ -413,7 +594,7 @@ export default function Onboarding() {
 
   const renderInterests = () => (
     <div className="px-6 w-full max-w-md mx-auto">
-      <BackButton onClick={() => navigateTo('profile', 3)} />
+      <BackButton onClick={() => navigateTo('profile', 7)} />
       <div className="pt-16">
         <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
           Pick your interests
@@ -489,14 +670,10 @@ export default function Onboarding() {
             onClick={handleLocationAllow}
             className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2"
           >
-            {locationGranted ? (
-              <><Check className="w-4 h-4" /> Location enabled</>
-            ) : (
-              <><MapPin className="w-4 h-4" /> Allow Location</>
-            )}
+            <MapPin className="w-4 h-4" /> Allow Location
           </button>
           <button
-            onClick={() => navigateTo('done', 6)}
+            onClick={() => navigateTo('done', 9)}
             className="w-full py-3.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
           >
             Skip for now
@@ -552,8 +729,12 @@ export default function Onboarding() {
 
   const steps: Record<Step, { render: () => React.ReactNode }> = {
     welcome: { render: renderWelcome },
-    phone: { render: renderPhone },
-    otp: { render: renderOTP },
+    email: { render: renderEmail },
+    password: { render: renderPassword },
+    'verify-email': { render: renderVerifyEmail },
+    'totp-setup': { render: renderTOTPSetup },
+    'totp-verify': { render: renderTOTPVerify },
+    username: { render: renderUsername },
     profile: { render: renderProfile },
     interests: { render: renderInterests },
     location: { render: renderLocation },

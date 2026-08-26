@@ -8,8 +8,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppShell from './layouts/AppShell';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LocationProvider } from './contexts/LocationContext';
-import Login from './pages/Login';
 import Landing from './pages/Landing';
+import LoginPage from './pages/LoginPage';
 import Onboarding from './pages/Onboarding';
 
 // Lazy load pages for now
@@ -59,7 +59,8 @@ const AppRoutes = () => {
   if (!isLoggedIn) {
     return (
       <Routes>
-        <Route path="/login" element={<Onboarding />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route path="*" element={<Landing />} />
       </Routes>
     );

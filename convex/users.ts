@@ -19,6 +19,17 @@ export const getByUsername = query({
   },
 });
 
+export const getByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const users = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), args.email))
+      .collect();
+    return users[0] || null;
+  },
+});
+
 export const create = mutation({
   args: {
     name: v.string(),
@@ -28,6 +39,8 @@ export const create = mutation({
     phone: v.optional(v.string()),
     isNINVerified: v.boolean(),
     isPhoneVerified: v.boolean(),
+    isEmailVerified: v.optional(v.boolean()),
+    passwordHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await ctx.db.insert("users", {
@@ -38,6 +51,23 @@ export const create = mutation({
       rating: 0,
     });
     return userId;
+  },
+});
+
+export const updateAuth = mutation({
+  args: {
+    userId: v.id("users"),
+    passwordHash: v.optional(v.string()),
+    totpSecret: v.optional(v.string()),
+    totpEnabled: v.optional(v.boolean()),
+    isEmailVerified: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { userId, ...fields } = args;
+    const filtered = Object.fromEntries(
+      Object.entries(fields).filter(([, v]) => v !== undefined)
+    );
+    await ctx.db.patch(userId, filtered);
   },
 });
 

@@ -1,22 +1,36 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, PrivacySettings, NotificationSettings, AppSettings, TrustedContact, BlockedUser } from '../types';
 import { currentUser as initialCurrentUser } from '../data/mock';
-import { auth } from '../lib/firebase';
+import {
+  auth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  reload,
+} from '../lib/firebase';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-
-interface OtpConfirmation {
-  confirm: (code: string) => Promise<void>;
-}
 
 interface AuthContextType {
   isLoggedIn: boolean;
   isAuthLoading: boolean;
   user: User;
   firebaseUser: FirebaseUser | null;
-  sendOTP: (phoneNumber: string) => Promise<OtpConfirmation>;
-  login: () => void;
+  register: (email: string, password: string) => Promise<void>;
+  login: (emailOrUsername: string, password: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  waitForEmailVerification: () => Promise<boolean>;
+  setupTOTP: (email: string) => Promise<{ secret: string; qrCode: string }>;
+  verifyTOTP: (secret: string, token: string) => Promise<boolean>;
+  saveUserToConvex: (data: {
+    name: string;
+    username: string;
+    email: string;
+    passwordHash: string;
+    totpSecret?: string;
+    totpEnabled?: boolean;
+    isEmailVerified: boolean;
+  }) => Promise<string>;
   verifyNIN: (nin: string) => Promise<boolean>;
   updatePrivacySettings: (settings: Partial<PrivacySettings>) => void;
   updateNotificationSettings: (settings: Partial<NotificationSettings>) => void;
@@ -93,10 +107,14 @@ const AuthContext = createContext<AuthContextType>({
   isAuthLoading: true,
   user: initialUserState,
   firebaseUser: null,
-  sendOTP: async () => ({ confirm: async () => {} }),
-  login: () => {},
+  register: async () => {},
+  login: async () => {},
   logout: () => {},
   updateUser: () => {},
+  waitForEmailVerification: async () => false,
+  setupTOTP: async () => ({ secret: '', qrCode: '' }),
+  verifyTOTP: async () => false,
+  saveUserToConvex: async () => '',
   verifyNIN: async () => true,
   updatePrivacySettings: () => {},
   updateNotificationSettings: () => {},
@@ -142,26 +160,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  const sendOTP = async (phoneNumber: string): Promise<OtpConfirmation> => {
-    const res = await fetch('/api/send-otp', {
+  const register = async (email: string, password: string) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    await sendEmailVerification(cred.user);
+  };
+
+  const waitForEmailVerification = async (): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    let attempts = 0;
+    while (attempts < 60) {
+      await reload(auth.currentUser);
+      if (auth.currentUser.emailVerified) return true;
+      await new Promise((r) => setTimeout(r, 2000));
+      attempts++;
+    }
+    return false;
+  };
+
+  const setupTOTP = async (email: string) => {
+    const res = await fetch('/api/totp-setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: phoneNumber }),
+      body: JSON.stringify({ email }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to send code');
+    if (!res.ok) throw new Error(data.error || 'Failed to setup TOTP');
+    return data;
+  };
 
-    return {
-      confirm: async (code: string) => {
-        const verifyRes = await fetch('/api/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pinId: data.pinId, pin: code }),
-        });
-        const verifyData = await verifyRes.json();
-        if (!verifyRes.ok) throw new Error(verifyData.error || 'Invalid code');
-      },
-    };
+  const verifyTOTP = async (secret: string, token: string) => {
+    const res = await fetch('/api/totp-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, token }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid code');
+    return data.valid;
+  };
+
+  const saveUserToConvex = async (data: {
+    name: string;
+    username: string;
+    email: string;
+    passwordHash: string;
+    totpSecret?: string;
+    totpEnabled?: boolean;
+    isEmailVerified: boolean;
+  }) => {
+    const res = await fetch('/api/save-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to save user');
+    return result.userId;
+  };
+
+  const login = async (emailOrUsername: string, password: string) => {
+    let email = emailOrUsername;
+    if (!emailOrUsername.includes('@')) {
+      const res = await fetch('/api/login-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: emailOrUsername }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.email) throw new Error('Username not found');
+      email = data.email;
+    }
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
@@ -265,10 +334,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthLoading,
         user,
         firebaseUser,
-        sendOTP,
-        login: () => {},
+        register,
+        login,
         logout,
         updateUser,
+        waitForEmailVerification,
+        setupTOTP,
+        verifyTOTP,
+        saveUserToConvex,
         verifyNIN,
         updatePrivacySettings,
         updateNotificationSettings,

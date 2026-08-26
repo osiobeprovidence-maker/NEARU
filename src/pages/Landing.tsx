@@ -24,6 +24,10 @@ const stagger = {
 
 export default function Landing() {
   const handleGetStarted = () => {
+    window.location.href = '/onboarding';
+  };
+
+  const handleLogin = () => {
     window.location.href = '/login';
   };
 
@@ -38,12 +42,20 @@ export default function Landing() {
             </div>
             <span className="font-black text-xl tracking-tighter text-zinc-900">RALLY</span>
           </div>
-          <button
-            onClick={handleGetStarted}
-            className="px-5 py-2 bg-zinc-900 text-white text-sm font-bold rounded-full hover:bg-zinc-800 active:scale-95 transition-all"
-          >
-            Get Started
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleLogin}
+              className="px-4 py-2 text-sm font-bold text-zinc-600 hover:text-zinc-900 transition-colors"
+            >
+              Log In
+            </button>
+            <button
+              onClick={handleGetStarted}
+              className="px-5 py-2 bg-zinc-900 text-white text-sm font-bold rounded-full hover:bg-zinc-800 active:scale-95 transition-all"
+            >
+              Get Started
+            </button>
+          </div>
         </div>
       </nav>
 

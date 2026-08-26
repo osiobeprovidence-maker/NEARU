@@ -14,6 +14,10 @@ export default defineSchema({
     interests: v.optional(v.array(v.string())),
     isNINVerified: v.boolean(),
     isPhoneVerified: v.boolean(),
+    isEmailVerified: v.optional(v.boolean()),
+    passwordHash: v.optional(v.string()),
+    totpSecret: v.optional(v.string()),
+    totpEnabled: v.optional(v.boolean()),
     badges: v.optional(v.array(v.string())),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -88,7 +92,7 @@ export default defineSchema({
         })
       )
     ),
-  }).index("by_username", ["username"]),
+  }).index("by_username", ["username"]).index("by_email", ["email"]),
 
   rallies: defineTable({
     type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN")),
