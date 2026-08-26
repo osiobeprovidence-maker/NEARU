@@ -1,32 +1,27 @@
 const TERMII_BASE_URL = process.env.TERMII_BASE_URL || "https://v4.api.termii.com";
 const TERMII_API_KEY = process.env.TERMII_API_KEY;
 
-function normalizeNigerianPhone(input: string): string | null {
+function normalizeNigerianPhone(input) {
   const cleaned = input.replace(/[\s\-()+ ]/g, "");
-
   if (/^234\d{10}$/.test(cleaned)) return cleaned;
   if (/^0\d{10}$/.test(cleaned)) return "234" + cleaned.slice(1);
   if (/^[789]\d{9}$/.test(cleaned)) return "234" + cleaned;
-
   return null;
 }
 
-function readBody(req: any): Promise<any> {
+function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk: string) => (body += chunk));
+    req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
-      try {
-        resolve(JSON.parse(body));
-      } catch {
-        reject(new Error("Invalid JSON"));
-      }
+      try { resolve(JSON.parse(body)); }
+      catch { reject(new Error("Invalid JSON")); }
     });
     req.on("error", reject);
   });
 }
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -36,7 +31,14 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: "SMS service is not configured" });
   }
 
-  const { phone } = await readBody(req);
+  let phone;
+  try {
+    const body = await readBody(req);
+    phone = body.phone;
+  } catch {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+
   if (!phone || typeof phone !== "string") {
     return res.status(400).json({ error: "Phone number is required" });
   }
@@ -65,19 +67,18 @@ export default async function handler(req: any, res: any) {
     });
 
     const data = await response.json();
-    console.error("Termii response:", response.status, JSON.stringify(data));
+    console.log("Termii send response:", response.status, JSON.stringify(data));
 
-    if (!response.ok || (data.smsStatus && data.smsStatus !== "Message Sent") || data.error) {
+    if (!response.ok || data.error) {
       if (response.status === 429) {
         return res.status(429).json({ error: data.message || "Too many attempts. Please wait before trying again." });
       }
-      const msg = data.message || data.smsStatus || "Unable to send verification code. Please try again.";
-      return res.status(502).json({ error: msg });
+      return res.status(502).json({ error: data.message || "Unable to send verification code. Please try again." });
     }
 
     return res.status(200).json({ ok: true, phone: normalized, pinId: data.pinId || data.pin_id });
   } catch (err) {
-    console.error("OTP send network error:", err);
+    console.error("OTP send error:", err);
     return res.status(502).json({ error: "Network error. Please try again." });
   }
-}
+};

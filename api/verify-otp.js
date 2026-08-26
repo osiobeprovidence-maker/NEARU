@@ -1,22 +1,19 @@
-const TERMII_BASE_URL = process.env.TERMII_BASE_URL || "https://api.ng.termii.com";
+const TERMII_BASE_URL = process.env.TERMII_BASE_URL || "https://v4.api.termii.com";
 const TERMII_API_KEY = process.env.TERMII_API_KEY;
 
-function readBody(req: any): Promise<any> {
+function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk: string) => (body += chunk));
+    req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
-      try {
-        resolve(JSON.parse(body));
-      } catch {
-        reject(new Error("Invalid JSON"));
-      }
+      try { resolve(JSON.parse(body)); }
+      catch { reject(new Error("Invalid JSON")); }
     });
     req.on("error", reject);
   });
 }
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -26,7 +23,15 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: "SMS service is not configured" });
   }
 
-  const { pinId, pin } = await readBody(req);
+  let pinId, pin;
+  try {
+    const body = await readBody(req);
+    pinId = body.pinId;
+    pin = body.pin;
+  } catch {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+
   if (!pinId || !pin || typeof pinId !== "string" || typeof pin !== "string") {
     return res.status(400).json({ error: "Verification ID and code are required" });
   }
@@ -47,15 +52,15 @@ export default async function handler(req: any, res: any) {
     });
 
     const data = await response.json();
+    console.log("Termii verify response:", response.status, JSON.stringify(data));
 
     if (!response.ok || data.verified !== "True") {
-      console.error("Termii verify error:", JSON.stringify(data));
-      return res.status(400).json({ error: "Invalid verification code. Please try again." });
+      return res.status(400).json({ error: data.message || "Invalid verification code. Please try again." });
     }
 
     return res.status(200).json({ ok: true, phone: data.msisdn });
   } catch (err) {
-    console.error("OTP verify network error:", err);
+    console.error("OTP verify error:", err);
     return res.status(502).json({ error: "Network error. Please try again." });
   }
-}
+};
