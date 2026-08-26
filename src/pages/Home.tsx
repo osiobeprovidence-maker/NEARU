@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AlertCircle, Heart, Users, Sparkles, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, RefreshCw, Settings } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { cn } from '../lib/utils';
-import { mockRallies } from '../data/mock';
+import { mockRallies, mockUsers } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
 import { haversineDistance, formatDistance, GeoPoint } from '../lib/geo';
+import { Rally } from '../types';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import AdCard from '../components/AdCard';
@@ -28,6 +31,8 @@ export default function Home() {
   } = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
+  const convexRallies = useQuery(api.rallies.list);
 
   useEffect(() => {
     const dismissed = localStorage.getItem(NOTIF_DISMISSED_KEY);
@@ -123,13 +128,38 @@ export default function Home() {
     [position]
   );
 
+  const allRallies: Rally[] = useMemo(() => {
+    if (convexRallies && convexRallies.length > 0) {
+      return convexRallies.map((r) => ({
+        id: r._id,
+        type: r.type,
+        title: r.title,
+        description: r.description,
+        distance: 0,
+        time: r.time,
+        peopleNeeded: r.peopleNeeded,
+        peopleInterested: r.peopleInterested,
+        isPaid: r.isPaid,
+        price: r.price,
+        creator: mockUsers.david,
+        status: r.status,
+        createdAt: new Date(r.createdAt).toISOString(),
+        city: r.city,
+        locationLabel: r.locationLabel,
+        rallyLatitude: r.rallyLatitude,
+        rallyLongitude: r.rallyLongitude,
+      }));
+    }
+    return mockRallies;
+  }, [convexRallies]);
+
   const nearbyRallies = useMemo(() => {
     if (!hasLocation) return [];
 
-    return mockRallies
+    return allRallies
       .map((rally) => {
         const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
-        return { ... rally, computedDistance: dist };
+        return { ...rally, computedDistance: dist };
       })
       .filter((rally) => {
         if (rally.computedDistance === null) return false;
@@ -144,10 +174,10 @@ export default function Home() {
         return matchesFilter;
       })
       .sort((a, b) => (a.computedDistance ?? Infinity) - (b.computedDistance ?? Infinity));
-  }, [hasLocation, radiusKm, activeFilter, computeDistance]);
+  }, [hasLocation, radiusKm, activeFilter, computeDistance, allRallies]);
 
   const buzzingRallies = useMemo(() => {
-    return mockRallies
+    return allRallies
       .filter((rally) => {
         const matchesFilter =
           activeFilter === 'All' ||
@@ -160,7 +190,7 @@ export default function Home() {
         const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
         return { ...rally, computedDistance: dist };
       });
-  }, [activeFilter, computeDistance]);
+  }, [activeFilter, computeDistance, allRallies]);
 
   return (
     <div className="w-full pt-4 md:pt-6">

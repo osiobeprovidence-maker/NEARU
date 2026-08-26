@@ -94,8 +94,8 @@ export default function LocationSettings() {
               </div>
 
               {position && !isManual && (
-                <div className="text-xs text-zinc-400 font-mono mt-2 pt-2 border-t border-zinc-200">
-                  {position.latitude.toFixed(6)}, {position.longitude.toFixed(6)}
+                <div className="text-xs text-zinc-400 mt-2 pt-2 border-t border-zinc-200">
+                  <span>Updated {Math.round((Date.now() - position.capturedAt) / 60000)}m ago</span>
                 </div>
               )}
             </div>

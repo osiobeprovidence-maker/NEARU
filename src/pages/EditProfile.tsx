@@ -1,7 +1,10 @@
 import React, { useState, useRef } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from '../contexts/LocationContext';
 import { useNavigate } from 'react-router-dom';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { 
   User, 
   Mail, 
@@ -62,6 +65,8 @@ const NIGERIAN_CITIES = [
 
 export default function EditProfile() {
   const { user, updateUser } = useAuth();
+  const { position, geoState } = useLocation();
+  const updateUserMutation = useMutation(api.users.update);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,7 +103,7 @@ export default function EditProfile() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     updateUser({
       name,
@@ -112,6 +117,24 @@ export default function EditProfile() {
       birthday,
       interests,
     });
+
+    const convexUserId = localStorage.getItem('rally_convex_user_id');
+    if (convexUserId && convexUserId !== 'local') {
+      try {
+        await updateUserMutation({
+          userId: convexUserId as any,
+          name,
+          bio: bio || undefined,
+          location: location || undefined,
+          locationLatitude: position?.latitude,
+          locationLongitude: position?.longitude,
+          locationAccuracy: position?.accuracy,
+          locationUpdatedAt: position?.capturedAt,
+        });
+      } catch {
+        // Convex save is best-effort; localStorage already updated
+      }
+    }
 
     setIsSaved(true);
     setTimeout(() => {

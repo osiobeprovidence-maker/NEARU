@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign } from 'lucide-react';
+import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign, Loader2 } from 'lucide-react';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { ActivityType } from '../types';
 import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CreateRallyModalProps {
   isOpen: boolean;
@@ -17,8 +20,11 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
   const [description, setDescription] = useState('');
   const [isPaid, setIsPaid] = useState<boolean | null>(null);
   const [price, setPrice] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
 
   const { city, locationLabel, position, geoState } = useLocation();
+  const { firebaseUser } = useAuth();
+  const createRally = useMutation(api.rallies.create);
 
   const rallyLocation = city || locationLabel || 'Unknown location';
   const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
@@ -32,15 +38,49 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
     onClose();
   };
 
-  const handlePost = () => {
-    onCreated();
-    setTimeout(() => {
-      setStep(1);
-      setType(null);
-      setDescription('');
-      setIsPaid(null);
-      setPrice('');
-    }, 500);
+  const handlePost = async () => {
+    if (!type || !description || isPaid === null) return;
+    setIsPosting(true);
+    try {
+      const convexUserId = localStorage.getItem('rally_convex_user_id');
+      if (!convexUserId || convexUserId === 'local') {
+        throw new Error('Please complete onboarding first');
+      }
+
+      const title = description.split('\n')[0].slice(0, 80) || `${type} RALLY`;
+
+      await createRally({
+        type,
+        title,
+        description,
+        distance: 0,
+        time: 'Soon',
+        peopleNeeded: 1,
+        isPaid: isPaid,
+        price: isPaid && price ? parseInt(price, 10) : undefined,
+        creatorId: convexUserId as any,
+        city: city || undefined,
+        locationLabel: rallyLocation,
+        rallyLatitude: position?.latitude,
+        rallyLongitude: position?.longitude,
+      });
+
+      onCreated();
+      setTimeout(() => {
+        setStep(1);
+        setType(null);
+        setDescription('');
+        setIsPaid(null);
+        setPrice('');
+      }, 500);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to post';
+      window.dispatchEvent(new CustomEvent('show-toast', {
+        detail: { title: 'Could not post RALLY', subtitle: msg }
+      }));
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   const typeConfig = {
@@ -205,10 +245,17 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
               <div className="p-6 border-t border-zinc-100 bg-white">
                 <button
                   onClick={handlePost}
-                  disabled={!description || isPaid === null || (isPaid && !price)}
-                  className="w-full py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all"
+                  disabled={!description || isPaid === null || (isPaid && !price) || isPosting}
+                  className="w-full py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
-                  POST RALLY
+                  {isPosting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    'POST RALLY'
+                  )}
                 </button>
               </div>
             )}
