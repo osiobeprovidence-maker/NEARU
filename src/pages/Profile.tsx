@@ -72,15 +72,15 @@ export default function Profile() {
         <div className="py-4 sm:py-5 px-4 bg-zinc-50/50">
           <div className="grid grid-cols-3 divide-x divide-zinc-200/70 text-center max-w-md mx-auto">
             <div className="px-2">
-              <div className="text-xl sm:text-2xl font-black text-zinc-900">{user.stats?.rallies ?? 24}</div>
+              <div className="text-xl sm:text-2xl font-black text-zinc-900">{user.stats?.rallies ?? 0}</div>
               <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Rallys</div>
             </div>
             <div className="px-2">
-              <div className="text-xl sm:text-2xl font-black text-zinc-900">{user.stats?.completed ?? 18}</div>
+              <div className="text-xl sm:text-2xl font-black text-zinc-900">{user.stats?.completed ?? 0}</div>
               <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Completed</div>
             </div>
             <div className="px-2">
-              <div className="text-xl sm:text-2xl font-black text-amber-500">{user.stats?.rating ?? 4.9}</div>
+              <div className="text-xl sm:text-2xl font-black text-amber-500">{user.stats?.rating ?? '—'}</div>
               <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">Rating</div>
             </div>
           </div>

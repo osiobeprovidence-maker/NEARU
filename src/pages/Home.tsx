@@ -5,6 +5,7 @@ import { mockRallies } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
+import AdCard from '../components/AdCard';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
 
@@ -249,6 +250,9 @@ export default function Home() {
               CREATE A RALLY
             </button>
           </div>
+
+          {/* Advertisement Segment */}
+          <AdCard />
 
           {/* Dynamic Feed Section */}
           {isLoading ? (
