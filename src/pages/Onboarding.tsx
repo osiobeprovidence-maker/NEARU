@@ -64,6 +64,19 @@ export default function Onboarding() {
   const [isSendingOTP, setIsSendingOTP] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
+  function normalizeNigerianPhone(raw: string): string | null {
+    const cleaned = raw.replace(/[\s\-()+ ]/g, '');
+    if (/^234\d{10}$/.test(cleaned)) return cleaned;
+    if (/^0\d{10}$/.test(cleaned)) return '234' + cleaned.slice(1);
+    if (/^[789]\d{9}$/.test(cleaned)) return '234' + cleaned;
+    return null;
+  }
+
+  function formatPhoneDisplay(normalized: string): string {
+    const local = normalized.replace(/^234/, '');
+    return `+234 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
+  }
+
   const goNext = () => {
     setDirection(1);
     setStepIndex((i) => i + 1);
@@ -85,14 +98,21 @@ export default function Onboarding() {
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setOtpError('');
+
+    const normalized = normalizeNigerianPhone(phone);
+    if (!normalized) {
+      setOtpError('Please enter a valid Nigerian phone number.');
+      return;
+    }
+
     setIsSendingOTP(true);
     try {
-      const fullPhone = phone.startsWith('+') ? phone : `+234${phone.replace(/^0/, '')}`;
-      const confirmation = await sendOTP(fullPhone);
+      const confirmation = await sendOTP(normalized);
       setOtpConfirmation(confirmation);
       navigateTo('otp', 2);
     } catch (err) {
-      setOtpError('Failed to send code. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Unable to send verification code. Please try again.';
+      setOtpError(msg);
       console.error('OTP error:', err);
     } finally {
       setIsSendingOTP(false);
@@ -110,6 +130,22 @@ export default function Onboarding() {
       setOtpError('Invalid code. Try again.');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    setOtpError('');
+    const normalized = normalizeNigerianPhone(phone);
+    if (!normalized) return;
+    setIsSendingOTP(true);
+    try {
+      const confirmation = await sendOTP(normalized);
+      setOtpConfirmation(confirmation);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to resend code. Please try again.';
+      setOtpError(msg);
+    } finally {
+      setIsSendingOTP(false);
     }
   };
 
@@ -257,7 +293,7 @@ export default function Onboarding() {
                 autoFocus
                 required
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => { setPhone(e.target.value); setOtpError(''); }}
                 className="block w-full pl-28 pr-4 py-4 sm:text-lg border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
                 placeholder="801 234 5678"
               />
@@ -271,7 +307,7 @@ export default function Onboarding() {
             {isSendingOTP ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              <>Send Code <ArrowRight className="w-4 h-4" /></>
+              <>Continue <ArrowRight className="w-4 h-4" /></>
             )}
           </button>
           {otpError && (
@@ -282,52 +318,58 @@ export default function Onboarding() {
     </div>
   );
 
-  const renderOTP = () => (
-    <div className="px-6 w-full max-w-md mx-auto">
-      <BackButton onClick={() => navigateTo('phone', 1)} />
-      <div className="pt-16">
-        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
-          Enter the code
-        </h2>
-        <p className="mt-2 text-sm text-zinc-500 mb-8">
-          Sent to <span className="font-bold text-zinc-900">+234 {phone}</span>
-        </p>
-        <form onSubmit={handleVerifyOTP} className="space-y-5">
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            autoFocus
-            required
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            className="block w-full text-center tracking-[0.5em] text-2xl font-bold py-4 border-0 bg-zinc-100 rounded-2xl focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all"
-            placeholder="------"
-          />
-          <button
-            type="submit"
-            disabled={otp.length < 6 || isVerifying}
-            className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-          >
-            {isVerifying ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>Verify <ArrowRight className="w-4 h-4" /></>
+  const renderOTP = () => {
+    const normalized = normalizeNigerianPhone(phone);
+    const displayPhone = normalized ? formatPhoneDisplay(normalized) : `+234 ${phone}`;
+
+    return (
+      <div className="px-6 w-full max-w-md mx-auto">
+        <BackButton onClick={() => navigateTo('phone', 1)} />
+        <div className="pt-16">
+          <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
+            Verify your number
+          </h2>
+          <p className="mt-2 text-sm text-zinc-500 mb-8">
+            We sent a verification code to<br />
+            <span className="font-bold text-zinc-900">{displayPhone}</span>
+          </p>
+          <form onSubmit={handleVerifyOTP} className="space-y-5">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              autoFocus
+              required
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+              className="block w-full text-center tracking-[0.5em] text-2xl font-bold py-4 border-0 bg-zinc-100 rounded-2xl focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all"
+              placeholder="------"
+            />
+            <button
+              type="submit"
+              disabled={otp.length < 6 || isVerifying}
+              className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            >
+              {isVerifying ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>Verify <ArrowRight className="w-4 h-4" /></>
+              )}
+            </button>
+            {otpError && (
+              <p className="text-sm text-rose-600 font-medium text-center">{otpError}</p>
             )}
+          </form>
+          <button
+            onClick={handleResendOTP}
+            className="mt-4 w-full text-center text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors py-2"
+          >
+            Didn't receive a code? Resend
           </button>
-          {otpError && (
-            <p className="text-sm text-rose-600 font-medium text-center">{otpError}</p>
-          )}
-        </form>
-        <button
-          onClick={() => handleSendOTP(new Event('submit') as unknown as React.FormEvent)}
-          className="mt-4 w-full text-center text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors py-2"
-        >
-          Resend code
-        </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderProfile = () => (
     <div className="px-6 w-full max-w-md mx-auto">
