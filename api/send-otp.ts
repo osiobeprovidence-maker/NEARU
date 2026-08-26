@@ -65,13 +65,14 @@ export default async function handler(req: any, res: any) {
     });
 
     const data = await response.json();
+    console.error("Termii response:", response.status, JSON.stringify(data));
 
-    if (!response.ok || (data.smsStatus && data.smsStatus !== "Message Sent") || data.status === "error") {
-      console.error("Termii send error:", JSON.stringify(data));
+    if (!response.ok || (data.smsStatus && data.smsStatus !== "Message Sent") || data.error) {
       if (response.status === 429) {
-        return res.status(429).json({ error: "Too many attempts. Please wait before trying again." });
+        return res.status(429).json({ error: data.message || "Too many attempts. Please wait before trying again." });
       }
-      return res.status(502).json({ error: "Unable to send verification code. Please try again." });
+      const msg = data.message || data.smsStatus || "Unable to send verification code. Please try again.";
+      return res.status(502).json({ error: msg });
     }
 
     return res.status(200).json({ ok: true, phone: normalized, pinId: data.pinId || data.pin_id });
