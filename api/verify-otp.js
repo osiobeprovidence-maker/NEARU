@@ -13,7 +13,7 @@ function readBody(req) {
   });
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -52,7 +52,7 @@ module.exports = async function handler(req, res) {
     });
 
     const data = await response.json();
-    console.log("Termii verify response:", response.status, JSON.stringify(data));
+    console.log("Termii verify:", response.status, JSON.stringify(data));
 
     if (!response.ok || data.verified !== "True") {
       return res.status(400).json({ error: data.message || "Invalid verification code. Please try again." });
@@ -63,4 +63,4 @@ module.exports = async function handler(req, res) {
     console.error("OTP verify error:", err);
     return res.status(502).json({ error: "Network error. Please try again." });
   }
-};
+}

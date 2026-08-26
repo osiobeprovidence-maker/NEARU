@@ -21,7 +21,7 @@ function readBody(req) {
   });
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
     });
 
     const data = await response.json();
-    console.log("Termii send response:", response.status, JSON.stringify(data));
+    console.log("Termii send:", response.status, JSON.stringify(data));
 
     if (!response.ok || data.error) {
       if (response.status === 429) {
@@ -81,4 +81,4 @@ module.exports = async function handler(req, res) {
     console.error("OTP send error:", err);
     return res.status(502).json({ error: "Network error. Please try again." });
   }
-};
+}
