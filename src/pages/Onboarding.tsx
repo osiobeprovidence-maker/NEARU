@@ -55,7 +55,7 @@ const INTERESTS = [
 const TOTAL_STEPS = 9;
 
 export default function Onboarding() {
-  const { register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
+  const { firebaseUser, register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [stepIndex, setStepIndex] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -75,6 +75,14 @@ export default function Onboarding() {
   const [isLoading, setIsLoading] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (firebaseUser) {
+      setStep('username');
+      setStepIndex(6);
+      setEmail(firebaseUser.email || '');
+    }
+  }, []);
 
   const goNext = () => {
     setDirection(1);

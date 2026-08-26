@@ -163,6 +163,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const register = async (email: string, password: string) => {
+    if (auth.currentUser) {
+      await sendEmailVerification(auth.currentUser, {
+        url: window.location.origin,
+        handleCodeInApp: true,
+      });
+      return;
+    }
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await sendEmailVerification(cred.user, {
       url: window.location.origin,
