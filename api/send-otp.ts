@@ -11,24 +11,39 @@ function normalizeNigerianPhone(input: string): string | null {
   return null;
 }
 
-export default async function handler(req: Request): Promise<Response> {
+function readBody(req: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk: string) => (body += chunk));
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   if (!TERMII_API_KEY) {
     console.error("TERMII_API_KEY is not set");
-    return new Response(JSON.stringify({ error: "SMS service is not configured" }), { status: 500 });
+    return res.status(500).json({ error: "SMS service is not configured" });
   }
 
-  const { phone } = await req.json();
+  const { phone } = await readBody(req);
   if (!phone || typeof phone !== "string") {
-    return new Response(JSON.stringify({ error: "Phone number is required" }), { status: 400 });
+    return res.status(400).json({ error: "Phone number is required" });
   }
 
   const normalized = normalizeNigerianPhone(phone);
   if (!normalized) {
-    return new Response(JSON.stringify({ error: "Invalid phone number" }), { status: 400 });
+    return res.status(400).json({ error: "Invalid phone number" });
   }
 
   try {
@@ -51,14 +66,14 @@ export default async function handler(req: Request): Promise<Response> {
     if (!response.ok || data.status === "error") {
       console.error("Termii send error:", data);
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Too many attempts. Please wait before trying again." }), { status: 429 });
+        return res.status(429).json({ error: "Too many attempts. Please wait before trying again." });
       }
-      return new Response(JSON.stringify({ error: "Unable to send verification code. Please try again." }), { status: 502 });
+      return res.status(502).json({ error: "Unable to send verification code. Please try again." });
     }
 
-    return new Response(JSON.stringify({ ok: true, phone: normalized }), { status: 200 });
+    return res.status(200).json({ ok: true, phone: normalized });
   } catch (err) {
     console.error("OTP send network error:", err);
-    return new Response(JSON.stringify({ error: "Network error. Please try again." }), { status: 502 });
+    return res.status(502).json({ error: "Network error. Please try again." });
   }
 }
