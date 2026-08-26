@@ -5,7 +5,9 @@ import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+const convex = new ConvexReactClient(
+  import.meta.env.VITE_CONVEX_URL ?? 'https://rare-rooster-878.eu-west-1.convex.cloud'
+);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
