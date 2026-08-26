@@ -6,6 +6,9 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   reload,
 } from '../lib/firebase';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -17,6 +20,8 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   register: (email: string, password: string) => Promise<void>;
   login: (emailOrUsername: string, password: string) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<void>;
+  loginWithMagicLink: () => Promise<boolean>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   waitForEmailVerification: () => Promise<boolean>;
@@ -110,6 +115,8 @@ const AuthContext = createContext<AuthContextType>({
   firebaseUser: null,
   register: async () => {},
   login: async () => {},
+  sendMagicLink: async () => {},
+  loginWithMagicLink: async () => false,
   logout: () => {},
   updateUser: () => {},
   waitForEmailVerification: async () => false,
@@ -247,6 +254,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
+  const sendMagicLink = async (email: string) => {
+    const actionCodeSettings = {
+      url: window.location.origin,
+      handleCodeInApp: true,
+    };
+    await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+    localStorage.setItem('rally_email_for_signin', email);
+  };
+
+  const loginWithMagicLink = async (): Promise<boolean> => {
+    if (!isSignInWithEmailLink(auth, window.location.href)) return false;
+    let email = localStorage.getItem('rally_email_for_signin');
+    if (!email) {
+      email = window.prompt('Please enter your email to confirm');
+    }
+    if (!email) return false;
+    await signInWithEmailLink(auth, email, window.location.href);
+    localStorage.removeItem('rally_email_for_signin');
+    return true;
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
@@ -350,6 +378,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUser,
         register,
         login,
+        sendMagicLink,
+        loginWithMagicLink,
         logout,
         updateUser,
         waitForEmailVerification,
