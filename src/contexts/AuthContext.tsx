@@ -1,10 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, PrivacySettings, NotificationSettings, AppSettings, TrustedContact, BlockedUser } from '../types';
 import { currentUser as initialCurrentUser } from '../data/mock';
+import { auth, setupRecaptcha } from '../lib/firebase';
+import { 
+  signInWithPhoneNumber, 
+  ConfirmationResult, 
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser
+} from 'firebase/auth';
 
 interface AuthContextType {
   isLoggedIn: boolean;
+  isAuthLoading: boolean;
   user: User;
+  firebaseUser: FirebaseUser | null;
+  sendOTP: (phoneNumber: string) => Promise<ConfirmationResult>;
   login: () => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -80,8 +91,11 @@ const initialUserState: User = {
 };
 
 const AuthContext = createContext<AuthContextType>({
-  isLoggedIn: true,
+  isLoggedIn: false,
+  isAuthLoading: true,
   user: initialUserState,
+  firebaseUser: null,
+  sendOTP: async () => ({ confirmation: { confirm: async () => ({}) } }) as unknown as ConfirmationResult,
   login: () => {},
   logout: () => {},
   updateUser: () => {},
@@ -98,7 +112,8 @@ const AuthContext = createContext<AuthContextType>({
 const STORAGE_KEY = 'rally_user_profile_v1';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [user, setUser] = useState<User>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -112,12 +127,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      setFirebaseUser(fbUser);
+      setIsAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const isLoggedIn = !!firebaseUser;
+
+  useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     } catch {
       // ignore
     }
   }, [user]);
+
+  const sendOTP = async (phoneNumber: string): Promise<ConfirmationResult> => {
+    const appVerifier = setupRecaptcha('recaptcha-container');
+    const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+    return confirmation;
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+  };
 
   const updateUser = (updates: Partial<User>) => {
     setUser((prev) => {
@@ -213,9 +248,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         isLoggedIn,
+        isAuthLoading,
         user,
-        login: () => setIsLoggedIn(true),
-        logout: () => setIsLoggedIn(false),
+        firebaseUser,
+        sendOTP,
+        login: () => {},
+        logout,
         updateUser,
         verifyNIN,
         updatePrivacySettings,

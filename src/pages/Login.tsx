@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { ShieldCheck, MapPin, Search, ArrowLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { ConfirmationResult } from 'firebase/auth';
 
 type Step = 'landing' | 'phone' | 'otp' | 'email' | 'info';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { sendOTP } = useAuth();
   const [step, setStep] = useState<Step>('landing');
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [otpError, setOtpError] = useState('');
+  const [isSendingOTP, setIsSendingOTP] = useState(false);
   
   // Form State
   const [phone, setPhone] = useState('');
@@ -15,15 +19,37 @@ export default function Login() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
 
-  const handleNext = (e: React.FormEvent, nextStep: Step) => {
+  const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStep(nextStep);
+    setOtpError('');
+    setIsSendingOTP(true);
+    try {
+      const fullPhone = phone.startsWith('+') ? phone : `+234${phone.replace(/^0/, '')}`;
+      const result = await sendOTP(fullPhone);
+      setConfirmationResult(result);
+      setStep('otp');
+    } catch (err) {
+      setOtpError('Failed to send code. Please try again.');
+      console.error('OTP send error:', err);
+    } finally {
+      setIsSendingOTP(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError('');
+    try {
+      await confirmationResult?.confirm(otp);
+      setStep('email');
+    } catch {
+      setOtpError('Invalid code. Please try again.');
+    }
   };
 
   const handleFinish = (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically send the data to your backend
-    login();
+    window.location.href = '/';
   };
 
   const renderLanding = () => (
@@ -84,17 +110,6 @@ export default function Login() {
             >
               Continue with Phone Number
             </button>
-
-            <button
-              onClick={() => {
-                login();
-                window.location.href = '/admin';
-              }}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold text-zinc-700 transition-colors"
-            >
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              Quick Login as Super Admin
-            </button>
           </div>
           
           <div className="mt-4">
@@ -119,7 +134,7 @@ export default function Login() {
         We'll send you a code to verify it's you.
       </p>
 
-      <form onSubmit={(e) => handleNext(e, 'otp')} className="space-y-6">
+      <form onSubmit={handleSendOTP} className="space-y-6">
         <div>
           <label htmlFor="phone" className="block text-sm font-medium text-zinc-700">Phone Number</label>
           <div className="mt-1 relative rounded-xl shadow-sm">
@@ -146,12 +161,15 @@ export default function Login() {
 
         <button
           type="submit"
-          disabled={phone.length < 10}
+          disabled={phone.length < 10 || isSendingOTP}
           className="w-full flex items-center justify-center gap-2 py-4 px-4 border border-transparent rounded-xl shadow-sm text-base font-bold text-white bg-black hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          Send Code
-          <ChevronRight className="w-5 h-5" />
+          {isSendingOTP ? 'Sending...' : 'Send Code'}
+          {!isSendingOTP && <ChevronRight className="w-5 h-5" />}
         </button>
+        {otpError && (
+          <p className="text-sm text-rose-600 font-medium text-center">{otpError}</p>
+        )}
       </form>
     </div>
   );
@@ -168,7 +186,7 @@ export default function Login() {
         We sent a 4-digit code to <span className="font-bold text-zinc-900">{phone}</span>
       </p>
 
-      <form onSubmit={(e) => handleNext(e, 'email')} className="space-y-6">
+      <form onSubmit={handleVerifyOTP} className="space-y-6">
         <div>
           <input
             type="text"
@@ -190,6 +208,9 @@ export default function Login() {
           Verify
           <ChevronRight className="w-5 h-5" />
         </button>
+        {otpError && (
+          <p className="text-sm text-rose-600 font-medium text-center">{otpError}</p>
+        )}
       </form>
       <div className="mt-6 text-center">
         <button className="text-sm font-bold text-zinc-500 hover:text-black transition-colors">
@@ -211,7 +232,7 @@ export default function Login() {
         We use this to recover your account if you lose access to your phone.
       </p>
 
-      <form onSubmit={(e) => handleNext(e, 'info')} className="space-y-6">
+      <form onSubmit={(e) => { e.preventDefault(); setStep('info'); }} className="space-y-6">
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-zinc-700 mb-1">Email Address</label>
           <input
@@ -295,6 +316,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div id="recaptcha-container" />
       {step === 'landing' && renderLanding()}
       {step === 'phone' && renderPhone()}
       {step === 'otp' && renderOtp()}

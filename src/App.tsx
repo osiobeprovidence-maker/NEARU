@@ -45,7 +45,15 @@ const AdminAnalytics = React.lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
 
 const AppRoutes = () => {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isAuthLoading } = useAuth();
+  
+  if (isAuthLoading) {
+    return <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+      <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
+        <span className="text-white font-black text-lg tracking-tighter">R</span>
+      </div>
+    </div>;
+  }
   
   if (!isLoggedIn) {
     return (
