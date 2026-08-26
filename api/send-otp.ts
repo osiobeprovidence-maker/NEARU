@@ -47,31 +47,34 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const response = await fetch(`${TERMII_BASE_URL}/api/v1/otp/send`, {
+    const response = await fetch(`${TERMII_BASE_URL}/api/sms/otp/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: TERMII_API_KEY,
-        message_type: "numeric",
+        pin_type: "NUMERIC",
         to: normalized,
         from: "N-Alert",
         channel: "dnd",
+        pin_attempts: 5,
+        pin_time_to_live: 5,
         pin_length: 6,
-        expire: 300,
+        pin_placeholder: "< 123456 >",
+        message_text: "Your RALLY verification code is < 123456 >. It expires in 5 minutes.",
       }),
     });
 
     const data = await response.json();
 
-    if (!response.ok || data.status === "error") {
-      console.error("Termii send error:", data);
+    if (!response.ok || (data.smsStatus && data.smsStatus !== "Message Sent") || data.status === "error") {
+      console.error("Termii send error:", JSON.stringify(data));
       if (response.status === 429) {
         return res.status(429).json({ error: "Too many attempts. Please wait before trying again." });
       }
       return res.status(502).json({ error: "Unable to send verification code. Please try again." });
     }
 
-    return res.status(200).json({ ok: true, phone: normalized });
+    return res.status(200).json({ ok: true, phone: normalized, pinId: data.pinId || data.pin_id });
   } catch (err) {
     console.error("OTP send network error:", err);
     return res.status(502).json({ error: "Network error. Please try again." });

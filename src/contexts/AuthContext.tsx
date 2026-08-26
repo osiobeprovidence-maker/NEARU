@@ -156,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const verifyRes = await fetch('/api/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: data.phone, code }),
+          body: JSON.stringify({ pinId: data.pinId, pin: code }),
         });
         const verifyData = await verifyRes.json();
         if (!verifyRes.ok) throw new Error(verifyData.error || 'Invalid code');
