@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AlertCircle, Heart, Users, Zap, Sparkles, Share2, Compass, MapPin, Bell, X } from 'lucide-react';
+import { AlertCircle, Heart, Users, Sparkles, Share2, Compass, Bell, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { mockRallies } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
-import AdCard from '../components/AdCard';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
 
@@ -251,9 +250,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Advertisement Segment */}
-          <AdCard />
-
           {/* Dynamic Feed Section */}
           {isLoading ? (
             <>
@@ -305,22 +301,21 @@ export default function Home() {
         {/* Buzzing Locations Onboarding Feed (only shows if nearby is empty) */}
         {!isLoading && nearbyRallies.length === 0 && (
           <div className="space-y-6">
-            {/* Buzzing Locations Discovery / Passive Onboarding Feed */}
             <div>
               <div className="px-6 md:px-0 mb-3 pt-2">
                 <div className="flex items-center gap-2 mb-1">
                   <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   <h3 className="text-lg sm:text-xl font-bold text-zinc-900 tracking-tight">
-                    See what's happening around RALLY
+                    See what's happening on RALLY
                   </h3>
                 </div>
                 <p className="text-xs sm:text-sm text-zinc-500">
-                  Get a feel for what's happening in other buzzing locations.
+                  Get a feel for what people are posting in other locations.
                 </p>
               </div>
 
               <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-                {buzzingRallies.map(rally => (
+                {buzzingRallies.slice(0, 3).map(rally => (
                   <RallyCard key={`buzzing-${rally.id}`} rally={rally} />
                 ))}
               </div>
@@ -328,17 +323,22 @@ export default function Home() {
           </div>
         )}
 
-        {/* Placeholder Ad */}
+        {/* Invite Banner */}
         <div className="mt-8 mb-4 px-4 md:px-0">
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Sponsored</div>
-          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-indigo-100/50 transition-colors">
-            <div className="w-16 h-16 rounded-xl bg-indigo-200 flex-shrink-0 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-indigo-600" />
+          <div className="bg-zinc-100 border border-zinc-200 rounded-2xl p-4 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-zinc-200 flex-shrink-0 flex items-center justify-center">
+              <Users className="w-5 h-5 text-zinc-600" />
             </div>
-            <div>
-              <h4 className="font-bold text-indigo-900">Get RALLY+</h4>
-              <p className="text-xs text-indigo-700 mt-0.5">Remove ads and unlock premium features for just ₦1,000/mo.</p>
+            <div className="flex-1">
+              <h4 className="font-bold text-zinc-900 text-sm">Grow your community</h4>
+              <p className="text-xs text-zinc-500 mt-0.5">Invite friends to RALLY and make things happen together.</p>
             </div>
+            <button
+              onClick={handleInvite}
+              className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 active:scale-95 transition-all shrink-0"
+            >
+              Invite
+            </button>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +15,9 @@ import {
   ArrowLeft,
   X,
   Plus,
-  Heart
+  Heart,
+  Upload,
+  ImageIcon
 } from 'lucide-react';
 
 const PRESET_AVATARS = [
@@ -61,6 +63,7 @@ const NIGERIAN_CITIES = [
 export default function EditProfile() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user.name || '');
   const [username, setUsername] = useState(user.username || '');
@@ -77,6 +80,23 @@ export default function EditProfile() {
   const [isSaved, setIsSaved] = useState(false);
   const [newCustomInterest, setNewCustomInterest] = useState('');
   const [showAddInterest, setShowAddInterest] = useState(false);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setAvatar(dataUrl);
+      setShowAvatarPicker(false);
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,7 +184,22 @@ export default function EditProfile() {
             {/* Avatar Picker Palette (Compact Accordion) */}
             {showAvatarPicker && (
               <div className="mt-3 pt-3 border-t border-zinc-100 animate-in fade-in duration-200">
-                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Choose Preset Photo</p>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  accept="image/*"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full mb-3 py-3 border-2 border-dashed border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload your own photo
+                </button>
+                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Or choose a preset</p>
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5 max-w-sm mx-auto">
                   {PRESET_AVATARS.map((presetUrl, idx) => (
                     <button
