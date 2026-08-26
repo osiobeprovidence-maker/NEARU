@@ -26,6 +26,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const NotificationSettings = React.lazy(() => import('./pages/NotificationSettings'));
 const PrivacySettings = React.lazy(() => import('./pages/PrivacySettings'));
 const AppSettingsPage = React.lazy(() => import('./pages/AppSettingsPage'));
+const HelpSupport = React.lazy(() => import('./pages/HelpSupport'));
 const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = React.lazy(() => import('./pages/PrivacyPolicy'));
 const ReviewUser = React.lazy(() => import('./pages/ReviewUser'));
@@ -81,6 +82,8 @@ const AppRoutes = () => {
           <Route path="settings/notifications" element={<NotificationSettings />} />
           <Route path="settings/privacy" element={<PrivacySettings />} />
           <Route path="settings/app" element={<AppSettingsPage />} />
+          <Route path="settings/help" element={<HelpSupport />} />
+          <Route path="help" element={<HelpSupport />} />
           <Route path="terms" element={<TermsOfService />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="review/:id" element={<ReviewUser />} />

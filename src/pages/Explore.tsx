@@ -61,8 +61,8 @@ export default function Explore() {
 
   return (
     <PageShell title="Explore RALLY">
-      <div className="px-6 md:px-0">
-        <div className="relative mb-4">
+      <div className="px-4 sm:px-6 md:px-0 pt-3.5 sm:pt-4 md:pt-0">
+        <div className="relative mb-3.5 sm:mb-4">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <Search className="w-5 h-5 text-zinc-400" />
           </div>
@@ -75,7 +75,7 @@ export default function Explore() {
           />
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar mb-6">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar mb-5 sm:mb-6">
           {categories.map((category) => (
             <button 
               key={category}

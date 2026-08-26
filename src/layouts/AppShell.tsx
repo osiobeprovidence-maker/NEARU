@@ -9,6 +9,7 @@ import {
   Bell, 
   User, 
   ShieldCheck, 
+  Crown, 
   Zap, 
   Shield, 
   Settings, 
@@ -17,7 +18,8 @@ import {
   CheckCircle2, 
   LayoutDashboard,
   MapPin,
-  ChevronDown
+  ChevronDown,
+  ArrowLeft
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { currentUser } from '../data/mock';
@@ -83,7 +85,7 @@ export default function AppShell() {
   const secondaryNavItems = [
     { label: 'Profile', icon: User, path: '/profile' },
     { label: 'Verification', icon: ShieldCheck, path: '/verification' },
-    { label: 'RALLY+', icon: Zap, path: '/plus' },
+    { label: 'RALLY+', icon: Crown, path: '/plus' },
   ];
 
   const tertiaryNavItems = [
@@ -91,6 +93,33 @@ export default function AppShell() {
     { label: 'Settings', icon: Settings, path: '/settings' },
     { label: 'Admin CRM', icon: LayoutDashboard, path: '/admin' },
   ];
+
+  const getMobileHeaderTitle = () => {
+    const path = routeLocation.pathname;
+    if (path === '/') return null;
+    if (path === '/messages') return 'Messages';
+    if (path.startsWith('/messages/')) return null;
+    if (path === '/explore') return 'Explore';
+    if (path === '/my-rallys') return 'My RALLYS';
+    if (path === '/notifications') return 'Notifications';
+    if (path === '/profile') return 'Profile';
+    if (path === '/profile/edit') return 'Edit Profile';
+    if (path === '/verification') return 'Verification';
+    if (path === '/plus') return 'RALLY+';
+    if (path === '/safety') return 'Safety';
+    if (path === '/settings') return 'Settings';
+    if (path === '/settings/personal-info') return 'Personal Info';
+    if (path === '/settings/notifications') return 'Notification Settings';
+    if (path === '/settings/privacy') return 'Privacy & Safety';
+    if (path === '/settings/app') return 'App Settings';
+    if (path === '/settings/help' || path === '/help') return 'Help & Support';
+    if (path === '/terms') return 'Terms of Service';
+    if (path === '/privacy') return 'Privacy Policy';
+    return 'RALLY';
+  };
+
+  const mobileTitle = getMobileHeaderTitle();
+  const isChatPage = routeLocation.pathname.startsWith('/messages/') && routeLocation.pathname !== '/messages';
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row">
@@ -237,29 +266,79 @@ export default function AppShell() {
       </aside>
 
       {/* Mobile Top Header */}
-      <header className="md:hidden fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md border-b border-zinc-100 z-50 px-4 py-2.5 flex items-center justify-between gap-3 safe-area-top min-h-[53px]">
-        {/* Header Location Pill on Left (hidden/blank on messages, profile, and explore pages) */}
-        {!isLocationHidden ? (
-          <button
-            onClick={openLocationModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-full text-xs font-bold transition-all border border-zinc-200/70 active:scale-95 shadow-xs shrink-0 max-w-[240px]"
-            title="Change location and radius"
-          >
-            <MapPin className="w-3.5 h-3.5 text-zinc-900 shrink-0" />
-            <span className="truncate">{city} · {radius}</span>
-            <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0" />
-          </button>
-        ) : (
-          <div aria-hidden="true" />
-        )}
+      {!isChatPage && (
+        <header className="md:hidden fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md border-b border-zinc-100 z-50 px-4 py-2.5 flex items-center justify-between gap-3 safe-area-top min-h-[53px]">
+          {/* Header Location Pill on Left for Home, or Page Title for other routes */}
+          {!isLocationHidden ? (
+            <button
+              onClick={openLocationModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-full text-xs font-bold transition-all border border-zinc-200/70 active:scale-95 shadow-xs shrink-0 max-w-[240px]"
+              title="Change location and radius"
+            >
+              <MapPin className="w-3.5 h-3.5 text-zinc-900 shrink-0" />
+              <span className="truncate">{city} · {radius}</span>
+              <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0" />
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0">
+              {(routeLocation.pathname === '/settings' ||
+                routeLocation.pathname.startsWith('/settings/') || 
+                routeLocation.pathname === '/profile/edit' || 
+                routeLocation.pathname === '/verification' || 
+                routeLocation.pathname === '/plus' ||
+                routeLocation.pathname === '/safety' || 
+                routeLocation.pathname === '/terms' || 
+                routeLocation.pathname === '/privacy' ||
+                routeLocation.pathname === '/help' ||
+                routeLocation.pathname.startsWith('/review/') ||
+                routeLocation.pathname.startsWith('/report/')) && (
+                <button
+                  onClick={() => navigate(-1)}
+                  className="p-1 -ml-1 text-zinc-700 hover:bg-zinc-100 rounded-full transition-colors active:scale-95 shrink-0"
+                  title="Back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              <h1 className="text-xl font-black tracking-tight text-zinc-900 truncate">
+                {mobileTitle || 'RALLY'}
+              </h1>
+            </div>
+          )}
 
-        <NavLink to="/notifications" className={({isActive}) => cn("p-2 rounded-full transition-colors shrink-0", isActive ? "text-indigo-600 bg-indigo-50" : "text-zinc-600 hover:bg-zinc-100")}>
-          <Bell className="w-5 h-5" />
-        </NavLink>
-      </header>
+          {routeLocation.pathname === '/profile' ? (
+            <NavLink 
+              to="/settings" 
+              className={({isActive}) => cn("p-2 rounded-full transition-colors shrink-0", isActive ? "text-indigo-600 bg-indigo-50" : "text-zinc-600 hover:bg-zinc-100")}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </NavLink>
+          ) : (routeLocation.pathname === '/settings' ||
+               routeLocation.pathname === '/settings/personal-info' || 
+               routeLocation.pathname === '/profile/edit' || 
+               routeLocation.pathname.startsWith('/settings/') ||
+               routeLocation.pathname === '/verification' ||
+               routeLocation.pathname === '/plus' ||
+               routeLocation.pathname === '/safety' ||
+               routeLocation.pathname === '/terms' ||
+               routeLocation.pathname === '/privacy' ||
+               routeLocation.pathname === '/help') ? (
+            <div className="w-6 shrink-0" />
+          ) : (
+            <NavLink 
+              to="/notifications" 
+              className={({isActive}) => cn("p-2 rounded-full transition-colors shrink-0", isActive ? "text-indigo-600 bg-indigo-50" : "text-zinc-600 hover:bg-zinc-100")}
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+            </NavLink>
+          )}
+        </header>
+      )}
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 pt-[60px] md:pt-0 min-h-screen">
+      <main className="flex-1 md:ml-64 pt-[53px] md:pt-0 min-h-screen">
         <div className="max-w-3xl mx-auto w-full">
           <Outlet />
         </div>

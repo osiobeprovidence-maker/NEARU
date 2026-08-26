@@ -5,6 +5,7 @@ import { mockRallies } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
+import AdCard from '../components/AdCard';
 
 export default function Home() {
   const [activeFilter, setActiveFilter] = useState('All');
@@ -118,86 +119,89 @@ export default function Home() {
           </div>
         </div>
 
-        {/* What's your RALLY? Card */}
-        <div className="mb-6 p-6 bg-white border-y md:border border-zinc-200 md:rounded-[2rem] shadow-sm">
-          <div className="mb-4">
-            <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">What's your RALLY?</h3>
-            <p className="text-xs sm:text-sm text-zinc-500 mt-1">
-              Tell people around you what you need, what you can offer, or what you'd like to do together.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <button 
-              onClick={openCreateModal}
-              className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors group"
-            >
-              <div className="w-10 h-10 rounded-full bg-rose-100 group-hover:bg-rose-200 text-rose-600 flex items-center justify-center transition-colors">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-rose-900 text-xs">ASK</div>
-                <div className="text-[9px] text-rose-600 font-medium mt-0.5 leading-tight px-0.5">I need something</div>
-              </div>
-            </button>
-
-            <button 
-              onClick={openCreateModal}
-              className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors group"
-            >
-              <div className="w-10 h-10 rounded-full bg-emerald-100 group-hover:bg-emerald-200 text-emerald-600 flex items-center justify-center transition-colors">
-                <Heart className="w-5 h-5" />
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-emerald-900 text-xs">HELP</div>
-                <div className="text-[9px] text-emerald-600 font-medium mt-0.5 leading-tight px-0.5">I can help</div>
-              </div>
-            </button>
-
-            <button 
-              onClick={openCreateModal}
-              className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors group"
-            >
-              <div className="w-10 h-10 rounded-full bg-indigo-100 group-hover:bg-indigo-200 text-indigo-600 flex items-center justify-center transition-colors">
-                <Users className="w-5 h-5" />
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-indigo-900 text-xs">JOIN</div>
-                <div className="text-[9px] text-indigo-600 font-medium mt-0.5 leading-tight px-0.5">I want company</div>
-              </div>
-            </button>
-          </div>
-
-          <button 
-            onClick={openCreateModal}
-            className="w-full py-3.5 bg-zinc-900 text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-md shadow-zinc-200"
-          >
-            <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-              <span className="text-xs font-black">+</span>
+        {/* Main Continuous Feed Container */}
+        <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
+          {/* What's your RALLY? Card */}
+          <div className="p-6">
+            <div className="mb-4">
+              <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">What's your RALLY?</h3>
+              <p className="text-xs sm:text-sm text-zinc-500 mt-1">
+                Tell people around you what you need, what you can offer, or what you'd like to do together.
+              </p>
             </div>
-            CREATE A RALLY
-          </button>
-        </div>
 
-        {/* Dynamic Feed Section */}
-        {isLoading ? (
-          <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-            <RallyCardSkeleton />
-            <RallyCardSkeleton />
-            <RallyCardSkeleton />
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              <button 
+                onClick={openCreateModal}
+                className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-full bg-rose-100 group-hover:bg-rose-200 text-rose-600 flex items-center justify-center transition-colors">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-rose-900 text-xs">ASK</div>
+                  <div className="text-[9px] text-rose-600 font-medium mt-0.5 leading-tight px-0.5">I need something</div>
+                </div>
+              </button>
+
+              <button 
+                onClick={openCreateModal}
+                className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-full bg-emerald-100 group-hover:bg-emerald-200 text-emerald-600 flex items-center justify-center transition-colors">
+                  <Heart className="w-5 h-5" />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-emerald-900 text-xs">HELP</div>
+                  <div className="text-[9px] text-emerald-600 font-medium mt-0.5 leading-tight px-0.5">I can help</div>
+                </div>
+              </button>
+
+              <button 
+                onClick={openCreateModal}
+                className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-full bg-indigo-100 group-hover:bg-indigo-200 text-indigo-600 flex items-center justify-center transition-colors">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-indigo-900 text-xs">JOIN</div>
+                  <div className="text-[9px] text-indigo-600 font-medium mt-0.5 leading-tight px-0.5">I want company</div>
+                </div>
+              </button>
+            </div>
+
+            <button 
+              onClick={openCreateModal}
+              className="w-full py-3.5 bg-zinc-900 text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-md shadow-zinc-200"
+            >
+              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                <span className="text-xs font-black">+</span>
+              </div>
+              CREATE A RALLY
+            </button>
           </div>
-        ) : nearbyRallies.length > 0 ? (
-          /* Active Nearby Feed */
-          <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-            {nearbyRallies.map(rally => (
-              <RallyCard key={rally.id} rally={rally} />
-            ))}
-          </div>
-        ) : (
-          /* Empty Nearby State + Buzzing Locations Onboarding Feed */
-          <div className="space-y-6">
-            {/* 1. Nearby Empty State Card */}
-            <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 p-8 sm:p-10 text-center">
+
+          {/* Advertisement Segment */}
+          <AdCard />
+
+          {/* Dynamic Feed Section */}
+          {isLoading ? (
+            <>
+              <RallyCardSkeleton />
+              <RallyCardSkeleton />
+              <RallyCardSkeleton />
+            </>
+          ) : nearbyRallies.length > 0 ? (
+            /* Active Nearby Feed */
+            <>
+              {nearbyRallies.map(rally => (
+                <RallyCard key={rally.id} rally={rally} />
+              ))}
+            </>
+          ) : (
+            /* Empty Nearby State */
+            <div className="p-8 sm:p-10 text-center">
               <div className="w-16 h-16 rounded-3xl bg-zinc-100 border border-zinc-200/80 flex items-center justify-center mx-auto mb-5 text-zinc-900 shadow-xs">
                 <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
               </div>
@@ -226,8 +230,13 @@ export default function Home() {
                 </button>
               </div>
             </div>
+          )}
+        </div>
 
-            {/* 2. Buzzing Locations Discovery / Passive Onboarding Feed */}
+        {/* Buzzing Locations Onboarding Feed (only shows if nearby is empty) */}
+        {!isLoading && nearbyRallies.length === 0 && (
+          <div className="space-y-6">
+            {/* Buzzing Locations Discovery / Passive Onboarding Feed */}
             <div>
               <div className="px-6 md:px-0 mb-3 pt-2">
                 <div className="flex items-center gap-2 mb-1">

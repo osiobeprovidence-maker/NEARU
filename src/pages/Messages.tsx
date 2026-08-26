@@ -17,10 +17,10 @@ export default function Messages() {
           return (
             <motion.div 
               key={conversation.id}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={() => navigate(`/messages/${conversation.id}`)}
-              className="p-5 sm:p-6 bg-white hover:bg-zinc-50/75 transition-colors cursor-pointer flex items-center justify-between gap-4 group"
+              className="p-4 sm:p-5 bg-white hover:bg-zinc-50/75 transition-colors cursor-pointer flex items-center justify-between gap-3.5 sm:gap-4 group"
             >
               <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
                 <img 
@@ -29,7 +29,7 @@ export default function Messages() {
                   className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-200 object-cover border-2 border-white shadow-sm shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex items-center gap-1.5 mb-0.5">
                     <h3 className="text-base sm:text-lg font-bold text-zinc-900 truncate group-hover:text-black transition-colors">
                       {otherUser.name}
                     </h3>
@@ -42,7 +42,7 @@ export default function Messages() {
                       </div>
                     ))}
                   </div>
-                  <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-1 truncate">
+                  <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-0.5 truncate">
                     {conversation.rallyTitle}
                   </div>
                   <p className="text-sm text-zinc-600 font-normal truncate leading-relaxed">
@@ -69,8 +69,8 @@ export default function Messages() {
       </div>
       
       {/* Safety Notice */}
-      <div className="mt-8 mx-4 md:mx-0 p-4 sm:p-5 bg-zinc-50 border border-zinc-200/80 rounded-2xl md:rounded-3xl flex items-start gap-3.5 text-xs text-zinc-600 leading-relaxed font-medium">
-        <ShieldAlert className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
+      <div className="mt-3 sm:mt-4 mx-4 md:mx-0 p-3.5 sm:p-4 bg-zinc-50 border border-zinc-200/80 rounded-2xl md:rounded-3xl flex items-start gap-3 text-xs text-zinc-600 leading-relaxed font-medium">
+        <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-500 shrink-0 mt-0.5" />
         <div>
           <span className="font-bold text-zinc-800 block mb-0.5">Trust & Safety Reminder</span>
           <p className="text-zinc-500">Keep communication inside RALLY. Do not share personal contact details like phone numbers or exact residential addresses until you have built trust.</p>

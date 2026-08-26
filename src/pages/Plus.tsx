@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import PageShell from '../components/PageShell';
-import { Zap, Check, Sparkles } from 'lucide-react';
+import { Crown, Check } from 'lucide-react';
 
 export default function Plus() {
   const [selectedPlan, setSelectedPlan] = useState<'1m' | '3m' | '1y'>('1m');
@@ -14,7 +14,7 @@ export default function Plus() {
         {/* Banner Card */}
         <div className="bg-zinc-900 text-white md:rounded-[2rem] border-y md:border border-zinc-800 p-8 text-center relative overflow-hidden shadow-sm">
           <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mx-auto mb-5 text-amber-400">
-            <Zap className="w-7 h-7" />
+            <Crown className="w-7 h-7" />
           </div>
           
           <h2 className="text-2xl font-black mb-2 text-white">RALLY is free for everyone.</h2>
@@ -124,7 +124,7 @@ export default function Plus() {
             type="button"
             className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-bold tracking-wide hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
           >
-            <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+            <Crown className="w-4 h-4 text-amber-400" />
             <span>GET RALLY+</span>
           </button>
         </div>
