@@ -55,7 +55,7 @@ const INTERESTS = [
 const TOTAL_STEPS = 9;
 
 export default function Onboarding() {
-  const { firebaseUser, register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
+  const { user, firebaseUser, register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [stepIndex, setStepIndex] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -238,19 +238,32 @@ export default function Onboarding() {
   };
 
   const handleFinish = async () => {
+    const userData = {
+      name: displayName || firstName,
+      username: email.split('@')[0].toLowerCase(),
+      email,
+      totpSecret: totpSecret || undefined,
+      totpEnabled: !!totpSecret,
+      isEmailVerified: true,
+    };
+    localStorage.setItem('rally_convex_user_id', 'local');
+    localStorage.setItem('rally_user_profile_v1', JSON.stringify({
+      ...user,
+      ...userData,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=6366f1&color=fff&bold=true&size=200`,
+    }));
+    updateUser(userData);
+
     try {
       const userId = await saveUserToConvex({
-        name: displayName || firstName,
-        username: email.split('@')[0].toLowerCase(),
-        email,
+        ...userData,
         passwordHash: '',
-        totpSecret: totpSecret || undefined,
-        totpEnabled: !!totpSecret,
-        isEmailVerified: true,
       });
-      localStorage.setItem('rally_convex_user_id', userId);
+      if (userId) {
+        localStorage.setItem('rally_convex_user_id', userId);
+      }
     } catch (err) {
-      console.error('Failed to save user profile:', err);
+      console.error('Convex save failed (will retry later):', err);
     }
     window.location.href = '/';
   };
