@@ -523,7 +523,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-zinc-50 relative overflow-hidden">
       <ProgressBar />
-      <div id="recaptcha-container" />
+      <div id="recaptcha-container" className="fixed bottom-0 right-0 z-[999]" />
       <AnimatePresence mode="wait" custom={direction}>
         <motion.div
           key={step}

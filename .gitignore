@@ -38,3 +38,5 @@ ios/App/App/capacitor.config.json
 
 # Misc
 *.tsbuildinfo
+
+.vercel

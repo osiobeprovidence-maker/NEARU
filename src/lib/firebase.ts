@@ -14,12 +14,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-export function setupRecaptcha(elementId: string) {
-  if (!(window as unknown as Record<string, unknown>)[`recaptchaVerifier_${elementId}`]) {
-    (window as unknown as Record<string, unknown>)[`recaptchaVerifier_${elementId}`] =
-      new RecaptchaVerifier(auth, elementId, {
-        size: 'invisible',
-      });
+export function setupRecaptcha(elementId: string): RecaptchaVerifier {
+  const key = `recaptchaVerifier_${elementId}`;
+  const win = window as unknown as Record<string, unknown>;
+
+  // Clear stale verifier so Firebase re-renders it fresh
+  if (win[key]) {
+    try {
+      (win[key] as RecaptchaVerifier).clear();
+    } catch {
+      // ignore cleanup errors
+    }
+    delete win[key];
   }
-  return (window as unknown as Record<string, unknown>)[`recaptchaVerifier_${elementId}`] as RecaptchaVerifier;
+
+  win[key] = new RecaptchaVerifier(auth, elementId, {
+    size: 'invisible',
+  });
+
+  return win[key] as RecaptchaVerifier;
 }
