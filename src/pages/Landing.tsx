@@ -71,7 +71,7 @@ export default function Landing() {
             <motion.div variants={fadeUp} transition={{ duration: 0.5 }}>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-full mb-6">
                 <Zap className="w-3.5 h-3.5" />
-                Now live in Lagos, Abuja & Port Harcourt
+                Now live across Nigeria
               </span>
             </motion.div>
 
@@ -255,7 +255,7 @@ export default function Landing() {
               className="mt-3 text-sm sm:text-base text-zinc-500 max-w-lg mx-auto"
             >
               No lengthy forms. No waiting days for approval.
-              Just your phone number and you're in.
+              Just sign up and you're in.
             </motion.p>
           </motion.div>
 
@@ -269,8 +269,8 @@ export default function Landing() {
             {[
               {
                 step: '1',
-                title: 'Sign up with your phone',
-                desc: 'Enter your number, verify with an OTP. Done in seconds.',
+                title: 'Sign up in seconds',
+                desc: 'Create an account with your email or phone. Quick and secure.',
                 color: 'bg-indigo-600',
               },
               {
@@ -357,7 +357,7 @@ export default function Landing() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-zinc-900">Identity Verified</p>
-                  <p className="text-xs text-zinc-500">NIN matched • Lagos, Nigeria</p>
+                  <p className="text-xs text-zinc-500">NIN matched • Nigeria</p>
                 </div>
               </div>
               <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">

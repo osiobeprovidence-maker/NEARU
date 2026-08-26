@@ -30,7 +30,7 @@ const activities: Activity[] = [
     type: "offer",
     title: "Food Distribution Center",
     description: "Volunteer group distributing rice and essentials every weekend.",
-    city: "Lagos",
+    city: "Abuja",
     coordinates: [3.3792, 6.5244]
   },
   {
