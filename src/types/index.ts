@@ -87,6 +87,8 @@ export interface Rally {
   createdAt: string;
   city?: string;
   locationLabel?: string;
+  rallyLatitude?: number;
+  rallyLongitude?: number;
 }
 
 export interface Message {

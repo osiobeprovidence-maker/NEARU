@@ -70,7 +70,7 @@ export default function EditProfile() {
   const [bio, setBio] = useState(user.bio || '');
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone || '');
-  const [location, setLocation] = useState(user.location || 'Lagos, Nigeria');
+  const [location, setLocation] = useState(user.location || '');
   const [avatar, setAvatar] = useState(user.avatar || '');
   const [gender, setGender] = useState(user.gender || 'Prefer not to say');
   const [birthday, setBirthday] = useState(user.birthday || '');

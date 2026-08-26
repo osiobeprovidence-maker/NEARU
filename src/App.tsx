@@ -28,6 +28,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const NotificationSettings = React.lazy(() => import('./pages/NotificationSettings'));
 const PrivacySettings = React.lazy(() => import('./pages/PrivacySettings'));
 const AppSettingsPage = React.lazy(() => import('./pages/AppSettingsPage'));
+const LocationSettings = React.lazy(() => import('./pages/LocationSettings'));
 const HelpSupport = React.lazy(() => import('./pages/HelpSupport'));
 const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = React.lazy(() => import('./pages/PrivacyPolicy'));
@@ -103,6 +104,7 @@ const AppRoutes = () => {
           <Route path="settings/personal-info" element={<EditProfile />} />
           <Route path="settings/notifications" element={<NotificationSettings />} />
           <Route path="settings/privacy" element={<PrivacySettings />} />
+          <Route path="settings/location" element={<LocationSettings />} />
           <Route path="settings/app" element={<AppSettingsPage />} />
           <Route path="settings/help" element={<HelpSupport />} />
           <Route path="help" element={<HelpSupport />} />

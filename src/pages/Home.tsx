@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { AlertCircle, Heart, Users, Sparkles, Share2, Compass, Bell, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { AlertCircle, Heart, Users, Sparkles, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, RefreshCw, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { mockRallies } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
+import { haversineDistance, formatDistance, GeoPoint } from '../lib/geo';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import AdCard from '../components/AdCard';
@@ -11,7 +12,20 @@ const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
 
 export default function Home() {
   const [activeFilter, setActiveFilter] = useState('All');
-  const { city, radius } = useLocation();
+  const {
+    city,
+    radiusKm,
+    geoState,
+    permissionState,
+    position,
+    locationLabel,
+    error,
+    isManual,
+    requestLocation,
+    startWatching,
+    setRadiusKmAction,
+    openLocationModal,
+  } = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
@@ -24,12 +38,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (geoState === 'active' || geoState === 'manual') {
+      startWatching();
+    }
+  }, [geoState, startWatching]);
+
+  useEffect(() => {
     setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 400); // Simulate network request delay
+    const timer = setTimeout(() => setIsLoading(false), 400);
     return () => clearTimeout(timer);
-  }, [activeFilter, city, radius]);
+  }, [activeFilter, city, radiusKm, geoState]);
 
   const openCreateModal = () => {
     window.dispatchEvent(new CustomEvent('open-create-rally'));
@@ -57,11 +75,12 @@ export default function Home() {
   };
 
   const handleInvite = async () => {
+    const shareCity = city || 'your area';
     if (navigator.share) {
       try {
         await navigator.share({
           title: 'Join me on RALLY',
-          text: `Join me on RALLY — see what people in ${city} are asking, helping with, and doing together!`,
+          text: `Join me on RALLY — see what people in ${shareCity} are asking, helping with, and doing together!`,
           url: window.location.origin,
         });
         return;
@@ -81,48 +100,70 @@ export default function Home() {
     window.dispatchEvent(new CustomEvent('show-toast', {
       detail: {
         title: 'Invite Link Copied!',
-        subtitle: `Share it with people around ${city} to get RALLYS started.`
+        subtitle: `Share it with people around ${shareCity} to get RALLYS started.`
       }
     }));
   };
 
   const filters = ['All', 'Help', 'Join', 'Paid', 'Free'];
 
-  // Parse numeric radius limit
-  const maxRadius = parseFloat(radius) || 5;
+  const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
+  const isLocating = geoState === 'requesting' || geoState === 'locating';
+  const isDenied = geoState === 'denied';
+  const isUnavailable = geoState === 'unavailable' || geoState === 'error';
 
-  // 1. Strictly local / nearby feed filtered by user's selected city & radius
+  const computeDistance = useCallback(
+    (rallyLat?: number, rallyLng?: number): number | null => {
+      if (!position || rallyLat == null || rallyLng == null) return null;
+      return haversineDistance(
+        { latitude: position.latitude, longitude: position.longitude },
+        { latitude: rallyLat, longitude: rallyLng }
+      );
+    },
+    [position]
+  );
+
   const nearbyRallies = useMemo(() => {
-    return mockRallies.filter(rally => {
-      const rallyCity = (rally.city || 'Lagos').toLowerCase();
-      const currentCity = city.toLowerCase();
-      const matchesCity = rallyCity === currentCity;
-      const matchesRadius = rally.distance <= maxRadius;
-      
-      const matchesFilter = activeFilter === 'All' 
-        || rally.type === activeFilter.toUpperCase() 
-        || (activeFilter === 'Free' && !rally.isPaid) 
-        || (activeFilter === 'Paid' && rally.isPaid);
+    if (!hasLocation) return [];
 
-      return matchesCity && matchesRadius && matchesFilter;
-    });
-  }, [city, maxRadius, activeFilter]);
+    return mockRallies
+      .map((rally) => {
+        const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
+        return { ... rally, computedDistance: dist };
+      })
+      .filter((rally) => {
+        if (rally.computedDistance === null) return false;
+        if (rally.computedDistance > radiusKm) return false;
 
-  // 2. Buzzing locations / Discovery feed (shown when nearby is empty to showcase varied ASK/HELP/JOIN/Paid/Free posts)
+        const matchesFilter =
+          activeFilter === 'All' ||
+          rally.type === activeFilter.toUpperCase() ||
+          (activeFilter === 'Free' && !rally.isPaid) ||
+          (activeFilter === 'Paid' && rally.isPaid);
+
+        return matchesFilter;
+      })
+      .sort((a, b) => (a.computedDistance ?? Infinity) - (b.computedDistance ?? Infinity));
+  }, [hasLocation, radiusKm, activeFilter, computeDistance]);
+
   const buzzingRallies = useMemo(() => {
-    return mockRallies.filter(rally => {
-      const matchesFilter = activeFilter === 'All' 
-        || rally.type === activeFilter.toUpperCase() 
-        || (activeFilter === 'Free' && !rally.isPaid) 
-        || (activeFilter === 'Paid' && rally.isPaid);
-
-      return matchesFilter;
-    });
-  }, [activeFilter]);
+    return mockRallies
+      .filter((rally) => {
+        const matchesFilter =
+          activeFilter === 'All' ||
+          rally.type === activeFilter.toUpperCase() ||
+          (activeFilter === 'Free' && !rally.isPaid) ||
+          (activeFilter === 'Paid' && rally.isPaid);
+        return matchesFilter;
+      })
+      .map((rally) => {
+        const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
+        return { ...rally, computedDistance: dist };
+      });
+  }, [activeFilter, computeDistance]);
 
   return (
     <div className="w-full pt-4 md:pt-6">
-      {/* Notification Prompt */}
       {showNotifPrompt && (
         <div className="px-4 md:px-6 mb-4">
           <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl p-4 flex items-start gap-3 shadow-lg shadow-indigo-500/20">
@@ -159,14 +200,26 @@ export default function Home() {
         </div>
       )}
 
-      {/* Around You Feed */}
       <div className="px-0 md:px-6 pb-24 md:pb-6">
         <div className="px-6 md:px-0">
           <div className="flex items-end justify-between mb-1">
             <h3 className="text-xl md:text-2xl font-bold text-zinc-900 tracking-tight">Around You</h3>
+            {hasLocation && (
+              <button
+                onClick={openLocationModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 text-zinc-600 text-xs font-semibold hover:bg-zinc-200 active:scale-95 transition-all"
+              >
+                <MapPin className="w-3 h-3" />
+                {city || 'Set location'} · {radiusKm} km
+              </button>
+            )}
           </div>
           <p className="text-xs sm:text-sm text-zinc-500 mb-4">
-            See what people nearby are asking, offering and looking for.
+            {hasLocation
+              ? 'See what people nearby are asking, offering and looking for.'
+              : isLocating
+                ? 'Finding your location...'
+                : 'Enable location to see nearby RALLYS.'}
           </p>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar mb-4">
@@ -188,9 +241,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Main Continuous Feed Container */}
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
-          {/* What's your RALLY? Card */}
           <div className="p-6">
             <div className="mb-4">
               <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">What's your RALLY?</h3>
@@ -251,25 +302,83 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Advertisement Segment */}
           <AdCard />
 
-          {/* Dynamic Feed Section */}
-          {isLoading ? (
+          {isLocating ? (
+            <div className="p-8 sm:p-10 text-center">
+              <Loader2 className="w-10 h-10 text-zinc-300 animate-spin mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-zinc-900 mb-1">Finding your location</h3>
+              <p className="text-xs text-zinc-500">Hang tight while we pinpoint where you are.</p>
+            </div>
+          ) : isDenied ? (
+            <div className="p-8 sm:p-10 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-rose-50 border border-rose-100 flex items-center justify-center mx-auto mb-5">
+                <MapPinOff className="w-8 h-8 text-rose-500" strokeWidth={1.75} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
+                Location access is off
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
+                Turn on location permission in your browser settings to see RALLYS near you.
+              </p>
+              <button
+                onClick={requestLocation}
+                className="px-6 py-3 bg-zinc-900 text-white rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all"
+              >
+                TRY AGAIN
+              </button>
+            </div>
+          ) : isUnavailable ? (
+            <div className="p-8 sm:p-10 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-5">
+                <MapPinOff className="w-8 h-8 text-amber-500" strokeWidth={1.75} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
+                We need your location
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-2 leading-relaxed">
+                RALLY uses your location to show people and activities near you.
+              </p>
+              {error && (
+                <p className="text-xs text-rose-500 font-medium mb-4">{error.message}</p>
+              )}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-sm mx-auto">
+                <button
+                  onClick={requestLocation}
+                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all"
+                >
+                  ENABLE LOCATION
+                </button>
+                <button
+                  onClick={openLocationModal}
+                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all border border-zinc-200/80"
+                >
+                  Set manually
+                </button>
+              </div>
+            </div>
+          ) : isLoading ? (
             <>
               <RallyCardSkeleton />
               <RallyCardSkeleton />
               <RallyCardSkeleton />
             </>
           ) : nearbyRallies.length > 0 ? (
-            /* Active Nearby Feed */
             <>
               {nearbyRallies.map(rally => (
-                <RallyCard key={rally.id} rally={rally} />
+                <RallyCard
+                  key={rally.id}
+                  rally={{
+                    ...rally,
+                    distance: rally.computedDistance ?? rally.distance,
+                    locationLabel: rally.computedDistance != null
+                      ? `${city || 'Nearby'} · ${formatDistance(rally.computedDistance)}`
+                      : rally.locationLabel,
+                  }}
+                />
               ))}
             </>
           ) : (
-            /* Empty Nearby State */
             <div className="p-8 sm:p-10 text-center">
               <div className="w-16 h-16 rounded-3xl bg-zinc-100 border border-zinc-200/80 flex items-center justify-center mx-auto mb-5 text-zinc-900 shadow-xs">
                 <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
@@ -302,19 +411,20 @@ export default function Home() {
           )}
         </div>
 
-        {/* Buzzing Locations Onboarding Feed (only shows if nearby is empty) */}
-        {!isLoading && nearbyRallies.length === 0 && (
+        {!isLoading && nearbyRallies.length === 0 && !isLocating && (
           <div className="space-y-6">
             <div>
               <div className="px-6 md:px-0 mb-3 pt-2">
                 <div className="flex items-center gap-2 mb-1">
                   <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   <h3 className="text-lg sm:text-xl font-bold text-zinc-900 tracking-tight">
-                    See what's happening on RALLY
+                    {hasLocation ? "What's happening elsewhere" : "See what's happening on RALLY"}
                   </h3>
                 </div>
                 <p className="text-xs sm:text-sm text-zinc-500">
-                  Get a feel for what people are posting in other locations.
+                  {hasLocation
+                    ? "RALLYS from other areas you might be interested in."
+                    : "Get a feel for what people are posting around Nigeria."}
                 </p>
               </div>
 
@@ -327,7 +437,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Invite Banner */}
         <div className="mt-8 mb-4 px-4 md:px-0">
           <div className="bg-zinc-100 border border-zinc-200 rounded-2xl p-4 flex items-center gap-4">
             <div className="w-14 h-14 rounded-xl bg-zinc-200 flex-shrink-0 flex items-center justify-center">

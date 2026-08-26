@@ -27,6 +27,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLocation as useLocationContext } from '../contexts/LocationContext';
 import CreateRallyModal from '../components/CreateRallyModal';
 import LocationFilterModal from '../components/LocationFilterModal';
+import LocationDebug from '../components/LocationDebug';
 
 export default function AppShell() {
   const navigate = useNavigate();
@@ -35,6 +36,9 @@ export default function AppShell() {
   const { 
     city, 
     radius, 
+    radiusKm,
+    locationLabel,
+    geoState,
     isLocationModalOpen, 
     closeLocationModal, 
     openLocationModal, 
@@ -111,6 +115,7 @@ export default function AppShell() {
     if (path === '/settings/personal-info') return 'Personal Info';
     if (path === '/settings/notifications') return 'Notification Settings';
     if (path === '/settings/privacy') return 'Privacy & Safety';
+    if (path === '/settings/location') return 'Location Settings';
     if (path === '/settings/app') return 'App Settings';
     if (path === '/settings/help' || path === '/help') return 'Help & Support';
     if (path === '/terms') return 'Terms of Service';
@@ -149,10 +154,9 @@ export default function AppShell() {
       <LocationFilterModal 
         isOpen={isLocationModalOpen}
         onClose={closeLocationModal}
-        currentCity={city}
-        currentRadius={radius}
-        onApply={updateLocation}
       />
+
+      <LocationDebug />
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-white border-r border-zinc-200 overflow-y-auto">
@@ -171,7 +175,7 @@ export default function AppShell() {
           >
             <div className="flex items-center gap-2 truncate">
               <MapPin className="w-3.5 h-3.5 text-zinc-800 shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="truncate">{city} · {radius}</span>
+              <span className="truncate">{city || locationLabel || 'Set location'} · {radiusKm} km</span>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
           </button>
@@ -276,7 +280,7 @@ export default function AppShell() {
               title="Change location and radius"
             >
               <MapPin className="w-3.5 h-3.5 text-zinc-900 shrink-0" />
-              <span className="truncate">{city} · {radius}</span>
+              <span className="truncate">{city || locationLabel || 'Set location'} · {radiusKm} km</span>
               <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0" />
             </button>
           ) : (

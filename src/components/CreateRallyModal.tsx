@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign } from 'lucide-react';
 import { ActivityType } from '../types';
 import { cn } from '../lib/utils';
+import { useLocation } from '../contexts/LocationContext';
 
 interface CreateRallyModalProps {
   isOpen: boolean;
@@ -17,6 +18,11 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
   const [isPaid, setIsPaid] = useState<boolean | null>(null);
   const [price, setPrice] = useState('');
 
+  const { city, locationLabel, position, geoState } = useLocation();
+
+  const rallyLocation = city || locationLabel || 'Unknown location';
+  const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
+
   const resetAndClose = () => {
     setStep(1);
     setType(null);
@@ -27,7 +33,6 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
   };
 
   const handlePost = () => {
-    // In a real app, we would save to DB here
     onCreated();
     setTimeout(() => {
       setStep(1);
@@ -35,7 +40,7 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
       setDescription('');
       setIsPaid(null);
       setPrice('');
-    }, 500); // Wait for modal exit animation
+    }, 500);
   };
 
   const typeConfig = {
@@ -117,10 +122,16 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                   <div className="space-y-3">
                     <h3 className="text-sm font-bold text-zinc-900">Location</h3>
                     <div className="flex items-center gap-3 p-4 bg-zinc-50 border border-zinc-100 rounded-2xl">
-                      <MapPin className="w-5 h-5 text-indigo-600 shrink-0" />
+                      <MapPin className={cn("w-5 h-5 shrink-0", hasLocation ? "text-indigo-600" : "text-zinc-400")} />
                       <div>
-                        <div className="text-sm font-semibold text-zinc-900">Approximate location</div>
-                        <div className="text-xs text-zinc-500 mt-0.5">📍 Lekki, Lagos</div>
+                        <div className="text-sm font-semibold text-zinc-900">
+                          {hasLocation ? rallyLocation : 'Location not available'}
+                        </div>
+                        <div className="text-xs text-zinc-500 mt-0.5">
+                          {hasLocation
+                            ? '📍 Posted at your current location'
+                            : 'Enable location to attach your position'}
+                        </div>
                       </div>
                     </div>
                   </div>

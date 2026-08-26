@@ -54,6 +54,8 @@ export const create = mutation({
     creatorId: v.id("users"),
     city: v.optional(v.string()),
     locationLabel: v.optional(v.string()),
+    rallyLatitude: v.optional(v.number()),
+    rallyLongitude: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("rallies", {

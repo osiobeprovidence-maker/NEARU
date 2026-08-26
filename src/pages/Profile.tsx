@@ -51,7 +51,7 @@ export default function Profile() {
           <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4">
             <div className="flex items-center justify-center gap-1 text-zinc-600">
               <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-              <span>{user.location || 'Lagos, Nigeria'}</span>
+              <span>{user.location || 'Location not set'}</span>
             </div>
             <p className="text-zinc-400">
               {interestsList.join(' · ')}

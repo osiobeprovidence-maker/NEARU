@@ -21,6 +21,10 @@ export default defineSchema({
     badges: v.optional(v.array(v.string())),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
+    locationLatitude: v.optional(v.number()),
+    locationLongitude: v.optional(v.number()),
+    locationAccuracy: v.optional(v.number()),
+    locationUpdatedAt: v.optional(v.number()),
     rallies: v.optional(v.number()),
     completed: v.optional(v.number()),
     rating: v.optional(v.number()),
@@ -113,6 +117,8 @@ export default defineSchema({
     createdAt: v.number(),
     city: v.optional(v.string()),
     locationLabel: v.optional(v.string()),
+    rallyLatitude: v.optional(v.number()),
+    rallyLongitude: v.optional(v.number()),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])

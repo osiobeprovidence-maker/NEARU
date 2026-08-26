@@ -78,6 +78,10 @@ export const update = mutation({
     avatar: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
+    locationLatitude: v.optional(v.number()),
+    locationLongitude: v.optional(v.number()),
+    locationAccuracy: v.optional(v.number()),
+    locationUpdatedAt: v.optional(v.number()),
     interests: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {

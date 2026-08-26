@@ -48,6 +48,14 @@ export default function Settings() {
       bg: 'bg-blue-50' 
     },
     { 
+      label: 'Location Settings', 
+      desc: 'GPS access, discovery radius & manual location', 
+      path: '/settings/location', 
+      icon: Sliders, 
+      color: 'text-indigo-600', 
+      bg: 'bg-indigo-50' 
+    },
+    { 
       label: 'Privacy & Safety', 
       desc: 'Location precision, visibility & blocked users', 
       path: '/settings/privacy', 
@@ -142,7 +150,7 @@ export default function Settings() {
                   )}
                 </div>
                 <p className="text-xs text-zinc-400 font-semibold truncate">
-                  {user.username} · {user.location || 'Lagos, Nigeria'}
+                  {user.username} · {user.location || 'Location not set'}
                 </p>
               </div>
             </div>
