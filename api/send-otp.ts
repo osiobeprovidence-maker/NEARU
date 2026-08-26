@@ -1,4 +1,4 @@
-const TERMII_BASE_URL = process.env.TERMII_BASE_URL || "https://api.ng.termii.com";
+const TERMII_BASE_URL = process.env.TERMII_BASE_URL || "https://v4.api.termii.com";
 const TERMII_API_KEY = process.env.TERMII_API_KEY;
 
 function normalizeNigerianPhone(input: string): string | null {
