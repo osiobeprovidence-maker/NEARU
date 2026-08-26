@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -55,7 +55,7 @@ const INTERESTS = [
 const TOTAL_STEPS = 9;
 
 export default function Onboarding() {
-  const { register, updateUser, waitForEmailVerification, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
+  const { register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [stepIndex, setStepIndex] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -74,6 +74,7 @@ export default function Onboarding() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const goNext = () => {
     setDirection(1);
@@ -114,7 +115,7 @@ export default function Onboarding() {
         setEmailVerified(true);
         navigateTo('totp-setup', 4);
       } else {
-        setError('Email not yet verified. Check your inbox and click the link.');
+        setError('Not verified yet. Check your inbox (and spam folder), then tap the link inside the email.');
       }
     } catch {
       setError('Something went wrong. Please try again.');
@@ -122,6 +123,40 @@ export default function Onboarding() {
       setIsLoading(false);
     }
   };
+
+  const handleResendEmail = async () => {
+    if (resendCooldown > 0) return;
+    setError('');
+    setIsLoading(true);
+    try {
+      await resendVerificationEmail();
+      setResendCooldown(30);
+      const interval = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) { clearInterval(interval); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch {
+      setError('Failed to resend. Try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step !== 'verify-email') return;
+    const interval = setInterval(async () => {
+      try {
+        const verified = await waitForEmailVerification();
+        if (verified) {
+          setEmailVerified(true);
+          navigateTo('totp-setup', 4);
+        }
+      } catch { /* ignore */ }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [step]);
 
   const handleSkipTOTP = () => {
     navigateTo('username', 6);
@@ -196,7 +231,7 @@ export default function Onboarding() {
 
   const handleFinish = async () => {
     try {
-      await saveUserToConvex({
+      const userId = await saveUserToConvex({
         name: displayName || firstName,
         username: email.split('@')[0].toLowerCase(),
         email,
@@ -205,8 +240,9 @@ export default function Onboarding() {
         totpEnabled: !!totpSecret,
         isEmailVerified: true,
       });
-    } catch {
-      // user may already exist
+      localStorage.setItem('rally_convex_user_id', userId);
+    } catch (err) {
+      console.error('Failed to save user profile:', err);
     }
     window.location.href = '/';
   };
@@ -385,11 +421,14 @@ export default function Onboarding() {
           <Mail className="w-9 h-9 text-indigo-600" />
         </motion.div>
         <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
-          Check your inbox
+          Verify your email
         </h2>
         <p className="mt-3 text-sm text-zinc-500 max-w-xs mx-auto leading-relaxed">
           We sent a verification link to<br />
           <span className="font-bold text-zinc-900">{email}</span>
+        </p>
+        <p className="mt-2 text-xs text-zinc-400 max-w-xs mx-auto">
+          Tap the link in the email. We'll detect it automatically when you come back.
         </p>
         <div className="mt-8 space-y-3 w-full max-w-xs mx-auto">
           <button
@@ -400,18 +439,20 @@ export default function Onboarding() {
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <>I've Verified <ArrowRight className="w-4 h-4" /></>
+              <>I've Verified — Continue <ArrowRight className="w-4 h-4" /></>
             )}
           </button>
           <button
-            onClick={handleCheckEmailVerified}
-            className="w-full py-3.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors flex items-center justify-center gap-2"
+            onClick={handleResendEmail}
+            disabled={resendCooldown > 0 || isLoading}
+            className="w-full py-3.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            <RefreshCw className="w-4 h-4" /> Refresh Status
+            <RefreshCw className="w-4 h-4" />
+            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend verification email'}
           </button>
         </div>
         {error && (
-          <p className="mt-4 text-sm text-rose-600 font-medium text-center">{error}</p>
+          <p className="mt-4 text-sm text-rose-600 font-medium text-center max-w-xs mx-auto">{error}</p>
         )}
       </div>
     </div>

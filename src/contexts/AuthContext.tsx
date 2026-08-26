@@ -20,6 +20,7 @@ interface AuthContextType {
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   waitForEmailVerification: () => Promise<boolean>;
+  resendVerificationEmail: () => Promise<void>;
   setupTOTP: (email: string) => Promise<{ secret: string; qrCode: string }>;
   verifyTOTP: (secret: string, token: string) => Promise<boolean>;
   saveUserToConvex: (data: {
@@ -112,6 +113,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   updateUser: () => {},
   waitForEmailVerification: async () => false,
+  resendVerificationEmail: async () => {},
   setupTOTP: async () => ({ secret: '', qrCode: '' }),
   verifyTOTP: async () => false,
   saveUserToConvex: async () => '',
@@ -162,19 +164,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await sendEmailVerification(cred.user);
+    await sendEmailVerification(cred.user, {
+      url: window.location.origin,
+      handleCodeInApp: true,
+    });
+  };
+
+  const resendVerificationEmail = async () => {
+    if (!auth.currentUser) return;
+    await sendEmailVerification(auth.currentUser, {
+      url: window.location.origin,
+      handleCodeInApp: true,
+    });
   };
 
   const waitForEmailVerification = async (): Promise<boolean> => {
     if (!auth.currentUser) return false;
-    let attempts = 0;
-    while (attempts < 60) {
-      await reload(auth.currentUser);
-      if (auth.currentUser.emailVerified) return true;
-      await new Promise((r) => setTimeout(r, 2000));
-      attempts++;
-    }
-    return false;
+    await reload(auth.currentUser);
+    return !!auth.currentUser.emailVerified;
   };
 
   const setupTOTP = async (email: string) => {
@@ -339,6 +346,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         updateUser,
         waitForEmailVerification,
+        resendVerificationEmail,
         setupTOTP,
         verifyTOTP,
         saveUserToConvex,
