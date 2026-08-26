@@ -20,7 +20,6 @@ import {
   Compass,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { ConfirmationResult } from 'firebase/auth';
 
 type Step =
   | 'welcome'
@@ -60,9 +59,8 @@ export default function Onboarding() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [locationGranted, setLocationGranted] = useState(false);
 
-  // Firebase state
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [otpError, setOtpError] = useState('');
+  const [otpConfirmation, setOtpConfirmation] = useState<{ confirm: (code: string) => Promise<void> } | null>(null);
   const [isSendingOTP, setIsSendingOTP] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -90,8 +88,8 @@ export default function Onboarding() {
     setIsSendingOTP(true);
     try {
       const fullPhone = phone.startsWith('+') ? phone : `+234${phone.replace(/^0/, '')}`;
-      const result = await sendOTP(fullPhone);
-      setConfirmationResult(result);
+      const confirmation = await sendOTP(fullPhone);
+      setOtpConfirmation(confirmation);
       navigateTo('otp', 2);
     } catch (err) {
       setOtpError('Failed to send code. Please try again.');
@@ -106,7 +104,7 @@ export default function Onboarding() {
     setOtpError('');
     setIsVerifying(true);
     try {
-      await confirmationResult?.confirm(otp);
+      await otpConfirmation?.confirm(otp);
       navigateTo('profile', 3);
     } catch {
       setOtpError('Invalid code. Try again.');
@@ -523,7 +521,6 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-zinc-50 relative overflow-hidden">
       <ProgressBar />
-      <div id="recaptcha-container" className="fixed bottom-0 right-0 z-[999]" />
       <AnimatePresence mode="wait" custom={direction}>
         <motion.div
           key={step}

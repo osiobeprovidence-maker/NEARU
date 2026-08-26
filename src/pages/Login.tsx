@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { ShieldCheck, MapPin, Search, ArrowLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { ConfirmationResult } from 'firebase/auth';
 
 type Step = 'landing' | 'phone' | 'otp' | 'email' | 'info';
 
 export default function Login() {
   const { sendOTP } = useAuth();
   const [step, setStep] = useState<Step>('landing');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [otpConfirmation, setOtpConfirmation] = useState<{ confirm: (code: string) => Promise<void> } | null>(null);
   const [otpError, setOtpError] = useState('');
   const [isSendingOTP, setIsSendingOTP] = useState(false);
   
@@ -25,8 +24,8 @@ export default function Login() {
     setIsSendingOTP(true);
     try {
       const fullPhone = phone.startsWith('+') ? phone : `+234${phone.replace(/^0/, '')}`;
-      const result = await sendOTP(fullPhone);
-      setConfirmationResult(result);
+      const confirmation = await sendOTP(fullPhone);
+      setOtpConfirmation(confirmation);
       setStep('otp');
     } catch (err) {
       setOtpError('Failed to send code. Please try again.');
@@ -40,7 +39,7 @@ export default function Login() {
     e.preventDefault();
     setOtpError('');
     try {
-      await confirmationResult?.confirm(otp);
+      await otpConfirmation?.confirm(otp);
       setStep('email');
     } catch {
       setOtpError('Invalid code. Please try again.');
@@ -316,7 +315,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div id="recaptcha-container" />
       {step === 'landing' && renderLanding()}
       {step === 'phone' && renderPhone()}
       {step === 'otp' && renderOtp()}

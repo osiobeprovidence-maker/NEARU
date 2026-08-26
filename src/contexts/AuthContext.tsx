@@ -1,21 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, PrivacySettings, NotificationSettings, AppSettings, TrustedContact, BlockedUser } from '../types';
 import { currentUser as initialCurrentUser } from '../data/mock';
-import { auth, setupRecaptcha } from '../lib/firebase';
-import { 
-  signInWithPhoneNumber, 
-  ConfirmationResult, 
-  signOut,
-  onAuthStateChanged,
-  User as FirebaseUser
-} from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+
+interface OtpConfirmation {
+  confirm: (code: string) => Promise<void>;
+}
 
 interface AuthContextType {
   isLoggedIn: boolean;
   isAuthLoading: boolean;
   user: User;
   firebaseUser: FirebaseUser | null;
-  sendOTP: (phoneNumber: string) => Promise<ConfirmationResult>;
+  sendOTP: (phoneNumber: string) => Promise<OtpConfirmation>;
   login: () => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -95,7 +93,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthLoading: true,
   user: initialUserState,
   firebaseUser: null,
-  sendOTP: async () => ({ confirmation: { confirm: async () => ({}) } }) as unknown as ConfirmationResult,
+  sendOTP: async () => ({ confirm: async () => {} }),
   login: () => {},
   logout: () => {},
   updateUser: () => {},
@@ -144,10 +142,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  const sendOTP = async (phoneNumber: string): Promise<ConfirmationResult> => {
-    const appVerifier = setupRecaptcha('recaptcha-container');
-    const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
-    return confirmation;
+  const sendOTP = async (phoneNumber: string): Promise<OtpConfirmation> => {
+    const res = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phoneNumber }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send code');
+
+    return {
+      confirm: async (code: string) => {
+        const verifyRes = await fetch('/api/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: data.phone, code }),
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok) throw new Error(verifyData.error || 'Invalid code');
+      },
+    };
   };
 
   const logout = async () => {
@@ -271,4 +285,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-
