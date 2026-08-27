@@ -11,7 +11,7 @@ import {
   reload,
 } from '../lib/firebase';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 interface AuthContextType {
@@ -162,6 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const queryEmail = firebaseUser?.email || undefined;
   const queryResult = useQuery(api.users.getByEmail, queryEmail !== undefined ? { email: queryEmail } : 'skip');
+  const convexCreateUser = useMutation(api.users.create);
+  const convexUpdateAuth = useMutation(api.users.updateAuth);
+  const convexGetOrCreateByEmail = useMutation(api.users.getOrCreateByEmail);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -211,21 +214,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const syncExistingUser = async () => {
       try {
-        const res = await fetch('/api/save-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            username: firebaseUser.email?.split('@')[0] || 'user',
-            email: firebaseUser.email || '',
-            passwordHash: '',
-            isEmailVerified: true,
-          }),
+        const userId = await convexGetOrCreateByEmail({
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          username: firebaseUser.email?.split('@')[0] || 'user',
+          email: firebaseUser.email || '',
         });
-        const data = await res.json();
-        if (data.userId) {
-          setConvexUserId(data.userId);
-          localStorage.setItem('rally_convex_user_id', data.userId);
+        if (userId) {
+          setConvexUserId(userId);
+          localStorage.setItem('rally_convex_user_id', userId);
         }
       } catch (err) {
         console.error('Failed to sync existing user to Convex:', err);
@@ -233,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     syncExistingUser();
-  }, [firebaseUser, profileChecked, hasConvexProfile, convexUserId]);
+  }, [firebaseUser, profileChecked, hasConvexProfile, convexUserId, convexGetOrCreateByEmail]);
 
   const isLoggedIn = !!firebaseUser;
 
@@ -297,14 +293,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     totpEnabled?: boolean;
     isEmailVerified: boolean;
   }) => {
-    const res = await fetch('/api/save-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+    const userId = await convexCreateUser({
+      name: data.name,
+      username: data.username,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=6366f1&color=fff&bold=true&size=200`,
+      email: data.email,
+      isNINVerified: false,
+      isPhoneVerified: false,
+      isEmailVerified: data.isEmailVerified,
+      passwordHash: data.passwordHash || undefined,
     });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Failed to save user');
-    return result.userId;
+    if (data.totpSecret || data.totpEnabled) {
+      await convexUpdateAuth({
+        userId: userId as any,
+        totpSecret: data.totpSecret || undefined,
+        totpEnabled: data.totpEnabled || false,
+      });
+    }
+    return userId;
   };
 
   const login = async (emailOrUsername: string, password: string) => {
