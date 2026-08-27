@@ -24,33 +24,40 @@ export default function Verification() {
   const [step, setStep] = useState<'idle' | 1 | 2 | 3 | 4>('idle');
   
   // Step 1 Form Inputs
-  const [fullName, setFullName] = useState(user.name || 'Alex Johnson');
-  const [ninNumber, setNinNumber] = useState(user.nin || '23481920384');
-  const [dob, setDob] = useState(user.birthday || '1998-05-12');
+  const [fullName, setFullName] = useState(user.name || '');
+  const [ninNumber, setNinNumber] = useState(user.nin || '');
+  const [dob, setDob] = useState(user.birthday || '');
   const [formError, setFormError] = useState('');
   
-  // Step 2 processing stage simulation
+  // Step 2 processing state
   const [processingStage, setProcessingStage] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  const verificationDate = '12 July 2026';
+  // Results from Ninja verification
+  const [resultScore, setResultScore] = useState<number | null>(null);
+  const [resultRecommendation, setResultRecommendation] = useState<string | null>(null);
+
+  const verificationDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
   // Format Date of Birth for human-readable confirmation
   const formatDisplayDate = (dateStr: string) => {
     try {
-      if (!dateStr) return '12 May 1998';
+      if (!dateStr) return '';
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
       return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     } catch {
-      return '12 May 1998';
+      return dateStr;
     }
   };
 
-  // Step 1 -> Step 2
+  // Step 1 -> Step 2 (start real verification)
   const handleStartFlow = () => {
     setStep(1);
     setFormError('');
+    setVerifyError('');
   };
 
   const handleStep1Submit = (e: React.FormEvent) => {
@@ -60,40 +67,56 @@ export default function Verification() {
       setFormError('Please enter a valid 11-digit National Identification Number (NIN).');
       return;
     }
-    if (!fullName.trim()) {
-      setFormError('Please provide your legal full name.');
+    const nameParts = fullName.trim().split(/\s+/);
+    if (nameParts.length < 2 || !fullName.trim()) {
+      setFormError('Please provide your legal full name (first and last name).');
+      return;
+    }
+    if (!dob) {
+      setFormError('Please provide your date of birth.');
       return;
     }
     setFormError('');
+    setVerifyError('');
     setStep(2);
+    setProcessingStage(1);
+
+    const firstName = nameParts.slice(0, -1).join(' ');
+    const lastName = nameParts[nameParts.length - 1];
+
+    (async () => {
+      setIsVerifying(true);
+      setProcessingStage(2);
+      const result = await verifyNIN({
+        nin: cleanNIN,
+        firstName,
+        lastName,
+        dateOfBirth: dob,
+      });
+      setIsVerifying(false);
+
+      if (result.verified) {
+        setProcessingStage(3);
+        setResultScore(result.score ?? null);
+        setResultRecommendation(result.recommendation ?? null);
+        updateUser({
+          name: fullName,
+          birthday: dob,
+          isNINVerified: true
+        });
+        setTimeout(() => setStep(3), 600);
+      } else {
+        setVerifyError(result.error || 'Identity verification failed. Please check your details and try again.');
+        setTimeout(() => {
+          setStep(1);
+          setProcessingStage(0);
+        }, 400);
+      }
+    })();
   };
-
-  // Step 2 Auto Processing Animation & Transition
-  useEffect(() => {
-    if (step === 2) {
-      setProcessingStage(1);
-      const timer1 = setTimeout(() => setProcessingStage(2), 700);
-      const timer2 = setTimeout(() => setProcessingStage(3), 1400);
-      const timer3 = setTimeout(() => {
-        setStep(3);
-      }, 2200);
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        clearTimeout(timer3);
-      };
-    }
-  }, [step]);
 
   // Step 3 -> Step 4
   const handleConfirmIdentity = async () => {
-    await verifyNIN(ninNumber);
-    updateUser({
-      name: fullName,
-      birthday: dob,
-      isNINVerified: true
-    });
     setStep(4);
   };
 
@@ -102,11 +125,12 @@ export default function Verification() {
     setStep('idle');
   };
 
-  // Reset to unverified state (for testing / demo purposes)
+  // Reset to unverified state
   const handleResetVerification = () => {
     updateUser({ isNINVerified: false });
     setStep('idle');
     setFormError('');
+    setVerifyError('');
   };
 
   return (
@@ -180,6 +204,9 @@ export default function Verification() {
                       />
                       <UserIcon className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3.5" />
                     </div>
+                    <p className="text-[11px] text-zinc-400 font-medium mt-1">
+                      Enter your legal name as printed on your National ID slip.
+                    </p>
                   </div>
 
                   {/* NIN Number */}
@@ -259,10 +286,10 @@ export default function Verification() {
 
                 <div className="max-w-sm mx-auto space-y-1.5">
                   <h3 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-                    Verifying your identity...
+                    {isVerifying ? 'Verifying your identity...' : 'Checking your identity...'}
                   </h3>
                   <p className="text-xs sm:text-sm text-zinc-500 font-medium">
-                    Checking your information securely.
+                    Checking your information against the national registry.
                   </p>
                 </div>
 
@@ -301,6 +328,13 @@ export default function Verification() {
                     </span>
                   </div>
                 </div>
+
+                {verifyError && (
+                  <div className="max-w-sm mx-auto p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 text-left flex items-start gap-2">
+                    <X className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{verifyError}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -325,6 +359,20 @@ export default function Verification() {
                       Match Found
                     </span>
                   </div>
+
+                  {resultScore != null && (
+                    <div className="py-3 flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Match Score</span>
+                      <span className="text-sm font-black text-zinc-900">{Math.round(resultScore * 100)}%</span>
+                    </div>
+                  )}
+
+                  {resultRecommendation && (
+                    <div className="py-3 flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Recommendation</span>
+                      <span className="text-sm font-bold text-zinc-800 capitalize">{resultRecommendation}</span>
+                    </div>
+                  )}
 
                   <div className="py-3 flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Full Name</span>
@@ -592,7 +640,7 @@ export default function Verification() {
                 </div>
 
                 <p className="text-[11px] text-zinc-500 font-medium leading-relaxed">
-                  Your identity verification ensures genuine neighborhood participation while completely hiding private biometric and demographic data.
+                  Your identity was verified through a trusted national identity gateway. Private biometric and demographic data remains hidden.
                 </p>
               </div>
 

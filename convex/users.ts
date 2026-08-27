@@ -304,6 +304,35 @@ export const addTrustedContact = mutation({
   },
 });
 
+export const setNINVerified = mutation({
+  args: {
+    userId: v.id("users"),
+    nin: v.string(),
+    verifiedData: v.optional(v.object({
+      firstName: v.optional(v.string()),
+      lastName: v.optional(v.string()),
+      dateOfBirth: v.optional(v.string()),
+      gender: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return;
+    await ctx.db.patch(args.userId, {
+      isNINVerified: true,
+      nin: args.nin,
+      gender: args.verifiedData?.gender || user.gender,
+      birthday: args.verifiedData?.dateOfBirth || user.birthday,
+    });
+    const badges = user.badges ?? [];
+    if (!badges.includes("NIN Verified")) {
+      await ctx.db.patch(args.userId, {
+        badges: [...badges, "NIN Verified"],
+      });
+    }
+  },
+});
+
 export const syncLocation = mutation({
   args: {
     userId: v.id("users"),
