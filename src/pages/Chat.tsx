@@ -1,22 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, MapPin, MoreVertical, BadgeCheck, Star, Image as ImageIcon, AlertCircle, Smile, Paperclip, Camera, Mic, Play } from 'lucide-react';
-import { mockConversations, mockUsers } from '../data/mock';
-
-type ChatMessage = {
-  id: string;
-  senderId: string;
-  text: string;
-  timestamp: string;
-  type?: 'text' | 'image' | 'audio' | 'location';
-  url?: string;
-};
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀'];
 
 export default function Chat() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { convexUserId } = useAuth();
   const [message, setMessage] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -24,27 +18,20 @@ export default function Chat() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const conversation = mockConversations.find(c => c.id === id) || mockConversations[0];
-  const otherUser = conversation.participants[0];
-  
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'old1',
-      senderId: otherUser.id,
-      text: 'Hey!',
-      type: 'text',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: conversation.lastMessage.id,
-      senderId: conversation.lastMessage.senderId,
-      text: conversation.lastMessage.text,
-      type: 'text',
-      timestamp: conversation.lastMessage.timestamp,
-    }
-  ]);
-  
+  const sendMessage = useMutation(api.messages.send);
+
+  const conversation = useQuery(
+    api.messages.getConversation,
+    id && convexUserId ? { conversationId: id as any, userId: convexUserId as any } : 'skip'
+  );
+
+  const messages = useQuery(
+    api.messages.listByConversation,
+    id ? { conversationId: id as any } : 'skip'
+  );
+
+  const otherUser = conversation?.otherParticipant;
+
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,17 +48,15 @@ export default function Chat() {
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
-    
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      senderId: 'me',
-      type: 'text',
+    if (!message.trim() || !id || !convexUserId) return;
+
+    await sendMessage({
+      conversationId: id as any,
+      senderId: convexUserId as any,
       text: message.trim(),
-      timestamp: new Date().toISOString()
-    }]);
+    });
     setMessage('');
     setShowEmojis(false);
   };
@@ -80,41 +65,17 @@ export default function Chat() {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        senderId: 'me',
-        type: 'image',
-        url,
-        text: '',
-        timestamp: new Date().toISOString()
-      }]);
+      // File upload not yet implemented with Convex storage
+      console.log('File selected:', url);
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const sendLocation = () => {
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      senderId: 'me',
-      type: 'location',
-      text: '',
-      timestamp: new Date().toISOString()
-    }]);
-    setShowAttachmentMenu(false);
-  };
-
   const handleMicClick = () => {
     if (isRecording) {
       setIsRecording(false);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        senderId: 'me',
-        type: 'audio',
-        text: '',
-        timestamp: new Date().toISOString()
-      }]);
     } else {
       setIsRecording(true);
     }
@@ -126,6 +87,14 @@ export default function Chat() {
       detail: { title, subtitle }
     }));
   };
+
+  if (!conversation || !otherUser) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-80px)] md:h-screen w-full bg-white items-center justify-center">
+        <div className="text-zinc-400 text-sm">Loading conversation...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] md:h-screen w-full bg-white relative">
@@ -157,7 +126,7 @@ export default function Chat() {
                 {otherUser.isNINVerified && (
                   <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 )}
-                {otherUser.badges?.map(badge => (
+                {otherUser.badges?.map((badge: string) => (
                   <div title={badge} key={badge} className="flex items-center justify-center w-4 h-4 bg-amber-100 rounded-full text-amber-600 shrink-0">
                     <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                   </div>
@@ -179,13 +148,13 @@ export default function Chat() {
           {isMenuOpen && (
             <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-zinc-100 overflow-hidden z-50">
               <button 
-                onClick={() => navigate(`/review/${otherUser.id}`)}
+                onClick={() => navigate(`/review/${otherUser._id}`)}
                 className="w-full text-left px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center gap-2"
               >
                 <Star className="w-4 h-4" /> Leave a Review
               </button>
               <button 
-                onClick={() => navigate(`/report/${otherUser.id}`)}
+                onClick={() => navigate(`/report/${otherUser._id}`)}
                 className="w-full text-left px-4 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 border-t border-zinc-100"
               >
                 <AlertCircle className="w-4 h-4" /> Report User
@@ -203,52 +172,30 @@ export default function Chat() {
           </div>
         </div>
         
-        {messages.map(msg => {
-          const isMe = msg.senderId === 'me';
-          return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div 
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                  isMe 
-                    ? 'bg-black text-white rounded-br-sm' 
-                    : 'bg-zinc-100 text-zinc-900 rounded-bl-sm font-medium'
-                }`}
-              >
-                {msg.type === 'image' && msg.url && (
-                  <img src={msg.url} alt="Attachment" className="max-w-full rounded-xl mb-1 object-cover max-h-48" />
-                )}
-                {msg.type === 'audio' && (
-                  <div className="flex items-center gap-3 py-1">
-                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center shrink-0">
-                      <Play className="w-4 h-4 text-white ml-0.5" />
-                    </div>
-                    <div className="flex-1 w-24 h-1 bg-zinc-700 rounded-full relative overflow-hidden">
-                      <div className="absolute inset-y-0 left-0 w-1/3 bg-white rounded-full"></div>
-                    </div>
-                    <span className="text-[10px] opacity-70">0:03</span>
+        {messages === undefined ? (
+          <div className="text-center text-zinc-400 text-sm py-8">Loading messages...</div>
+        ) : (
+          messages.map(msg => {
+            const isMe = msg.senderId === convexUserId;
+            return (
+              <div key={msg._id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <div 
+                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
+                    isMe 
+                      ? 'bg-black text-white rounded-br-sm' 
+                      : 'bg-zinc-100 text-zinc-900 rounded-bl-sm font-medium'
+                  }`}
+                >
+                  {msg.text && <div>{msg.text}</div>}
+                  
+                  <div className={`text-[10px] mt-1 text-right ${isMe ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                )}
-                {msg.type === 'location' && (
-                  <div className="flex items-center gap-3 py-1">
-                    <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center shrink-0">
-                      <MapPin className="w-5 h-5 text-rose-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm">Location Shared</p>
-                      <p className="text-[10px] opacity-70">Tap to open map</p>
-                    </div>
-                  </div>
-                )}
-                
-                {msg.text && <div>{msg.text}</div>}
-                
-                <div className={`text-[10px] mt-1 text-right ${isMe ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
         <div ref={endRef} />
       </div>
 
@@ -283,7 +230,7 @@ export default function Chat() {
             </button>
             <button 
               type="button" 
-              onClick={sendLocation} 
+              onClick={() => setShowAttachmentMenu(false)} 
               className="flex items-center gap-3 p-2 hover:bg-zinc-100 rounded-xl text-sm font-semibold text-zinc-700"
             >
               <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageShell from '../components/PageShell';
-import { mockUsers } from '../data/mock';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { AlertCircle, ChevronRight, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -17,7 +18,7 @@ const REPORT_REASONS = [
 export default function ReportUser() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const user = mockUsers[id || ''] || mockUsers['david'];
+  const user = useQuery(api.users.get, id ? { userId: id as any } : 'skip');
   
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [details, setDetails] = useState('');
@@ -27,10 +28,18 @@ export default function ReportUser() {
     if (!selectedReason) return;
     
     window.dispatchEvent(new CustomEvent('show-toast', {
-      detail: { title: 'Report Submitted', subtitle: `We'll review your report about ${user.name} shortly.` }
+      detail: { title: 'Report Submitted', subtitle: `We'll review your report about ${user?.name || 'this user'} shortly.` }
     }));
     navigate(-1);
   };
+
+  if (!user) {
+    return (
+      <PageShell title="Report User">
+        <div className="p-8 text-center text-zinc-500">Loading...</div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell title={`Report ${user.name}`}>

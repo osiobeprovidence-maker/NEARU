@@ -1,20 +1,24 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import PageShell from '../components/PageShell';
 import { Search } from 'lucide-react';
-import { mockRallies } from '../data/mock';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import { cn } from '../lib/utils';
+import { Rally } from '../types';
 
 export default function Explore() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('Nearby');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('Nearest');
-  
+
+  const convexRallies = useQuery(api.rallies.listWithCreators);
+
   const categories = ['Nearby', 'Trending', 'Events', 'Help', 'Paid', 'Free', 'Activities', 'Transport', 'Errands', 'Community'];
-  
-  useEffect(() => {
+
+  React.useEffect(() => {
     setIsLoading(true);
     const timer = setTimeout(() => {
       setIsLoading(false);
@@ -22,12 +26,54 @@ export default function Explore() {
     return () => clearTimeout(timer);
   }, [activeCategory, sortBy]);
 
+  const allRallies: Rally[] = useMemo(() => {
+    if (!convexRallies) return [];
+    return convexRallies.map((r) => ({
+      id: r._id,
+      type: r.type,
+      title: r.title,
+      description: r.description,
+      distance: 0,
+      time: r.time,
+      peopleNeeded: r.peopleNeeded,
+      peopleInterested: r.peopleInterested,
+      isPaid: r.isPaid,
+      price: r.price,
+      creator: r.creator ? {
+        id: r.creator._id,
+        name: r.creator.name,
+        username: r.creator.username,
+        avatar: r.creator.avatar,
+        isNINVerified: r.creator.isNINVerified,
+        isPhoneVerified: false,
+        badges: r.creator.badges,
+      } : {
+        id: 'unknown',
+        name: 'Unknown',
+        username: '@unknown',
+        avatar: '',
+        isNINVerified: false,
+        isPhoneVerified: false,
+      },
+      status: r.status,
+      createdAt: new Date(r.createdAt).toISOString(),
+      city: r.city,
+      locationLabel: r.locationLabel,
+      rallyLatitude: r.rallyLatitude,
+      rallyLongitude: r.rallyLongitude,
+      category: r.category as Rally['category'],
+      eventDate: r.eventDate,
+      mediaUrl: r.mediaUrl,
+      mediaType: r.mediaType as Rally['mediaType'],
+    }));
+  }, [convexRallies]);
+
   const filteredRallies = useMemo(() => {
-    let result = [...mockRallies];
+    let result = [...allRallies];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(r => 
+      result = result.filter(r =>
         r.title.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q) ||
         r.creator.name.toLowerCase().includes(q)
@@ -57,7 +103,7 @@ export default function Explore() {
     }
 
     return result;
-  }, [activeCategory, searchQuery, sortBy]);
+  }, [activeCategory, searchQuery, sortBy, allRallies]);
 
   return (
     <PageShell title="Explore RALLY">
@@ -111,7 +157,7 @@ export default function Explore() {
       </div>
 
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-        {isLoading ? (
+        {isLoading || convexRallies === undefined ? (
           <>
             <RallyCardSkeleton />
             <RallyCardSkeleton />

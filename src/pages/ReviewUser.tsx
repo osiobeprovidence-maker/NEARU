@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageShell from '../components/PageShell';
-import { mockUsers } from '../data/mock';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { Star, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function ReviewUser() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const user = mockUsers[id || ''] || mockUsers['david'];
+  const user = useQuery(api.users.get, id ? { userId: id as any } : 'skip');
   
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -19,10 +20,18 @@ export default function ReviewUser() {
     if (rating === 0) return;
     
     window.dispatchEvent(new CustomEvent('show-toast', {
-      detail: { title: 'Review Submitted', subtitle: `Thank you for reviewing ${user.name}.` }
+      detail: { title: 'Review Submitted', subtitle: `Thank you for reviewing ${user?.name || 'this user'}.` }
     }));
     navigate(-1);
   };
+
+  if (!user) {
+    return (
+      <PageShell title="Review User">
+        <div className="p-8 text-center text-zinc-500">Loading...</div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell title={`Review ${user.name}`}>
