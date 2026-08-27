@@ -41,12 +41,7 @@ interface AuthContextType {
     totpEnabled?: boolean;
     isEmailVerified: boolean;
   }) => Promise<string>;
-  verifyNIN: (details: {
-    nin: string;
-    firstName: string;
-    lastName: string;
-    dateOfBirth?: string;
-  }) => Promise<{ verified: boolean; score?: number | null; recommendation?: string | null; error?: string }>;
+  updateUserVerification: () => void;
   updatePrivacySettings: (settings: Partial<PrivacySettings>) => void;
   updateNotificationSettings: (settings: Partial<NotificationSettings>) => void;
   updateAppSettings: (settings: Partial<AppSettings>) => void;
@@ -112,7 +107,7 @@ const AuthContext = createContext<AuthContextType>({
   setupTOTP: async () => ({ secret: '', qrCode: '' }),
   verifyTOTP: async () => false,
   saveUserToConvex: async () => '',
-  verifyNIN: async () => ({ verified: false, error: 'Not available' }),
+  updateUserVerification: async () => {},
   updatePrivacySettings: () => {},
   updateNotificationSettings: () => {},
   updateAppSettings: () => {},
@@ -170,7 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const convexCreateUser = useMutation(api.users.create);
   const convexUpdateAuth = useMutation(api.users.updateAuth);
   const convexGetOrCreateByEmail = useMutation(api.users.getOrCreateByEmail);
-  const convexSetNINVerified = useMutation(api.users.setNINVerified);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -369,64 +363,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const verifyNIN = async (details: {
-    nin: string;
-    firstName: string;
-    lastName: string;
-    dateOfBirth?: string;
-  }): Promise<{ verified: boolean; score?: number | null; recommendation?: string | null; error?: string }> => {
-    try {
-      const res = await fetch('/api/verify-nin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(details),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        return { verified: false, error: data.error || 'Verification failed.' };
-      }
-
-      if (data.verified && convexUserId) {
-        try {
-          await convexSetNINVerified({
-            userId: convexUserId as any,
-            nin: details.nin,
-            verifiedData: {
-              firstName: details.firstName,
-              lastName: details.lastName,
-              dateOfBirth: details.dateOfBirth,
-            },
-          });
-        } catch {}
-      }
-
-      if (data.verified) {
-        setUser((prev) => {
-          const currentBadges = prev.badges || [];
-          const updatedBadges = currentBadges.includes('NIN Verified')
-            ? currentBadges
-            : [...currentBadges, 'NIN Verified'];
-          return {
-            ...prev,
-            nin: details.nin,
-            isNINVerified: true,
-            birthday: details.dateOfBirth || prev.birthday,
-            badges: updatedBadges,
-          };
-        });
-      }
-
-      return {
-        verified: data.verified === true,
-        score: data.score ?? null,
-        recommendation: data.recommendation ?? null,
-        error: data.verified ? undefined : data.error || 'Identity verification failed.',
+  const updateUserVerification = () => {
+    setUser((prev) => {
+      const currentBadges = prev.badges || [];
+      const updatedBadges = currentBadges.includes('NIN Verified')
+        ? currentBadges
+        : [...currentBadges, 'NIN Verified'];
+      const updated = {
+        ...prev,
+        isNINVerified: true,
+        badges: updatedBadges,
       };
-    } catch (err) {
-      console.error('NIN verification error:', err);
-      return { verified: false, error: 'Verification service temporarily unavailable.' };
-    }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const updatePrivacySettings = (settings: Partial<PrivacySettings>) => {
@@ -515,7 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setupTOTP,
         verifyTOTP,
         saveUserToConvex,
-        verifyNIN,
+        updateUserVerification,
         updatePrivacySettings,
         updateNotificationSettings,
         updateAppSettings,

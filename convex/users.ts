@@ -316,20 +316,8 @@ export const setNINVerified = mutation({
     })),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return;
-    await ctx.db.patch(args.userId, {
-      isNINVerified: true,
-      nin: args.nin,
-      gender: args.verifiedData?.gender || user.gender,
-      birthday: args.verifiedData?.dateOfBirth || user.birthday,
-    });
-    const badges = user.badges ?? [];
-    if (!badges.includes("NIN Verified")) {
-      await ctx.db.patch(args.userId, {
-        badges: [...badges, "NIN Verified"],
-      });
-    }
+    // Deprecated: the paid verification flow is server-gated.
+    throw new Error("setNINVerified is disabled. Use the server-gated verification flow.");
   },
 });
 

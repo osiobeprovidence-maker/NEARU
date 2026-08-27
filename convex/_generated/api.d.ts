@@ -15,6 +15,7 @@ import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as rallies from "../rallies.js";
 import type * as users from "../users.js";
+import type * as verifications from "../verifications.js";
 
 import type {
   ApiFromModules,
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   rallies: typeof rallies;
   users: typeof users;
+  verifications: typeof verifications;
 }>;
 
 /**

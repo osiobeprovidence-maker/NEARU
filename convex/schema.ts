@@ -212,4 +212,47 @@ export default defineSchema({
     auth: v.string(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]).index("by_endpoint", ["endpoint"]),
+
+  verifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(),
+    provider: v.string(),
+    amountKobo: v.number(),
+    currency: v.string(),
+    customerAmountKobo: v.number(),
+    providerCostKobo: v.number(),
+    grossMarginKobo: v.number(),
+    paymentReference: v.string(),
+    paymentStatus: v.union(
+      v.literal("CREATED"),
+      v.literal("PAYMENT_PENDING"),
+      v.literal("PAYMENT_SUCCESS"),
+      v.literal("PAYMENT_FAILED"),
+      v.literal("REFUNDED")
+    ),
+    verificationStatus: v.union(
+      v.literal("NOT_STARTED"),
+      v.literal("VERIFICATION_PENDING"),
+      v.literal("VERIFIED"),
+      v.literal("VERIFICATION_FAILED"),
+      v.literal("PROVIDER_ERROR")
+    ),
+    ninjaReference: v.optional(v.string()),
+    ninHash: v.optional(v.string()),
+    pendingNin: v.optional(v.string()),
+    resultData: v.optional(v.any()),
+    failureReason: v.optional(v.string()),
+    paystackReference: v.optional(v.string()),
+    createdAt: v.number(),
+    paidAt: v.optional(v.number()),
+    verifiedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+    verifiedFirstName: v.optional(v.string()),
+    verifiedLastName: v.optional(v.string()),
+    verifiedDob: v.optional(v.string()),
+  })
+    .index("by_payment_reference", ["paymentReference"])
+    .index("by_user", ["userId"])
+    .index("by_status", ["verificationStatus"])
+    .index("by_user_created", ["userId", "createdAt"]),
 });

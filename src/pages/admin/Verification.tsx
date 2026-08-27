@@ -1,466 +1,428 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  ShieldCheck, 
-  ShieldAlert, 
-  Search, 
-  Filter, 
-  CheckCircle2, 
-  XCircle, 
-  Eye, 
-  BadgeCheck, 
-  Clock, 
-  UserCheck, 
-  AlertTriangle, 
-  FileText, 
-  RotateCcw, 
-  Lock, 
-  EyeOff, 
-  Sparkles,
-  Check,
-  X
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  BadgeCheck,
+  RefreshCw,
+  Eye,
+  Search,
+  Banknote,
+  Landmark,
+  Wallet,
+  TrendingUp,
+  ShieldAlert,
+  AlertTriangle,
+  X,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Fingerprint,
 } from 'lucide-react';
-import { useAdmin, AdminVerification } from '../../contexts/AdminContext';
 import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
 import { AdminModal } from '../../components/admin/AdminModal';
-import { AdminStatsCard } from '../../components/admin/AdminStatsCard';
 import { cn } from '../../lib/utils';
+import {
+  AdminVerificationTx,
+  AdminVerificationReport,
+  getAdminVerifications,
+  getAdminVerificationReport,
+  formatNaira,
+  formatDate,
+  getPaymentStatusLabel,
+  getVerificationStatusLabel,
+} from '../../lib/adminVerification';
+
+type FilterKey =
+  | 'ALL'
+  | 'PAYMENT_PENDING'
+  | 'PAYMENT_SUCCESS'
+  | 'VERIFICATION_PENDING'
+  | 'VERIFIED'
+  | 'FAILED'
+  | 'VERIFICATION_FAILED'
+  | 'PROVIDER_ERROR';
+
+const FILTERS: { id: FilterKey; label: string }[] = [
+  { id: 'ALL', label: 'All' },
+  { id: 'PAYMENT_PENDING', label: 'Payment Pending' },
+  { id: 'PAYMENT_SUCCESS', label: 'Paid' },
+  { id: 'VERIFICATION_PENDING', label: 'Verification Pending' },
+  { id: 'VERIFIED', label: 'Verified' },
+  { id: 'VERIFICATION_FAILED', label: 'Verification Failed' },
+  { id: 'PROVIDER_ERROR', label: 'Provider Error' },
+];
+
+function filterMatches(tx: AdminVerificationTx, filter: FilterKey): boolean {
+  switch (filter) {
+    case 'ALL': return true;
+    case 'PAYMENT_PENDING': return tx.paymentStatus === 'PAYMENT_PENDING';
+    case 'PAYMENT_SUCCESS': return tx.paymentStatus === 'PAYMENT_SUCCESS';
+    case 'VERIFICATION_PENDING':
+      return tx.paymentStatus === 'PAYMENT_SUCCESS' && tx.verificationStatus === 'VERIFICATION_PENDING';
+    case 'VERIFIED': return tx.verificationStatus === 'VERIFIED';
+    case 'VERIFICATION_FAILED': return tx.verificationStatus === 'VERIFICATION_FAILED';
+    case 'PROVIDER_ERROR': return tx.verificationStatus === 'PROVIDER_ERROR';
+    default: return true;
+  }
+}
+
+function statusPill(paymentStatus: string, verificationStatus: string) {
+  // Primary status shown to admins: prefer verification outcome once paid.
+  if (verificationStatus === 'VERIFIED') {
+    return { label: 'Verified', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  }
+  if (verificationStatus === 'VERIFICATION_FAILED') {
+    return { label: 'Verification Failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+  }
+  if (verificationStatus === 'PROVIDER_ERROR') {
+    return { label: 'Provider Error', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  if (paymentStatus === 'PAYMENT_SUCCESS') {
+    return { label: 'Paid · Verifying', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+  }
+  if (paymentStatus === 'PAYMENT_FAILED') {
+    return { label: 'Payment Failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+  }
+  return { label: 'Payment Initialised', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' };
+}
 
 export default function AdminVerificationPage() {
-  const { 
-    verifications, 
-    approveVerification, 
-    rejectVerification, 
-    requestResubmission 
-  } = useAdmin();
+  const [verifications, setVerifications] = useState<AdminVerificationTx[]>([]);
+  const [report, setReport] = useState<AdminVerificationReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState<FilterKey>('ALL');
+  const [selected, setSelected] = useState<AdminVerificationTx | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [selectedVerification, setSelectedVerification] = useState<AdminVerification | null>(null);
-  const [modalType, setModalType] = useState<'approve' | 'reject' | 'resubmit' | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('BLURRY_IMAGE');
-  const [customRejectionNote, setCustomRejectionNote] = useState('');
-  const [showFullNIN, setShowFullNIN] = useState<Record<string, boolean>>({});
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [listRes, reportRes] = await Promise.all([
+        getAdminVerifications(),
+        getAdminVerificationReport(),
+      ]);
+      setVerifications(listRes.verifications || []);
+      setReport(reportRes.report);
+    } catch (err: any) {
+      setError(err.message || 'Could not load verification records.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Metrics
-  const pendingCount = verifications.filter(v => v.status === 'PENDING').length;
-  const inReviewCount = verifications.filter(v => v.status === 'IN_REVIEW').length;
-  const approvedCount = verifications.filter(v => v.status === 'APPROVED').length;
-  const rejectedCount = verifications.filter(v => v.status === 'REJECTED').length;
+  useEffect(() => { load(); }, [load]);
 
-  const filteredList = useMemo(() => {
-    return verifications.filter(v => {
-      if (statusFilter !== 'ALL' && v.status !== statusFilter) return false;
-      return true;
-    });
-  }, [verifications, statusFilter]);
+  const filteredList = useMemo(
+    () => verifications.filter((v) => filterMatches(v, filter)),
+    [verifications, filter]
+  );
 
-  const toggleNINVisibility = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowFullNIN(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  const stats = useMemo(() => {
+    const paid = verifications.filter((v) => v.paymentStatus === 'PAYMENT_SUCCESS').length;
+    const verified = verifications.filter((v) => v.verificationStatus === 'VERIFIED').length;
+    const failed = verifications.filter(
+      (v) => v.verificationStatus === 'VERIFICATION_FAILED' || v.verificationStatus === 'PROVIDER_ERROR'
+    ).length;
+    const pendingPayment = verifications.filter((v) => v.paymentStatus === 'PAYMENT_PENDING').length;
+    return { paid, verified, failed, pendingPayment };
+  }, [verifications]);
 
-  const handleConfirmApprove = () => {
-    if (!selectedVerification) return;
-    approveVerification(selectedVerification.id);
-    setSelectedVerification(prev => prev ? { ...prev, status: 'APPROVED' } : null);
-    setModalType(null);
-  };
-
-  const handleConfirmReject = () => {
-    if (!selectedVerification) return;
-    const reasonText = rejectionReason === 'OTHER' ? customRejectionNote : rejectionReason.replace('_', ' ');
-    rejectVerification(selectedVerification.id, reasonText);
-    setSelectedVerification(prev => prev ? { ...prev, status: 'REJECTED', rejectionReason: reasonText } : null);
-    setModalType(null);
-    setCustomRejectionNote('');
-  };
-
-  const handleConfirmResubmit = () => {
-    if (!selectedVerification) return;
-    requestResubmission(selectedVerification.id, customRejectionNote || 'Please provide a clearer photo of your NIN slip.');
-    setSelectedVerification(prev => prev ? { ...prev, status: 'PENDING' } : null);
-    setModalType(null);
-    setCustomRejectionNote('');
-  };
-
-  const columns: Column<AdminVerification>[] = [
+  const columns: Column<AdminVerificationTx>[] = [
     {
-      key: 'userName',
-      header: 'Applicant',
-      sortable: true,
+      key: 'transactionId',
+      header: 'Transaction',
       render: (v) => (
-        <div className="flex items-center gap-3">
-          <img src={v.userAvatar} alt={v.userName} className="w-10 h-10 rounded-2xl object-cover border border-zinc-200" />
-          <div className="min-w-0">
-            <span className="font-bold text-zinc-900 block truncate">{v.userName}</span>
-            <span className="text-[11px] text-zinc-400 font-medium">{v.userHandle}</span>
-          </div>
+        <div className="min-w-0">
+          <span className="font-bold text-zinc-900 block truncate text-xs">{v.transactionId}</span>
+          <span className="text-[11px] text-zinc-400 font-medium">{v.type || 'NIN_VERIFICATION'}</span>
         </div>
       ),
     },
     {
-      key: 'ninNumber',
-      header: 'NIN Number',
+      key: 'paymentReference',
+      header: 'Payment Ref',
       render: (v) => (
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-bold text-zinc-800">
-            {showFullNIN[v.id] ? v.ninNumber : `•••••••${v.ninNumber.slice(-4)}`}
-          </span>
-          <button 
-            onClick={(e) => toggleNINVisibility(v.id, e)}
-            className="text-zinc-400 hover:text-zinc-700 p-1"
-            title="Toggle NIN visibility"
-          >
-            {showFullNIN[v.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
-        </div>
+        <span className="font-mono text-xs font-bold text-zinc-700">{v.paymentReference}</span>
       ),
     },
     {
-      key: 'confidenceScore',
-      header: 'NIMC Match AI',
-      sortable: true,
+      key: 'amount',
+      header: 'Amount',
       render: (v) => (
-        <div className="flex items-center gap-2">
-          <span className={cn(
-            "text-xs font-black px-2 py-0.5 rounded-lg flex items-center gap-1",
-            v.confidenceScore >= 90 ? "bg-emerald-100 text-emerald-800" :
-            v.confidenceScore >= 75 ? "bg-amber-100 text-amber-800" :
-            "bg-rose-100 text-rose-800"
-          )}>
-            <Sparkles className="w-3 h-3" />
-            {v.confidenceScore}%
-          </span>
-        </div>
+        <span className="text-xs font-black text-zinc-900">{formatNaira(v.amount)}</span>
       ),
     },
     {
-      key: 'submittedAt',
-      header: 'Submitted',
-      sortable: true,
-      render: (v) => (
-        <span className="text-xs text-zinc-500 font-medium">
-          {v.submittedAt}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
+      key: 'paymentStatus',
+      header: 'Payment',
       sortable: true,
       render: (v) => (
         <span className={cn(
-          "text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider",
-          v.status === 'APPROVED' ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-          v.status === 'PENDING' ? "bg-amber-50 text-amber-700 border border-amber-200" :
-          v.status === 'IN_REVIEW' ? "bg-indigo-50 text-indigo-700 border border-indigo-200" :
-          "bg-rose-50 text-rose-700 border border-rose-200"
+          "text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-block whitespace-nowrap",
+          v.paymentStatus === 'PAYMENT_SUCCESS' ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+          v.paymentStatus === 'PAYMENT_FAILED' ? "bg-rose-50 text-rose-700 border border-rose-200" :
+          "bg-zinc-100 text-zinc-600 border border-zinc-200"
         )}>
-          {v.status.replace('_', ' ')}
+          {getPaymentStatusLabel(v.paymentStatus)}
         </span>
+      ),
+    },
+    {
+      key: 'verificationStatus',
+      header: 'Verification',
+      sortable: true,
+      render: (v) => {
+        const pill = statusPill(v.paymentStatus, v.verificationStatus);
+        return (
+          <span className={cn(
+            "text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border inline-block whitespace-nowrap",
+            pill.cls
+          )}>
+            {pill.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'ninHashMasked',
+      header: 'NIN (masked)',
+      render: (v) => (
+        <span className="font-mono text-xs font-bold text-zinc-500">{v.ninHashMasked || '—'}</span>
+      ),
+    },
+    {
+      key: 'createdAt',
+      header: 'Created',
+      sortable: true,
+      render: (v) => (
+        <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">{formatDate(v.createdAt)}</span>
       ),
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: '',
       align: 'right',
       render: (v) => (
-        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => setSelectedVerification(v)}
-            className="p-1.5 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
-            title="Inspect Verification Documents"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-          {v.status !== 'APPROVED' && (
-            <button
-              onClick={() => approveVerification(v.id)}
-              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
-              title="Quick Approve"
-            >
-              <Check className="w-4 h-4" />
-            </button>
-          )}
-          {v.status !== 'REJECTED' && (
-            <button
-              onClick={() => {
-                setSelectedVerification(v);
-                setModalType('reject');
-              }}
-              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-              title="Reject Application"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); setSelected(v); }}
+          className="p-1.5 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+          title="View details"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
       ),
-    }
+    },
   ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">Identity Verification Queue</h2>
-        <p className="text-zinc-500 font-medium text-xs sm:text-sm mt-1">
-          Review National Identity Management Commission (NIMC) NIN credentials and photo identity verification.
-        </p>
-      </div>
-
-      {/* Overview Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center">
-          <span className="text-[10px] font-bold text-amber-700 uppercase">Pending Review</span>
-          <p className="text-2xl font-black text-amber-900 mt-1">{pendingCount}</p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">Identity Verification</h2>
+          <p className="text-zinc-500 font-medium text-xs sm:text-sm mt-1">
+            Paid NIN verification transactions from the live backend.
+          </p>
         </div>
-        <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-center">
-          <span className="text-[10px] font-bold text-indigo-700 uppercase">In Active Review</span>
-          <p className="text-2xl font-black text-indigo-900 mt-1">{inReviewCount}</p>
-        </div>
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
-          <span className="text-[10px] font-bold text-emerald-700 uppercase">Approved Profiles</span>
-          <p className="text-2xl font-black text-emerald-900 mt-1">{approvedCount}</p>
-        </div>
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center">
-          <span className="text-[10px] font-bold text-rose-700 uppercase">Rejected / Flagged</span>
-          <p className="text-2xl font-black text-rose-900 mt-1">{rejectedCount}</p>
-        </div>
-      </div>
-
-      {/* Verification Data Table */}
-      <AdminDataTable
-        data={filteredList}
-        columns={columns}
-        keyExtractor={(v) => v.id}
-        searchPlaceholder="Search applicant name, handle, or NIN..."
-        searchFields={['userName', 'userHandle', 'ninNumber']}
-        exportFileName="nin-verifications"
-        onRowClick={(v) => setSelectedVerification(v)}
-        filters={[
-          {
-            id: 'status',
-            label: 'Status',
-            value: statusFilter,
-            onChange: setStatusFilter,
-            options: [
-              { label: 'All Statuses', value: 'ALL' },
-              { label: 'Pending', value: 'PENDING' },
-              { label: 'In Review', value: 'IN_REVIEW' },
-              { label: 'Approved', value: 'APPROVED' },
-              { label: 'Rejected', value: 'REJECTED' },
-            ]
-          }
-        ]}
-        bulkActions={[
-          {
-            label: 'Approve Selected',
-            icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-            variant: 'success',
-            action: (ids) => {
-              ids.forEach(id => approveVerification(id));
-            }
-          }
-        ]}
-      />
-
-      {/* DETAILED VERIFICATION INSPECTION MODAL */}
-      {selectedVerification && (
-        <AdminModal
-          isOpen={Boolean(selectedVerification)}
-          onClose={() => setSelectedVerification(null)}
-          title={`NIN Verification: ${selectedVerification.userName}`}
-          subtitle={`Application ID: ${selectedVerification.id} · Submitted ${selectedVerification.submittedAt}`}
-          maxWidth="3xl"
+        <button
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-50"
         >
-          <div className="space-y-6">
-            {/* Top Match Bar */}
-            <div className="p-5 rounded-3xl bg-zinc-50 border border-zinc-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <img src={selectedVerification.userAvatar} alt="" className="w-12 h-12 rounded-2xl object-cover border border-zinc-200" />
-                <div>
-                  <h3 className="text-base font-black text-zinc-900">{selectedVerification.userName}</h3>
-                  <p className="text-xs text-zinc-500 font-medium">{selectedVerification.userHandle}</p>
-                </div>
-              </div>
+          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+          Refresh
+        </button>
+      </div>
 
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <span className="text-[10px] font-bold text-zinc-400 block uppercase">NIMC AI Match</span>
-                  <span className="text-lg font-black text-emerald-600">{selectedVerification.confidenceScore}% Confidence</span>
-                </div>
-                <span className={cn(
-                  "text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider",
-                  selectedVerification.status === 'APPROVED' ? "bg-emerald-100 text-emerald-800" :
-                  selectedVerification.status === 'PENDING' ? "bg-amber-100 text-amber-800" :
-                  "bg-rose-100 text-rose-800"
-                )}>
-                  {selectedVerification.status}
-                </span>
-              </div>
-            </div>
-
-            {/* Document Previews (Side-by-side) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Selfie / Profile photo */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Live Camera Selfie</span>
-                <div className="h-48 rounded-2xl bg-zinc-100 border border-zinc-200 overflow-hidden flex items-center justify-center">
-                  <img src={selectedVerification.selfiePhotoUrl} alt="Selfie" className="w-full h-full object-cover" />
-                </div>
-              </div>
-
-              {/* NIN Document / Slip */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">NIN Slip / Government Card</span>
-                <div className="h-48 rounded-2xl bg-zinc-100 border border-zinc-200 overflow-hidden flex items-center justify-center">
-                  <img src={selectedVerification.documentPhotoUrl} alt="NIN Doc" className="w-full h-full object-cover" />
-                </div>
-              </div>
-            </div>
-
-            {/* NIN Registry Comparison Info */}
-            <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 block uppercase">NIN Number</span>
-                  <span className="font-mono font-bold text-zinc-900">{selectedVerification.ninNumber}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 block uppercase">NIMC Match Status</span>
-                  <span className="font-bold text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Biometrics Valid
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 block uppercase">Face Similarity</span>
-                  <span className="font-bold text-zinc-900">{selectedVerification.confidenceScore}%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Bar */}
-            <div className="pt-4 border-t border-zinc-200 flex flex-wrap items-center justify-between gap-3">
-              <button
-                onClick={() => setModalType('resubmit')}
-                className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold transition-colors"
-              >
-                Request Re-submission
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setModalType('reject')}
-                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors"
-                >
-                  Reject Application
-                </button>
-                <button
-                  onClick={handleConfirmApprove}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
-                >
-                  APPROVE & GRANT BADGE
-                </button>
-              </div>
-            </div>
-          </div>
-        </AdminModal>
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs font-bold">
+          {error}
+        </div>
       )}
 
-      {/* MODAL: REJECT VERIFICATION */}
-      <AdminModal
-        isOpen={modalType === 'reject'}
-        onClose={() => setModalType(null)}
-        title="Reject Identity Verification?"
-        subtitle="Specify the rejection reason to notify the user."
-        variant="danger"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-              Rejection Reason
-            </label>
-            <select
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              className="w-full p-2.5 bg-white border border-zinc-200 rounded-2xl text-xs sm:text-sm font-bold"
-            >
-              <option value="BLURRY_IMAGE">Document photo is blurry or unreadable</option>
-              <option value="NIN_MISMATCH">Name does not match official NIMC records</option>
-              <option value="EXPIRED_DOCUMENT">ID document is expired</option>
-              <option value="FACE_MISMATCH">Selfie does not match photo on identity card</option>
-              <option value="OTHER">Other Reason...</option>
-            </select>
-          </div>
-
-          {rejectionReason === 'OTHER' && (
-            <div>
-              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-                Custom Feedback for User
-              </label>
-              <textarea
-                value={customRejectionNote}
-                onChange={(e) => setCustomRejectionNote(e.target.value)}
-                placeholder="Explain the specific issue with the submission..."
-                rows={3}
-                className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-              />
+      {/* Report / Overview */}
+      {report && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          <div className="p-4 rounded-2xl bg-zinc-900 text-white">
+            <div className="flex items-center gap-2 text-white/70">
+              <Banknote className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Gross Margin</span>
             </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2.5 pt-2">
-            <button
-              onClick={() => setModalType(null)}
-              className="px-4 py-2.5 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-xl"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirmReject}
-              className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-2xl transition-colors shadow-sm"
-            >
-              Confirm Rejection
-            </button>
+            <p className="text-xl sm:text-2xl font-black mt-2">{formatNaira(report.grossMargin, true)}</p>
+            <p className="text-[10px] text-white/50 font-medium mt-1">Est. · {report.unit}</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <Wallet className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Revenue</span>
+            </div>
+            <p className="text-xl sm:text-2xl font-black text-emerald-900 mt-2">{formatNaira(report.totalRevenue, true)}</p>
+            <p className="text-[10px] font-bold text-emerald-600 mt-1">{report.totalSuccessfulPayments} payments</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200">
+            <div className="flex items-center gap-2 text-zinc-700">
+              <Landmark className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Provider Cost</span>
+            </div>
+            <p className="text-xl sm:text-2xl font-black text-zinc-900 mt-2">{formatNaira(report.totalProviderCost, true)}</p>
+            <p className="text-[10px] font-bold text-zinc-500 mt-1">Ninja verification</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
+            <div className="flex items-center gap-2 text-indigo-700">
+              <BadgeCheck className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Verified</span>
+            </div>
+            <p className="text-xl sm:text-2xl font-black text-indigo-900 mt-2">{report.totalSuccessfulVerifications}</p>
+            <p className="text-[10px] font-bold text-indigo-600 mt-1">of {report.totalTransactions} txn</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200">
+            <div className="flex items-center gap-2 text-rose-700">
+              <ShieldAlert className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Failed / Errors</span>
+            </div>
+            <p className="text-xl sm:text-2xl font-black text-rose-900 mt-2">{report.failedVerifications + report.providerErrors}</p>
+            <p className="text-[10px] font-bold text-rose-600 mt-1">{report.providerErrors} provider errors</p>
           </div>
         </div>
-      </AdminModal>
+      )}
 
-      {/* MODAL: REQUEST RESUBMISSION */}
+      {/* Quick status tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+          <span className="text-[11px] font-bold text-amber-700">Payment Pending</span>
+          <span className="text-lg font-black text-amber-900">{stats.pendingPayment}</span>
+        </div>
+        <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
+          <span className="text-[11px] font-bold text-indigo-700">Paid</span>
+          <span className="text-lg font-black text-indigo-900">{stats.paid}</span>
+        </div>
+        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+          <span className="text-[11px] font-bold text-emerald-700">Verified</span>
+          <span className="text-lg font-black text-emerald-900">{stats.verified}</span>
+        </div>
+        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between">
+          <span className="text-[11px] font-bold text-rose-700">Failed</span>
+          <span className="text-lg font-black text-rose-900">{stats.failed}</span>
+        </div>
+      </div>
+
+      {/* Data table */}
+      {loading && verifications.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
+          <Loader2 className="w-8 h-8 animate-spin mb-3 text-zinc-300" />
+          <p className="text-xs font-bold">Loading verification records...</p>
+        </div>
+      ) : (
+        <AdminDataTable
+          data={filteredList}
+          columns={columns}
+          keyExtractor={(v) => v.transactionId}
+          searchPlaceholder="Search transaction or payment reference..."
+          searchFields={['transactionId', 'paymentReference', 'paystackReference', 'ninHashMasked']}
+          exportFileName="verification-transactions"
+          onRowClick={(v) => setSelected(v)}
+          emptyTitle="No verification transactions"
+          emptySubtitle="Paid NIN verification records will appear here once customers go through the flow."
+          filters={[
+            {
+              id: 'status',
+              label: 'Status',
+              value: filter,
+              onChange: (v) => setFilter(v as FilterKey),
+              options: FILTERS.map((f) => ({ label: f.label, value: f.id })),
+            },
+          ]}
+        />
+      )}
+
+      {/* Detail modal */}
       <AdminModal
-        isOpen={modalType === 'resubmit'}
-        onClose={() => setModalType(null)}
-        title="Request Document Re-submission"
-        subtitle="Prompt the user to re-upload clearer verification credentials."
+        isOpen={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title="Verification Transaction"
+        subtitle={selected ? `ID: ${selected.transactionId}` : ''}
+        maxWidth="2xl"
       >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-              Instruction for User
-            </label>
-            <textarea
-              value={customRejectionNote}
-              onChange={(e) => setCustomRejectionNote(e.target.value)}
-              placeholder="e.g. Please take a well-lit photo of your original NIMC paper slip..."
-              rows={3}
-              className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
+        {selected && (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-2xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <BadgeCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 block uppercase">Overall Status</span>
+                  {(() => { const p = statusPill(selected.paymentStatus, selected.verificationStatus); return (
+                    <span className={cn("text-[11px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border inline-block mt-1", p.cls)}>{p.label}</span>
+                  ); })()}
+                </div>
+              </div>
+              <span className="text-2xl font-black text-zinc-900">{formatNaira(selected.amount)}</span>
+            </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-2">
-            <button
-              onClick={() => setModalType(null)}
-              className="px-4 py-2.5 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-xl"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirmResubmit}
-              className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-2xl transition-colors"
-            >
-              Send Request
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
+                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Payment Status</span>
+                <span className="font-bold text-zinc-900 block mt-1">{getPaymentStatusLabel(selected.paymentStatus)}</span>
+              </div>
+              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
+                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Verification Status</span>
+                <span className="font-bold text-zinc-900 block mt-1">{getVerificationStatusLabel(selected.verificationStatus)}</span>
+              </div>
+              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
+                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Payment Reference</span>
+                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.paymentReference}</span>
+              </div>
+              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
+                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Paystack Reference</span>
+                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.paystackReference || '—'}</span>
+              </div>
+              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
+                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Ninja Reference</span>
+                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.ninjaReference || '—'}</span>
+              </div>
+              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
+                <span className="text-[10px] font-bold text-zinc-400 block uppercase">NIN (masked)</span>
+                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.ninHashMasked || '—'}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div className="flex items-center gap-2 text-xs text-zinc-600">
+                <Clock className="w-4 h-4 text-zinc-400" />
+                <div>
+                  <span className="block text-[10px] font-bold text-zinc-400 uppercase">Created</span>
+                  <span className="font-bold text-zinc-900">{formatDate(selected.createdAt)}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-600">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <div>
+                  <span className="block text-[10px] font-bold text-zinc-400 uppercase">Paid</span>
+                  <span className="font-bold text-zinc-900">{formatDate(selected.paidAt)}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-600">
+                <BadgeCheck className="w-4 h-4 text-emerald-500" />
+                <div>
+                  <span className="block text-[10px] font-bold text-zinc-400 uppercase">Verified</span>
+                  <span className="font-bold text-zinc-900">{formatDate(selected.verifiedAt)}</span>
+                </div>
+              </div>
+            </div>
+
+            {selected.failureReason && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2 text-xs text-amber-800 font-medium">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span><b>Failure reason:</b> {selected.failureReason}</span>
+              </div>
+            )}
+
+            <p className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
+              <X className="w-3.5 h-3.5" />
+              Raw NIN is never stored; only a masked hash {selected.ninHashMasked ? `(${selected.ninHashMasked})` : ''} is shown.
+            </p>
           </div>
-        </div>
+        )}
       </AdminModal>
     </div>
   );
