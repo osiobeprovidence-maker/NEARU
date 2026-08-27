@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, PrivacySettings, NotificationSettings, AppSettings, TrustedContact, BlockedUser } from '../types';
-import { currentUser as initialCurrentUser } from '../data/mock';
 import {
   auth,
   createUserWithEmailAndPassword,
@@ -12,11 +11,16 @@ import {
   reload,
 } from '../lib/firebase';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 interface AuthContextType {
   isLoggedIn: boolean;
   isAuthLoading: boolean;
+  isProfileLoading: boolean;
+  hasConvexProfile: boolean;
   user: User;
+  convexUserId: string | null;
   firebaseUser: FirebaseUser | null;
   register: (email: string, password: string) => Promise<void>;
   login: (emailOrUsername: string, password: string) => Promise<void>;
@@ -75,43 +79,22 @@ const defaultAppSettings: AppSettings = {
   cacheSizeMB: 24.8,
 };
 
-const defaultTrustedContacts: TrustedContact[] = [
-  {
-    id: 'tc-1',
-    name: 'Ada Johnson',
-    phone: '+234 803 123 4567',
-    relationship: 'Sister',
-  }
-];
-
-const defaultBlockedUsers: BlockedUser[] = [
-  {
-    id: 'block-1',
-    name: 'Spam Bot 3000',
-    username: '@bot3000',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-    blockedAt: '2 days ago',
-  }
-];
-
-const initialUserState: User = {
-  ...initialCurrentUser,
-  email: 'alex.johnson@example.com',
-  phone: '+234 812 345 6789',
-  gender: 'Male',
-  birthday: '1998-05-14',
-  interests: ['Outdoor & Sports', 'Social Hangouts', 'Music & Events', 'Tech & Gaming'],
-  privacySettings: defaultPrivacySettings,
-  notificationSettings: defaultNotificationSettings,
-  appSettings: defaultAppSettings,
-  trustedContacts: defaultTrustedContacts,
-  blockedUsers: defaultBlockedUsers,
+const EMPTY_USER: User = {
+  id: '',
+  name: '',
+  username: '',
+  avatar: '',
+  isNINVerified: false,
+  isPhoneVerified: false,
 };
 
 const AuthContext = createContext<AuthContextType>({
   isLoggedIn: false,
   isAuthLoading: true,
-  user: initialUserState,
+  isProfileLoading: true,
+  hasConvexProfile: false,
+  user: EMPTY_USER,
+  convexUserId: null,
   firebaseUser: null,
   register: async () => {},
   login: async () => {},
@@ -136,38 +119,123 @@ const AuthContext = createContext<AuthContextType>({
 
 const STORAGE_KEY = 'rally_user_profile_v1';
 
+function convexUserToUser(cu: any, firebaseEmail: string): User {
+  return {
+    id: cu._id,
+    name: cu.name || '',
+    username: cu.username || '',
+    avatar: cu.avatar || '',
+    email: cu.email || firebaseEmail,
+    phone: cu.phone,
+    nin: cu.nin,
+    gender: cu.gender,
+    birthday: cu.birthday,
+    interests: cu.interests,
+    isNINVerified: cu.isNINVerified ?? false,
+    isPhoneVerified: cu.isPhoneVerified ?? false,
+    badges: cu.badges,
+    bio: cu.bio,
+    location: cu.location,
+    stats: cu.rallies != null ? {
+      rallies: cu.rallies ?? 0,
+      completed: cu.completed ?? 0,
+      rating: cu.rating ?? 0,
+    } : undefined,
+    privacySettings: cu.privacySettings,
+    notificationSettings: cu.notificationSettings,
+    appSettings: cu.appSettings,
+    trustedContacts: cu.trustedContacts,
+    blockedUsers: cu.blockedUsers,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [user, setUser] = useState<User>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        return { ...initialUserState, ...JSON.parse(saved) };
-      }
-    } catch {
-      // Fallback
-    }
-    return initialUserState;
+  const [user, setUser] = useState<User>(EMPTY_USER);
+  const [convexUserId, setConvexUserId] = useState<string | null>(() => {
+    return localStorage.getItem('rally_convex_user_id');
   });
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [hasConvexProfile, setHasConvexProfile] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
+
+  const queryEmail = firebaseUser?.email || undefined;
+  const queryResult = useQuery(api.users.getByEmail, queryEmail !== undefined ? { email: queryEmail } : 'skip');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       setIsAuthLoading(false);
+      if (!fbUser) {
+        setConvexUserId(null);
+        setHasConvexProfile(false);
+        setUser(EMPTY_USER);
+        setIsProfileLoading(false);
+        setProfileChecked(true);
+        localStorage.removeItem('rally_convex_user_id');
+        localStorage.removeItem(STORAGE_KEY);
+      }
     });
     return unsubscribe;
   }, []);
 
-  const isLoggedIn = !!firebaseUser;
+  useEffect(() => {
+    if (firebaseUser === null) return;
+
+    if (queryResult === undefined) {
+      setIsProfileLoading(true);
+      return;
+    }
+
+    if (queryResult === null) {
+      setHasConvexProfile(false);
+      setConvexUserId(null);
+      setIsProfileLoading(false);
+      setProfileChecked(true);
+      return;
+    }
+
+    const u = convexUserToUser(queryResult, firebaseUser.email || '');
+    setUser(u);
+    setConvexUserId(queryResult._id);
+    setHasConvexProfile(true);
+    setIsProfileLoading(false);
+    setProfileChecked(true);
+    localStorage.setItem('rally_convex_user_id', queryResult._id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+  }, [firebaseUser, queryResult]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    } catch {
-      // ignore
-    }
-  }, [user]);
+    if (!firebaseUser || !profileChecked || hasConvexProfile || convexUserId) return;
+
+    const syncExistingUser = async () => {
+      try {
+        const res = await fetch('/api/save-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            username: firebaseUser.email?.split('@')[0] || 'user',
+            email: firebaseUser.email || '',
+            passwordHash: '',
+            isEmailVerified: true,
+          }),
+        });
+        const data = await res.json();
+        if (data.userId) {
+          setConvexUserId(data.userId);
+          localStorage.setItem('rally_convex_user_id', data.userId);
+        }
+      } catch (err) {
+        console.error('Failed to sync existing user to Convex:', err);
+      }
+    };
+
+    syncExistingUser();
+  }, [firebaseUser, profileChecked, hasConvexProfile, convexUserId]);
+
+  const isLoggedIn = !!firebaseUser;
 
   const register = async (email: string, password: string) => {
     if (auth.currentUser) {
@@ -282,6 +350,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = (updates: Partial<User>) => {
     setUser((prev) => {
       const updated = { ...prev, ...updates };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
       return updated;
     });
   };
@@ -293,7 +364,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updatedBadges = currentBadges.includes('NIN Verified')
         ? currentBadges
         : [...currentBadges, 'NIN Verified'];
-
       return {
         ...prev,
         nin,
@@ -374,7 +444,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         isLoggedIn,
         isAuthLoading,
+        isProfileLoading,
+        hasConvexProfile,
         user,
+        convexUserId,
         firebaseUser,
         register,
         login,

@@ -64,7 +64,7 @@ const NIGERIAN_CITIES = [
 ];
 
 export default function EditProfile() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, convexUserId } = useAuth();
   const { position, geoState } = useLocation();
   const updateUserMutation = useMutation(api.users.update);
   const navigate = useNavigate();
@@ -118,8 +118,7 @@ export default function EditProfile() {
       interests,
     });
 
-    const convexUserId = localStorage.getItem('rally_convex_user_id');
-    if (convexUserId && convexUserId !== 'local') {
+    if (convexUserId) {
       try {
         await updateUserMutation({
           userId: convexUserId as any,

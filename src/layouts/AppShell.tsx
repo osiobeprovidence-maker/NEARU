@@ -22,7 +22,6 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { currentUser } from '../data/mock';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation as useLocationContext } from '../contexts/LocationContext';
 import CreateRallyModal from '../components/CreateRallyModal';

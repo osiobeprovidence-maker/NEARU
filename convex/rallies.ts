@@ -12,6 +12,38 @@ export const list = query({
   },
 });
 
+export const listWithCreators = query({
+  args: {},
+  handler: async (ctx) => {
+    const rallies = await ctx.db
+      .query("rallies")
+      .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
+      .order("desc")
+      .collect();
+
+    const creatorIds = [...new Set(rallies.map((r) => r.creatorId))];
+    const creators: Record<string, any> = {};
+    for (const id of creatorIds) {
+      const user = await ctx.db.get(id);
+      if (user) {
+        creators[id] = {
+          _id: user._id,
+          name: user.name,
+          username: user.username,
+          avatar: user.avatar,
+          isNINVerified: user.isNINVerified,
+          badges: user.badges,
+        };
+      }
+    }
+
+    return rallies.map((rally) => ({
+      ...rally,
+      creator: creators[rally.creatorId] || null,
+    }));
+  },
+});
+
 export const listByCity = query({
   args: { city: v.string() },
   handler: async (ctx, args) => {

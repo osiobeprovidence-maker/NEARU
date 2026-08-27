@@ -3,7 +3,6 @@ import { AlertCircle, Heart, Users, Share2, Compass, Bell, X, MapPin, MapPinOff,
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { cn } from '../lib/utils';
-import { mockUsers } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
 import { haversineDistance, formatDistance } from '../lib/geo';
 import { Rally } from '../types';
@@ -32,7 +31,7 @@ export default function Home() {
     return !localStorage.getItem(EXPLAINER_DISMISSED_KEY);
   });
 
-  const convexRallies = useQuery(api.rallies.list);
+  const convexRallies = useQuery(api.rallies.listWithCreators);
 
   const feedIsLoaded = convexRallies !== undefined;
 
@@ -148,7 +147,22 @@ export default function Home() {
         peopleInterested: r.peopleInterested,
         isPaid: r.isPaid,
         price: r.price,
-        creator: mockUsers.david,
+        creator: r.creator ? {
+          id: r.creator._id,
+          name: r.creator.name,
+          username: r.creator.username,
+          avatar: r.creator.avatar,
+          isNINVerified: r.creator.isNINVerified,
+          isPhoneVerified: false,
+          badges: r.creator.badges,
+        } : {
+          id: 'unknown',
+          name: 'Unknown',
+          username: '@unknown',
+          avatar: '',
+          isNINVerified: false,
+          isPhoneVerified: false,
+        },
         status: r.status,
         createdAt: new Date(r.createdAt).toISOString(),
         city: r.city,

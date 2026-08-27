@@ -22,11 +22,24 @@ export const getByUsername = query({
 export const getByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    const users = await ctx.db
+    return await ctx.db
       .query("users")
-      .filter((q) => q.eq(q.field("email"), args.email))
-      .collect();
-    return users[0] || null;
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .unique();
+  },
+});
+
+export const getByIds = query({
+  args: { ids: v.array(v.id("users")) },
+  handler: async (ctx, args) => {
+    const results: Record<string, any> = {};
+    for (const id of args.ids) {
+      if (!results[id]) {
+        const user = await ctx.db.get(id);
+        if (user) results[id] = user;
+      }
+    }
+    return results;
   },
 });
 

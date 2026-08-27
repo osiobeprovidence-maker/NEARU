@@ -64,6 +64,7 @@ export default function Onboarding() {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
@@ -204,7 +205,6 @@ export default function Onboarding() {
     if (!firstName.trim()) return;
     const fullName = `${firstName} ${lastName}`.trim();
     setDisplayName(fullName);
-    updateUser({ name: fullName });
     navigateTo('interests', 7);
   };
 
@@ -238,20 +238,21 @@ export default function Onboarding() {
   };
 
   const handleFinish = async () => {
+    const fullName = `${firstName} ${lastName}`.trim();
     const userData = {
-      name: displayName || firstName,
-      username: email.split('@')[0].toLowerCase(),
+      name: fullName || firstName,
+      username: username || email.split('@')[0].toLowerCase(),
       email,
       totpSecret: totpSecret || undefined,
       totpEnabled: !!totpSecret,
       isEmailVerified: true,
     };
-    localStorage.setItem('rally_user_profile_v1', JSON.stringify({
-      ...user,
+    const profileData = {
       ...userData,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=6366f1&color=fff&bold=true&size=200`,
-    }));
-    updateUser(userData);
+    };
+    localStorage.setItem('rally_user_profile_v1', JSON.stringify(profileData));
+    updateUser(profileData);
 
     try {
       const userId = await saveUserToConvex({
@@ -595,15 +596,15 @@ export default function Onboarding() {
               required
               minLength={3}
               maxLength={20}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               className="block w-full pl-10 pr-4 py-4 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
               placeholder="yourusername"
             />
           </div>
           <button
             type="submit"
-            disabled={displayName.length < 3}
+            disabled={username.length < 3}
             className="w-full py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             Continue <ArrowRight className="w-4 h-4" />
