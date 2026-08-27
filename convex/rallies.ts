@@ -119,13 +119,15 @@ export const create = mutation({
     });
 
     if (args.city) {
-      await ctx.runMutation(api.notifications.notifyNearbyUsers, {
-        rallyId,
-        rallyTitle: args.title,
-        rallyType: args.type,
-        creatorId: args.creatorId,
-        city: args.city,
-      });
+      try {
+        await ctx.runMutation(api.notifications.notifyNearbyUsers, {
+          rallyId,
+          rallyTitle: args.title,
+          rallyType: args.type,
+          creatorId: args.creatorId,
+          city: args.city,
+        });
+      } catch {}
     }
 
     return rallyId;
