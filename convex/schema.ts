@@ -194,4 +194,22 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_active", ["isActive", "displayOrder"]),
+
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(),
+    title: v.string(),
+    body: v.string(),
+    rallyId: v.optional(v.id("rallies")),
+    read: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId", "read"]).index("by_user_created", ["userId", "createdAt"]),
+
+  pushSubscriptions: defineTable({
+    userId: v.id("users"),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]).index("by_endpoint", ["endpoint"]),
 });

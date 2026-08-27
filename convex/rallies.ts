@@ -110,13 +110,25 @@ export const create = mutation({
     
     const uniqueHashtags = [...new Set(normalizedHashtags)];
 
-    return await ctx.db.insert("rallies", {
+    const rallyId = await ctx.db.insert("rallies", {
       ...args,
       hashtags: uniqueHashtags.length > 0 ? uniqueHashtags : undefined,
       peopleInterested: 0,
       status: "ACTIVE",
       createdAt: Date.now(),
     });
+
+    if (args.city) {
+      await ctx.runMutation(api.notifications.notifyNearbyUsers, {
+        rallyId,
+        rallyTitle: args.title,
+        rallyType: args.type,
+        creatorId: args.creatorId,
+        city: args.city,
+      });
+    }
+
+    return rallyId;
   },
 });
 

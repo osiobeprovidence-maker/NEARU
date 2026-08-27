@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation } from '../contexts/LocationContext';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { NIGERIA_STATES, COUNTRIES } from '../data/nigeria';
 import { 
   User, 
   Mail, 
@@ -12,15 +13,14 @@ import {
   MapPin, 
   Camera, 
   Check, 
-  Sparkles, 
   Calendar, 
   ShieldCheck, 
-  ArrowLeft,
   X,
   Plus,
   Heart,
   Upload,
-  ImageIcon
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 const PRESET_AVATARS = [
@@ -49,24 +49,11 @@ const AVAILABLE_INTERESTS = [
   'Nightlife & Raves',
 ];
 
-const NIGERIAN_CITIES = [
-  'Lagos, Nigeria',
-  'Abuja (FCT), Nigeria',
-  'Port Harcourt, Rivers',
-  'Ibadan, Oyo',
-  'Benin City, Edo',
-  'Enugu, Nigeria',
-  'Calabar, Cross River',
-  'Abeokuta, Ogun',
-  'Kaduna, Nigeria',
-  'Kano, Nigeria',
-  'Asaba, Delta',
-];
-
 export default function EditProfile() {
   const { user, updateUser, convexUserId } = useAuth();
   const { position, geoState } = useLocation();
   const updateUserMutation = useMutation(api.users.update);
+  const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,84 +62,148 @@ export default function EditProfile() {
   const [bio, setBio] = useState(user.bio || '');
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone || '');
-  const [location, setLocation] = useState(user.location || '');
-  const [avatar, setAvatar] = useState(user.avatar || '');
   const [gender, setGender] = useState(user.gender || 'Prefer not to say');
   const [birthday, setBirthday] = useState(user.birthday || '');
-  const [interests, setInterests] = useState<string[]>(user.interests || ['Outdoor & Sports', 'Social Hangouts']);
-  
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [interests, setInterests] = useState<string[]>(user.interests || []);
+
+  const parseLocation = (loc?: string) => {
+    if (!loc) return { state: '', city: '' };
+    for (const s of NIGERIA_STATES) {
+      for (const c of s.cities) {
+        if (loc.includes(c)) return { state: s.name, city: c };
+      }
+      if (loc.includes(s.name)) return { state: s.name, city: '' };
+    }
+    return { state: '', city: loc };
+  };
+
+  const parsed = parseLocation(user.location);
+  const [selectedState, setSelectedState] = useState(parsed.state);
+  const [selectedCity, setSelectedCity] = useState(parsed.city);
+
+  const [avatar, setAvatar] = useState(user.avatar || '');
+  const [avatarStorageId, setAvatarStorageId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [newCustomInterest, setNewCustomInterest] = useState('');
   const [showAddInterest, setShowAddInterest] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const selectedStateData = NIGERIA_STATES.find((s) => s.name === selectedState);
+  const availableCities = selectedStateData?.cities || [];
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be under 5MB');
+      setSaveError('Image must be under 5MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      setAvatar(dataUrl);
+    setIsUploading(true);
+    try {
+      const uploadUrl = await generateAvatarUploadUrl();
+      const result = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      const { storageId } = await result.json();
+      setAvatarStorageId(storageId);
+      setAvatar(URL.createObjectURL(file));
       setShowAvatarPicker(false);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setSaveError('Failed to upload image. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser({
-      name,
-      username: username.startsWith('@') ? username : `@${username}`,
-      bio,
-      email,
-      phone,
-      location,
-      avatar,
-      gender,
-      birthday,
-      interests,
-    });
-
-    if (convexUserId) {
-      try {
-        await updateUserMutation({
-          userId: convexUserId as any,
-          name,
-          bio: bio || undefined,
-          location: location || undefined,
-          locationLatitude: position?.latitude,
-          locationLongitude: position?.longitude,
-          locationAccuracy: position?.accuracy,
-          locationUpdatedAt: position?.capturedAt,
-        });
-      } catch {
-        // Convex save is best-effort; localStorage already updated
-      }
+    if (!convexUserId) {
+      setSaveError('Not connected. Please refresh and try again.');
+      return;
     }
+    setIsSaving(true);
+    setSaveError(null);
 
-    setIsSaved(true);
-    setTimeout(() => {
-      setIsSaved(false);
-      navigate('/profile');
-    }, 1200);
+    const locationString = selectedCity && selectedState
+      ? `${selectedCity}, ${selectedState}, Nigeria`
+      : selectedState
+        ? `${selectedState}, Nigeria`
+        : user.location || '';
+
+    const avatarToSave = avatarStorageId || avatar;
+
+    try {
+      await updateUserMutation({
+        userId: convexUserId as any,
+        name: name || undefined,
+        username: username ? (username.startsWith('@') ? username : `@${username}`) : undefined,
+        avatar: avatarToSave || undefined,
+        bio: bio || undefined,
+        phone: phone || undefined,
+        gender: gender || undefined,
+        birthday: birthday || undefined,
+        location: locationString || undefined,
+        locationLatitude: position?.latitude,
+        locationLongitude: position?.longitude,
+        locationAccuracy: position?.accuracy,
+        locationUpdatedAt: position?.capturedAt,
+        interests: interests.length > 0 ? interests : undefined,
+      });
+
+      updateUser({
+        name,
+        username: username.startsWith('@') ? username : `@${username}`,
+        bio,
+        email,
+        phone,
+        location: locationString,
+        avatar: avatarToSave || avatar,
+        gender,
+        birthday,
+        interests,
+      });
+
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsSaved(false);
+        navigate('/profile');
+      }, 1200);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save profile. Please try again.';
+      setSaveError(msg);
+      updateUser({
+        name,
+        username: username.startsWith('@') ? username : `@${username}`,
+        bio,
+        email,
+        phone,
+        location: locationString,
+        avatar: avatarToSave || avatar,
+        gender,
+        birthday,
+        interests,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const toggleInterest = (interest: string) => {
-    if (interests.includes(interest)) {
-      setInterests(interests.filter(i => i !== interest));
-    } else {
-      setInterests([...interests, interest]);
-    }
+    setInterests((prev) =>
+      prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]
+    );
   };
 
   const handleAddCustomInterest = () => {
-    if (newCustomInterest.trim() && !interests.includes(newCustomInterest.trim())) {
-      setInterests([...interests, newCustomInterest.trim()]);
+    const trimmed = newCustomInterest.trim();
+    if (trimmed && !interests.map((i) => i.toLowerCase()).includes(trimmed.toLowerCase())) {
+      setInterests([...interests, trimmed]);
       setNewCustomInterest('');
       setShowAddInterest(false);
     }
@@ -164,7 +215,6 @@ export default function EditProfile() {
       subtitle="Update your profile details and preferences"
     >
       <form onSubmit={handleSave} className="space-y-4 max-w-2xl mx-auto pb-12">
-        {/* Saved Success Toast Notification */}
         {isSaved && (
           <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-5 py-2.5 rounded-full font-bold shadow-xl flex items-center gap-2 text-xs sm:text-sm animate-in fade-in slide-in-from-top-3 duration-200">
             <Check className="w-4 h-4" />
@@ -172,10 +222,19 @@ export default function EditProfile() {
           </div>
         )}
 
-        {/* Unified Continuous Edit Container */}
+        {saveError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-800">{saveError}</p>
+              <button type="button" onClick={() => setSaveError(null)} className="text-xs text-red-600 font-semibold mt-1 hover:underline">Dismiss</button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 divide-y divide-zinc-100 overflow-hidden">
           
-          {/* 1. Profile Photo Section (Compact & Integrated) */}
+          {/* Profile Photo */}
           <div className="py-4 sm:py-5 px-4 sm:px-6 text-center">
             <div className="relative inline-block mb-1.5">
               <img 
@@ -193,17 +252,14 @@ export default function EditProfile() {
               </button>
             </div>
 
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors py-0.5"
-              >
-                {showAvatarPicker ? 'Hide Photo Options' : 'Change Photo'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors py-0.5"
+            >
+              {showAvatarPicker ? 'Hide Photo Options' : 'Change Photo'}
+            </button>
 
-            {/* Avatar Picker Palette (Compact Accordion) */}
             {showAvatarPicker && (
               <div className="mt-3 pt-3 border-t border-zinc-100 animate-in fade-in duration-200">
                 <input
@@ -211,15 +267,19 @@ export default function EditProfile() {
                   ref={fileInputRef}
                   onChange={handleImageUpload}
                   className="hidden"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                 />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full mb-3 py-3 border-2 border-dashed border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all"
+                  disabled={isUploading}
+                  className="w-full mb-3 py-3 border-2 border-dashed border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all disabled:opacity-50"
                 >
-                  <Upload className="w-4 h-4" />
-                  Upload your own photo
+                  {isUploading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
+                  ) : (
+                    <><Upload className="w-4 h-4" /> Upload your own photo</>
+                  )}
                 </button>
                 <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Or choose a preset</p>
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5 max-w-sm mx-auto">
@@ -229,6 +289,7 @@ export default function EditProfile() {
                       type="button"
                       onClick={() => {
                         setAvatar(presetUrl);
+                        setAvatarStorageId(null);
                         setShowAvatarPicker(false);
                       }}
                       className={`relative rounded-full overflow-hidden aspect-square border-2 transition-all hover:scale-105 ${
@@ -248,7 +309,7 @@ export default function EditProfile() {
             )}
           </div>
 
-          {/* 2. Public Details Section */}
+          {/* Public Details */}
           <div className="p-4 sm:p-6 space-y-3.5">
             <div className="flex items-center gap-2 pb-1">
               <User className="w-4 h-4 text-indigo-600" />
@@ -299,26 +360,71 @@ export default function EditProfile() {
               <p className="text-[10px] font-medium text-zinc-400 text-right mt-0.5">{bio.length}/160 characters</p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1">
-                City & Region
+            {/* Location - Country > State > City dependent selectors */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider">
+                Location
               </label>
-              <div className="relative">
-                <select
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 font-semibold text-zinc-900 text-sm appearance-none pr-10 transition-colors"
-                >
-                  {NIGERIAN_CITIES.map(city => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
-                </select>
-                <MapPin className="w-4 h-4 text-zinc-400 absolute right-3 top-3 pointer-events-none" />
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Country</label>
+                  <div className="relative">
+                    <select
+                      value="Nigeria"
+                      disabled
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 font-semibold text-zinc-900 text-sm appearance-none pr-10"
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <MapPin className="w-4 h-4 text-zinc-400 absolute right-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">State</label>
+                  <div className="relative">
+                    <select
+                      value={selectedState}
+                      onChange={(e) => {
+                        setSelectedState(e.target.value);
+                        setSelectedCity('');
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 font-semibold text-zinc-900 text-sm appearance-none pr-10 transition-colors"
+                    >
+                      <option value="">Select state</option>
+                      {NIGERIA_STATES.map((s) => (
+                        <option key={s.code} value={s.name}>{s.name}</option>
+                      ))}
+                    </select>
+                    <MapPin className="w-4 h-4 text-zinc-400 absolute right-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase mb-1">City / LGA</label>
+                  <div className="relative">
+                    <select
+                      value={selectedCity}
+                      onChange={(e) => setSelectedCity(e.target.value)}
+                      disabled={!selectedState}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 font-semibold text-zinc-900 text-sm appearance-none pr-10 transition-colors disabled:opacity-50"
+                    >
+                      <option value="">{selectedState ? 'Select city' : 'Select state first'}</option>
+                      {availableCities.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <MapPin className="w-4 h-4 text-zinc-400 absolute right-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 3. Interests & Vibes Section */}
+          {/* Interests */}
           <div className="p-4 sm:p-6 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -352,8 +458,7 @@ export default function EditProfile() {
                 );
               })}
 
-              {/* Custom added interests */}
-              {interests.filter(i => !AVAILABLE_INTERESTS.includes(i)).map(custom => (
+              {interests.filter((i) => !AVAILABLE_INTERESTS.includes(i)).map((custom) => (
                 <button
                   key={custom}
                   type="button"
@@ -366,7 +471,6 @@ export default function EditProfile() {
               ))}
             </div>
 
-            {/* Add custom interest button */}
             {showAddInterest ? (
               <div className="flex items-center gap-2 pt-1">
                 <input 
@@ -409,7 +513,7 @@ export default function EditProfile() {
             )}
           </div>
 
-          {/* 4. Contact & Identity Details (Private) */}
+          {/* Contact & Identity */}
           <div className="p-4 sm:p-6 space-y-3.5">
             <div className="flex items-center justify-between pb-1">
               <div className="flex items-center gap-2">
@@ -474,14 +578,13 @@ export default function EditProfile() {
                 <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1">
                   Date of Birth
                 </label>
-                <div className="relative">
-                  <input 
-                    type="date"
-                    value={birthday}
-                    onChange={(e) => setBirthday(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 font-semibold text-zinc-900 text-sm transition-colors"
-                  />
-                </div>
+                <input 
+                  type="date"
+                  value={birthday}
+                  onChange={(e) => setBirthday(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 font-semibold text-zinc-900 text-sm transition-colors"
+                />
               </div>
             </div>
           </div>
@@ -499,10 +602,14 @@ export default function EditProfile() {
           </button>
           <button
             type="submit"
-            className="flex-2 py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+            disabled={isSaving || isUploading}
+            className="flex-2 py-3 px-4 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-400 text-white rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
           >
-            <Check className="w-4 h-4" />
-            Save Profile Changes
+            {isSaving ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+            ) : (
+              <><Check className="w-4 h-4" /> Save Profile Changes</>
+            )}
           </button>
         </div>
       </form>

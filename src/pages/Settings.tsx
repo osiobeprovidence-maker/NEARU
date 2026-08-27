@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PageShell from '../components/PageShell';
 import { 
   LogOut, 
@@ -13,16 +13,46 @@ import {
   LayoutDashboard,
   Edit3,
   BadgeCheck,
-  LifeBuoy
+  LifeBuoy,
+  Download,
+  BellRing
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 
 const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
 
 export default function Settings() {
   const { logout, user } = useAuth();
   const isAdmin = user.email === SUPER_ADMIN_EMAIL;
+  const { isInstallable, install } = usePwaInstall();
+  const [notifStatus, setNotifStatus] = useState<string | null>(null);
+
+  const handleEnableNotifications = async () => {
+    if (!('Notification' in window)) {
+      setNotifStatus('Notifications not supported on this device');
+      setTimeout(() => setNotifStatus(null), 3000);
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      setNotifStatus('Notifications already enabled');
+      setTimeout(() => setNotifStatus(null), 3000);
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setNotifStatus('Notifications blocked. Enable in browser settings.');
+      setTimeout(() => setNotifStatus(null), 4000);
+      return;
+    }
+    const result = await Notification.requestPermission();
+    if (result === 'granted') {
+      setNotifStatus('Notifications enabled!');
+    } else {
+      setNotifStatus('Permission denied');
+    }
+    setTimeout(() => setNotifStatus(null), 3000);
+  };
 
   const mainSettings = [
     { 
@@ -242,7 +272,31 @@ export default function Settings() {
         </div>
 
         {/* Log Out Action */}
-        <div className="pt-2 px-3 sm:px-0">
+        <div className="pt-2 px-3 sm:px-0 space-y-2">
+          {isInstallable && (
+            <button 
+              onClick={install}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all font-bold text-xs sm:text-sm active:scale-98 shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              <span>Install RALLY</span>
+            </button>
+          )}
+
+          {('Notification' in window) && Notification.permission !== 'granted' && (
+            <button 
+              onClick={handleEnableNotifications}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition-all font-bold text-xs sm:text-sm active:scale-98"
+            >
+              <BellRing className="w-4 h-4" />
+              <span>Enable Notifications</span>
+            </button>
+          )}
+
+          {notifStatus && (
+            <div className="text-center text-xs font-bold text-zinc-500 py-1">{notifStatus}</div>
+          )}
+
           <button 
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-zinc-100 hover:bg-red-50 hover:text-red-700 text-zinc-700 rounded-xl transition-all font-bold text-xs sm:text-sm active:scale-98 border border-transparent hover:border-red-200"

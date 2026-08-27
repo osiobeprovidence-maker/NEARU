@@ -27,6 +27,7 @@ import { useLocation as useLocationContext } from '../contexts/LocationContext';
 import CreateRallyModal from '../components/CreateRallyModal';
 import LocationFilterModal from '../components/LocationFilterModal';
 import LocationDebug from '../components/LocationDebug';
+import NotificationListener from '../components/NotificationListener';
 
 export default function AppShell() {
   const navigate = useNavigate();
@@ -159,6 +160,7 @@ export default function AppShell() {
       />
 
       <LocationDebug />
+      <NotificationListener />
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-white border-r border-zinc-200 overflow-y-auto">

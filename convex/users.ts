@@ -16,7 +16,15 @@ export const isAdmin = query({
 export const get = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.userId);
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+    if (user.avatar && !user.avatar.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.avatar);
+        if (url) user.avatar = url;
+      } catch {}
+    }
+    return user;
   },
 });
 
@@ -34,10 +42,18 @@ export const getByUsername = query({
 export const getByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const user = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .unique();
+    if (!user) return null;
+    if (user.avatar && !user.avatar.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.avatar);
+        if (url) user.avatar = url;
+      } catch {}
+    }
+    return user;
   },
 });
 
@@ -48,7 +64,15 @@ export const getByIds = query({
     for (const id of args.ids) {
       if (!results[id]) {
         const user = await ctx.db.get(id);
-        if (user) results[id] = user;
+        if (user) {
+          if (user.avatar && !user.avatar.startsWith("http")) {
+            try {
+              const url = await ctx.storage.getUrl(user.avatar);
+              if (url) user.avatar = url;
+            } catch {}
+          }
+          results[id] = user;
+        }
       }
     }
     return results;
@@ -101,8 +125,12 @@ export const update = mutation({
   args: {
     userId: v.id("users"),
     name: v.optional(v.string()),
+    username: v.optional(v.string()),
     avatar: v.optional(v.string()),
     bio: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    gender: v.optional(v.string()),
+    birthday: v.optional(v.string()),
     location: v.optional(v.string()),
     locationLatitude: v.optional(v.number()),
     locationLongitude: v.optional(v.number()),
@@ -115,7 +143,28 @@ export const update = mutation({
     const filtered = Object.fromEntries(
       Object.entries(fields).filter(([, v]) => v !== undefined)
     );
+    if (Object.keys(filtered).length === 0) return;
     await ctx.db.patch(userId, filtered);
+  },
+});
+
+export const generateAvatarUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const resolveAvatarUrl = query({
+  args: { avatar: v.string() },
+  handler: async (ctx, args) => {
+    if (args.avatar.startsWith("http")) return args.avatar;
+    try {
+      const url = await ctx.storage.getUrl(args.avatar);
+      return url ?? args.avatar;
+    } catch {
+      return args.avatar;
+    }
   },
 });
 

@@ -53,6 +53,9 @@ export default function Profile() {
               <MapPin className="w-3.5 h-3.5 text-zinc-400" />
               <span>{user.location || 'Location not set'}</span>
             </div>
+            {user.gender && user.gender !== 'Prefer not to say' && (
+              <p className="text-zinc-400">{user.gender}</p>
+            )}
             <p className="text-zinc-400">
               {interestsList.join(' · ')}
             </p>
