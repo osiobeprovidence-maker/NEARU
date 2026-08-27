@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppShell from './layouts/AppShell';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LocationProvider } from './contexts/LocationContext';
+import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import Landing from './pages/Landing';
 import LoginPage from './pages/LoginPage';
 import Onboarding from './pages/Onboarding';
@@ -68,8 +69,9 @@ const AppRoutes = () => {
   }
 
   return (
-    <React.Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>
-      <Routes>
+    <ChunkErrorBoundary>
+      <React.Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>
+        <Routes>
         {/* Admin CRM Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
@@ -109,7 +111,8 @@ const AppRoutes = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
-    </React.Suspense>
+      </React.Suspense>
+    </ChunkErrorBoundary>
   );
 };
 
