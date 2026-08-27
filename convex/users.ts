@@ -179,6 +179,35 @@ export const addBlockedUser = mutation({
   },
 });
 
+export const getOrCreateByEmail = mutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    username: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), args.email))
+      .first();
+    if (existing) return existing._id;
+    const userId = await ctx.db.insert("users", {
+      name: args.name,
+      username: args.username || args.email.split("@")[0],
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(args.name)}&background=6366f1&color=fff&bold=true&size=200`,
+      email: args.email,
+      isNINVerified: false,
+      isPhoneVerified: false,
+      isEmailVerified: true,
+      badges: [],
+      rallies: 0,
+      completed: 0,
+      rating: 0,
+    });
+    return userId;
+  },
+});
+
 export const addTrustedContact = mutation({
   args: {
     userId: v.id("users"),

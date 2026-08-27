@@ -246,7 +246,6 @@ export default function Onboarding() {
       totpEnabled: !!totpSecret,
       isEmailVerified: true,
     };
-    localStorage.setItem('rally_convex_user_id', 'local');
     localStorage.setItem('rally_user_profile_v1', JSON.stringify({
       ...user,
       ...userData,

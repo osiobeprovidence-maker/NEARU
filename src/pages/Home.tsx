@@ -6,7 +6,7 @@ import { cn } from '../lib/utils';
 import { mockRallies, mockUsers } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
 import { haversineDistance, formatDistance, GeoPoint } from '../lib/geo';
-import { Rally } from '../types';
+import { Rally, RallyCategory } from '../types';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import AdCard from '../components/AdCard';
@@ -148,9 +148,13 @@ export default function Home() {
         locationLabel: r.locationLabel,
         rallyLatitude: r.rallyLatitude,
         rallyLongitude: r.rallyLongitude,
+        category: r.category as Rally['category'],
+        eventDate: r.eventDate,
+        mediaUrl: r.mediaUrl,
+        mediaType: r.mediaType as Rally['mediaType'],
       }));
     }
-    return mockRallies;
+    return [];
   }, [convexRallies]);
 
   const nearbyRallies = useMemo(() => {

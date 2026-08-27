@@ -119,10 +119,40 @@ export default defineSchema({
     locationLabel: v.optional(v.string()),
     rallyLatitude: v.optional(v.number()),
     rallyLongitude: v.optional(v.number()),
+    category: v.optional(v.string()),
+    eventDate: v.optional(v.string()),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])
     .index("by_creator", ["creatorId"]),
+
+  follows: defineTable({
+    followerId: v.id("users"),
+    followingId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_follower", ["followerId"])
+    .index("by_following", ["followingId"])
+    .index("by_pair", ["followerId", "followingId"]),
+
+  chatRequests: defineTable({
+    fromUserId: v.id("users"),
+    toUserId: v.id("users"),
+    rallyId: v.id("rallies"),
+    message: v.string(),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("ACCEPTED"),
+      v.literal("DECLINED")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_toUser", ["toUserId", "status"])
+    .index("by_fromUser", ["fromUserId"])
+    .index("by_pair", ["fromUserId", "toUserId", "rallyId"]),
 
   conversations: defineTable({
     rallyId: v.id("rallies"),

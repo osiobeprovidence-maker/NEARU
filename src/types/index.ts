@@ -1,5 +1,7 @@
 export type ActivityType = 'ASK' | 'HELP' | 'JOIN';
 
+export type RallyCategory = 'sports' | 'music' | 'gaming' | 'social' | 'work' | 'education' | 'creative' | 'fitness' | 'travel' | 'food' | 'general';
+
 export interface PrivacySettings {
   profileVisibility: 'public' | 'verified_only' | 'private';
   locationPrecision: 'approximate' | 'exact' | 'city_only';
@@ -89,6 +91,21 @@ export interface Rally {
   locationLabel?: string;
   rallyLatitude?: number;
   rallyLongitude?: number;
+  category?: RallyCategory;
+  eventDate?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video';
+}
+
+export interface ChatRequest {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  rallyId: string;
+  message: string;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface Message {

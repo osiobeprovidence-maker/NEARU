@@ -56,6 +56,10 @@ export const create = mutation({
     locationLabel: v.optional(v.string()),
     rallyLatitude: v.optional(v.number()),
     rallyLongitude: v.optional(v.number()),
+    category: v.optional(v.string()),
+    eventDate: v.optional(v.string()),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("rallies", {

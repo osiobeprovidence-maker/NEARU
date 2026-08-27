@@ -67,12 +67,6 @@ const AppRoutes = () => {
     );
   }
 
-  const hasProfile = !!localStorage.getItem('rally_convex_user_id');
-
-  if (!hasProfile) {
-    return <Onboarding />;
-  }
-
   return (
     <React.Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>
       <Routes>
