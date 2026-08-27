@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AlertCircle, Heart, Users, Sparkles, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, RefreshCw, Settings } from 'lucide-react';
+import { AlertCircle, Heart, Users, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { cn } from '../lib/utils';
-import { mockRallies, mockUsers } from '../data/mock';
+import { mockUsers } from '../data/mock';
 import { useLocation } from '../contexts/LocationContext';
-import { haversineDistance, formatDistance, GeoPoint } from '../lib/geo';
-import { Rally, RallyCategory } from '../types';
+import { haversineDistance, formatDistance } from '../lib/geo';
+import { Rally } from '../types';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import AdCard from '../components/AdCard';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
+const EXPLAINER_DISMISSED_KEY = 'rally_explainer_dismissed';
 
 export default function Home() {
   const [activeFilter, setActiveFilter] = useState('All');
@@ -19,20 +20,21 @@ export default function Home() {
     city,
     radiusKm,
     geoState,
-    permissionState,
     position,
-    locationLabel,
     error,
-    isManual,
     requestLocation,
     startWatching,
-    setRadiusKmAction,
     openLocationModal,
   } = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(() => {
+    return !localStorage.getItem(EXPLAINER_DISMISSED_KEY);
+  });
 
   const convexRallies = useQuery(api.rallies.list);
+
+  const feedIsLoaded = convexRallies !== undefined;
 
   useEffect(() => {
     const dismissed = localStorage.getItem(NOTIF_DISMISSED_KEY);
@@ -77,6 +79,11 @@ export default function Home() {
   const handleDismissNotif = () => {
     localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
     setShowNotifPrompt(false);
+  };
+
+  const handleDismissExplainer = () => {
+    localStorage.setItem(EXPLAINER_DISMISSED_KEY, '1');
+    setShowExplainer(false);
   };
 
   const handleInvite = async () => {
@@ -157,6 +164,9 @@ export default function Home() {
     return [];
   }, [convexRallies]);
 
+  const hasRealPosts = allRallies.length > 0;
+  const showFilters = feedIsLoaded && !isLoading && hasRealPosts;
+
   const nearbyRallies = useMemo(() => {
     if (!hasLocation) return [];
 
@@ -179,22 +189,6 @@ export default function Home() {
       })
       .sort((a, b) => (a.computedDistance ?? Infinity) - (b.computedDistance ?? Infinity));
   }, [hasLocation, radiusKm, activeFilter, computeDistance, allRallies]);
-
-  const buzzingRallies = useMemo(() => {
-    return allRallies
-      .filter((rally) => {
-        const matchesFilter =
-          activeFilter === 'All' ||
-          rally.type === activeFilter.toUpperCase() ||
-          (activeFilter === 'Free' && !rally.isPaid) ||
-          (activeFilter === 'Paid' && rally.isPaid);
-        return matchesFilter;
-      })
-      .map((rally) => {
-        const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
-        return { ...rally, computedDistance: dist };
-      });
-  }, [activeFilter, computeDistance, allRallies]);
 
   return (
     <div className="w-full pt-4 md:pt-6">
@@ -234,6 +228,44 @@ export default function Home() {
         </div>
       )}
 
+      {showExplainer && (
+        <div className="px-4 md:px-6 mb-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                  <MessageCircleQuestion className="w-5 h-5 text-indigo-600" />
+                </div>
+                <h3 className="text-base font-black text-zinc-900 tracking-tight">What's your RALLY?</h3>
+              </div>
+              <button
+                onClick={handleDismissExplainer}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4 text-zinc-400" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500 leading-relaxed mb-4">
+              Ask for help, offer help, or invite people nearby to join you. Post what you need and connect with people around you.
+            </p>
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <div className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-rose-200 shrink-0 mt-0.5">ASK</div>
+                <p className="text-xs text-zinc-600 leading-relaxed">"Anyone know a good plumber around here?"</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <div className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-emerald-200 shrink-0 mt-0.5">HELP</div>
+                <p className="text-xs text-zinc-600 leading-relaxed">"I can help move furniture this afternoon."</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <div className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-indigo-200 shrink-0 mt-0.5">JOIN</div>
+                <p className="text-xs text-zinc-600 leading-relaxed">"I have an extra ticket. Anyone want to come?"</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-0 md:px-6 pb-24 md:pb-6">
         <div className="px-6 md:px-0">
           <div className="flex items-end justify-between mb-1">
@@ -256,23 +288,25 @@ export default function Home() {
                 : 'Enable location to see nearby RALLYS.'}
           </p>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar mb-4">
-            {filters.map(filter => (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={cn(
-                  "px-4 py-1.5 rounded-full text-sm font-semibold transition-all shrink-0 active:scale-95",
-                  activeFilter === filter 
-                    ? "bg-zinc-900 text-white shadow-xs shadow-zinc-900/20 font-bold" 
-                    : "bg-white border border-zinc-200/80 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-300"
-                )}
-              >
-                {filter}
-              </button>
-            ))}
-          </div>
+          {showFilters && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar mb-4">
+              {filters.map(filter => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setActiveFilter(filter)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-sm font-semibold transition-all shrink-0 active:scale-95",
+                    activeFilter === filter 
+                      ? "bg-zinc-900 text-white shadow-xs shadow-zinc-900/20 font-bold" 
+                      : "bg-white border border-zinc-200/80 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-300"
+                  )}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
@@ -391,12 +425,32 @@ export default function Home() {
                 </button>
               </div>
             </div>
-          ) : isLoading ? (
+          ) : !feedIsLoaded || isLoading ? (
             <>
               <RallyCardSkeleton />
               <RallyCardSkeleton />
               <RallyCardSkeleton />
             </>
+          ) : !hasRealPosts ? (
+            <div className="p-8 sm:p-10 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-zinc-100 border border-zinc-200/80 flex items-center justify-center mx-auto mb-5 text-zinc-900 shadow-xs">
+                <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
+                Nothing nearby? Be the first to RALLY!
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
+                Start the conversation. Ask for something, offer help, or invite people nearby to join you.
+              </p>
+
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="px-8 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all"
+              >
+                Create a RALLY
+              </button>
+            </div>
           ) : nearbyRallies.length > 0 ? (
             <>
               {nearbyRallies.map(rally => (
@@ -418,10 +472,10 @@ export default function Home() {
                 <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
-                Nothing nearby right now
+                Nothing nearby? Be the first to RALLY!
               </h3>
               <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
-                We'll notify you when someone posts near you.
+                Start the conversation. Ask for something, offer help, or invite people nearby to join you.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
@@ -430,7 +484,7 @@ export default function Home() {
                   onClick={openCreateModal}
                   className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all"
                 >
-                  BE THE FIRST TO RALLY
+                  Create a RALLY
                 </button>
                 <button
                   type="button"
@@ -444,32 +498,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        {!isLoading && nearbyRallies.length === 0 && !isLocating && (
-          <div className="space-y-6">
-            <div>
-              <div className="px-6 md:px-0 mb-3 pt-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <h3 className="text-lg sm:text-xl font-bold text-zinc-900 tracking-tight">
-                    {hasLocation ? "What's happening elsewhere" : "See what's happening on RALLY"}
-                  </h3>
-                </div>
-                <p className="text-xs sm:text-sm text-zinc-500">
-                  {hasLocation
-                    ? "RALLYS from other areas you might be interested in."
-                    : "Get a feel for what people are posting around Nigeria."}
-                </p>
-              </div>
-
-              <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-                {buzzingRallies.slice(0, 3).map(rally => (
-                  <RallyCard key={`buzzing-${rally.id}`} rally={rally} />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="mt-8 mb-4 px-4 md:px-0">
           <div className="bg-zinc-100 border border-zinc-200 rounded-2xl p-4 flex items-center gap-4">
