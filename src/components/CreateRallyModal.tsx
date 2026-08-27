@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign, Loader2, Camera, Video, FileText, Hash, ChevronDown, Check } from 'lucide-react';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ActivityType } from '../types';
 import { cn } from '../lib/utils';
@@ -47,10 +47,6 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
   const { firebaseUser } = useAuth();
   const createRally = useMutation(api.rallies.create);
   const getOrCreateUser = useMutation(api.users.getOrCreateByEmail);
-  const convexUser = useQuery(
-    api.users.getByEmail,
-    firebaseUser?.email ? { email: firebaseUser.email } : 'skip'
-  );
 
   const rallyLocation = city || locationLabel || 'Unknown location';
   const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
@@ -83,14 +79,13 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
   };
 
   const ensureConvexUser = useCallback(async (): Promise<string> => {
-    if (convexUser?._id) return convexUser._id;
     if (!firebaseUser?.email) throw new Error('Please complete onboarding first');
     const userId = await getOrCreateUser({
       email: firebaseUser.email,
       name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
     });
     return userId;
-  }, [convexUser, firebaseUser, getOrCreateUser]);
+  }, [firebaseUser, getOrCreateUser]);
 
   const handlePost = async () => {
     if (!type || !description || isPaid === null) return;
