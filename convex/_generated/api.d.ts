@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as chatRequests from "../chatRequests.js";
+import type * as follows from "../follows.js";
 import type * as messages from "../messages.js";
 import type * as rallies from "../rallies.js";
 import type * as users from "../users.js";
@@ -19,6 +21,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  chatRequests: typeof chatRequests;
+  follows: typeof follows;
   messages: typeof messages;
   rallies: typeof rallies;
   users: typeof users;
