@@ -23,7 +23,8 @@ import {
   ShieldAlert,
   Sparkles,
   Sliders,
-  Send
+  Send,
+  Megaphone
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -38,6 +39,7 @@ const navItems = [
   { icon: BadgeCheck, label: 'Verification', path: '/admin/verification', badgeKey: 'pendingVerifications' },
   { icon: Bell, label: 'Notifications', path: '/admin/notifications' },
   { icon: BarChart3, label: 'Analytics', path: '/admin/analytics' },
+  { icon: Megaphone, label: 'Ads', path: '/admin/ads' },
   { icon: Settings, label: 'System Settings', path: '/admin/settings' },
 ];
 

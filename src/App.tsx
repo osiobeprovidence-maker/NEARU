@@ -46,6 +46,7 @@ const AdminVerification = React.lazy(() => import('./pages/admin/Verification'))
 const AdminNotifications = React.lazy(() => import('./pages/admin/Notifications'));
 const AdminAnalytics = React.lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
+const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
 
 const AppRoutes = () => {
   const { isLoggedIn, isAuthLoading, isProfileLoading, hasConvexProfile } = useAuth();
@@ -98,6 +99,7 @@ const AppRoutes = () => {
           <Route path="verification" element={<AdminVerification />} />
           <Route path="notifications" element={<AdminNotifications />} />
           <Route path="analytics" element={<AdminAnalytics />} />
+          <Route path="ads" element={<AdminAds />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
 

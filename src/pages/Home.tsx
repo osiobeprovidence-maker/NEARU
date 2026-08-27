@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AlertCircle, Heart, Users, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { Users, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { cn } from '../lib/utils';
@@ -32,6 +32,7 @@ export default function Home() {
   });
 
   const convexRallies = useQuery(api.rallies.listWithCreators);
+  const activeAds = useQuery(api.ads.listActive);
 
   const feedIsLoaded = convexRallies !== undefined;
 
@@ -324,68 +325,6 @@ export default function Home() {
         </div>
 
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
-          <div className="p-6">
-            <div className="mb-4">
-              <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">What's your RALLY?</h3>
-              <p className="text-xs sm:text-sm text-zinc-500 mt-1">
-                Tell people around you what you need, what you can offer, or what you'd like to do together.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              <button 
-                onClick={openCreateModal}
-                className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors group"
-              >
-                <div className="w-10 h-10 rounded-full bg-rose-100 group-hover:bg-rose-200 text-rose-600 flex items-center justify-center transition-colors">
-                  <AlertCircle className="w-5 h-5" />
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-rose-900 text-xs">ASK</div>
-                  <div className="text-[9px] text-rose-600 font-medium mt-0.5 leading-tight px-0.5">I need something</div>
-                </div>
-              </button>
-
-              <button 
-                onClick={openCreateModal}
-                className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors group"
-              >
-                <div className="w-10 h-10 rounded-full bg-emerald-100 group-hover:bg-emerald-200 text-emerald-600 flex items-center justify-center transition-colors">
-                  <Heart className="w-5 h-5" />
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-emerald-900 text-xs">HELP</div>
-                  <div className="text-[9px] text-emerald-600 font-medium mt-0.5 leading-tight px-0.5">I can help</div>
-                </div>
-              </button>
-
-              <button 
-                onClick={openCreateModal}
-                className="flex flex-col items-center justify-center gap-2.5 p-3.5 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors group"
-              >
-                <div className="w-10 h-10 rounded-full bg-indigo-100 group-hover:bg-indigo-200 text-indigo-600 flex items-center justify-center transition-colors">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-indigo-900 text-xs">JOIN</div>
-                  <div className="text-[9px] text-indigo-600 font-medium mt-0.5 leading-tight px-0.5">I want company</div>
-                </div>
-              </button>
-            </div>
-
-            <button 
-              onClick={openCreateModal}
-              className="w-full py-3.5 bg-zinc-900 text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-md shadow-zinc-200"
-            >
-              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                <span className="text-xs font-black">+</span>
-              </div>
-              CREATE A RALLY
-            </button>
-          </div>
-
-          <AdCard />
-
           {isLocating ? (
             <div className="p-8 sm:p-10 text-center">
               <Loader2 className="w-10 h-10 text-zinc-300 animate-spin mx-auto mb-4" />
@@ -467,18 +406,38 @@ export default function Home() {
             </div>
           ) : nearbyRallies.length > 0 ? (
             <>
-              {nearbyRallies.map(rally => (
-                <RallyCard
-                  key={rally.id}
-                  rally={{
-                    ...rally,
-                    distance: rally.computedDistance ?? rally.distance,
-                    locationLabel: rally.computedDistance != null
-                      ? `${city || 'Nearby'} · ${formatDistance(rally.computedDistance)}`
-                      : rally.locationLabel,
-                  }}
-                />
-              ))}
+              {nearbyRallies.flatMap((rally, index) => {
+                const items: React.ReactNode[] = [];
+                items.push(
+                  <RallyCard
+                    key={rally.id}
+                    rally={{
+                      ...rally,
+                      distance: rally.computedDistance ?? rally.distance,
+                      locationLabel: rally.computedDistance != null
+                        ? `${city || 'Nearby'} · ${formatDistance(rally.computedDistance)}`
+                        : rally.locationLabel,
+                    }}
+                  />
+                );
+                const adIndex = Math.floor(index / 3);
+                if (activeAds && activeAds.length > 0 && (index + 1) % 3 === 0) {
+                  const ad = activeAds[adIndex % activeAds.length];
+                  items.push(
+                    <AdCard
+                      key={`ad-${ad._id}`}
+                      title={ad.title}
+                      description={ad.description}
+                      imageUrl={ad.imageUrl}
+                      linkUrl={ad.linkUrl}
+                      ctaText={ad.ctaText}
+                      brandName={ad.brandName}
+                      brandLogoUrl={ad.brandLogoUrl}
+                    />
+                  );
+                }
+                return items;
+              })}
             </>
           ) : (
             <div className="p-8 sm:p-10 text-center">

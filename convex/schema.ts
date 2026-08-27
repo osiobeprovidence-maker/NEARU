@@ -172,4 +172,18 @@ export default defineSchema({
     text: v.string(),
     timestamp: v.number(),
   }).index("by_conversation", ["conversationId"]),
+
+  ads: defineTable({
+    title: v.string(),
+    description: v.string(),
+    imageUrl: v.optional(v.string()),
+    linkUrl: v.optional(v.string()),
+    ctaText: v.optional(v.string()),
+    brandName: v.optional(v.string()),
+    brandLogoUrl: v.optional(v.string()),
+    isActive: v.boolean(),
+    displayOrder: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_active", ["isActive", "displayOrder"]),
 });
