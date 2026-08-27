@@ -18,8 +18,11 @@ import {
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
+const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
+
 export default function Settings() {
   const { logout, user } = useAuth();
+  const isAdmin = user.email === SUPER_ADMIN_EMAIL;
 
   const mainSettings = [
     { 
@@ -110,9 +113,10 @@ export default function Settings() {
       icon: LayoutDashboard, 
       color: 'text-zinc-900', 
       bg: 'bg-zinc-100', 
-      badge: 'Super Admin' 
+      badge: 'Super Admin',
+      adminOnly: true 
     },
-  ];
+  ].filter((item) => !(item as any).adminOnly || isAdmin);
 
   return (
     <PageShell 

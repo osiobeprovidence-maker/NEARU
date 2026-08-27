@@ -62,6 +62,7 @@ export default function Explore() {
       rallyLatitude: r.rallyLatitude,
       rallyLongitude: r.rallyLongitude,
       category: r.category as Rally['category'],
+      hashtags: r.hashtags,
       eventDate: r.eventDate,
       mediaUrl: r.mediaUrl,
       mediaType: r.mediaType as Rally['mediaType'],
@@ -72,11 +73,12 @@ export default function Explore() {
     let result = [...allRallies];
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().replace(/^#/, '');
       result = result.filter(r =>
         r.title.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q) ||
-        r.creator.name.toLowerCase().includes(q)
+        r.creator.name.toLowerCase().includes(q) ||
+        (r.hashtags && r.hashtags.some((t) => t.toLowerCase().includes(q)))
       );
     }
 

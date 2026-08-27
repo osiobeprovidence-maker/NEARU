@@ -1,6 +1,18 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+const SUPER_ADMIN_EMAIL = "riderEasy@gmail.com";
+
+export const isAdmin = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return false;
+    if (user.email === SUPER_ADMIN_EMAIL) return true;
+    return user.role === "super_admin" || user.role === "admin";
+  },
+});
+
 export const get = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -62,6 +74,7 @@ export const create = mutation({
       rallies: 0,
       completed: 0,
       rating: 0,
+      role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
     });
     return userId;
   },
@@ -216,6 +229,7 @@ export const getOrCreateByEmail = mutation({
       rallies: 0,
       completed: 0,
       rating: 0,
+      role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
     });
     return userId;
   },
@@ -237,6 +251,25 @@ export const addTrustedContact = mutation({
     const contacts = user.trustedContacts ?? [];
     await ctx.db.patch(args.userId, {
       trustedContacts: [...contacts, args.contact],
+    });
+  },
+});
+
+export const syncLocation = mutation({
+  args: {
+    userId: v.id("users"),
+    location: v.string(),
+    locationLatitude: v.number(),
+    locationLongitude: v.number(),
+    locationAccuracy: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      location: args.location,
+      locationLatitude: args.locationLatitude,
+      locationLongitude: args.locationLongitude,
+      locationAccuracy: args.locationAccuracy,
+      locationUpdatedAt: Date.now(),
     });
   },
 });

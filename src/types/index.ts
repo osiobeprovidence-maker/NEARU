@@ -92,6 +92,7 @@ export interface Rally {
   rallyLatitude?: number;
   rallyLongitude?: number;
   category?: RallyCategory;
+  hashtags?: string[];
   eventDate?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';

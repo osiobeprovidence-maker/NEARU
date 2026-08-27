@@ -171,6 +171,7 @@ export default function Home() {
         rallyLatitude: r.rallyLatitude,
         rallyLongitude: r.rallyLongitude,
         category: r.category as Rally['category'],
+        hashtags: r.hashtags,
         eventDate: r.eventDate,
         mediaUrl: r.mediaUrl,
         mediaType: r.mediaType as Rally['mediaType'],
@@ -191,8 +192,12 @@ export default function Home() {
         return { ...rally, computedDistance: dist };
       })
       .filter((rally) => {
-        if (rally.computedDistance === null) return false;
-        if (rally.computedDistance > radiusKm) return false;
+        if (rally.computedDistance !== null && rally.computedDistance > radiusKm) return false;
+        if (rally.computedDistance === null) {
+          const rallyCity = (rally.city || '').toLowerCase().trim();
+          const userCity = (city || '').toLowerCase().trim();
+          if (!userCity || !rallyCity || rallyCity !== userCity) return false;
+        }
 
         const matchesFilter =
           activeFilter === 'All' ||
@@ -203,7 +208,7 @@ export default function Home() {
         return matchesFilter;
       })
       .sort((a, b) => (a.computedDistance ?? Infinity) - (b.computedDistance ?? Infinity));
-  }, [hasLocation, radiusKm, activeFilter, computeDistance, allRallies]);
+  }, [hasLocation, radiusKm, activeFilter, computeDistance, allRallies, city]);
 
   return (
     <div className="w-full pt-4 md:pt-6">

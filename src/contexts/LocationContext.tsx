@@ -6,6 +6,9 @@ import {
   LocationError,
 } from '../hooks/useLocation';
 import { GeoPoint, GeoLocation, ReverseGeocodeResult } from '../lib/geo';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from './AuthContext';
 
 interface LocationContextType {
   city: string;
@@ -44,6 +47,9 @@ const LocationContext = createContext<LocationContextType | undefined>(undefined
 
 export function LocationProvider({ children }: { children: ReactNode }) {
   const geo = useGeolocation();
+  const { convexUserId } = useAuth();
+  const syncLocationMutation = useMutation(api.users.syncLocation);
+  
   const [city, setCityState] = useState(() => {
     return localStorage.getItem('rally_city') || '';
   });
@@ -63,6 +69,23 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('rally_radius', `${geo.radius} km`);
     setRadiusStr(`${geo.radius} km`);
   }, [geo.radius]);
+
+  useEffect(() => {
+    if (!convexUserId || !geo.position || !geo.reverseGeocode?.city) return;
+    const lastSync = localStorage.getItem('rally_location_last_sync');
+    const now = Date.now();
+    if (lastSync && now - parseInt(lastSync) < 60000) return;
+    
+    syncLocationMutation({
+      userId: convexUserId as any,
+      location: geo.reverseGeocode.city,
+      locationLatitude: geo.position.latitude,
+      locationLongitude: geo.position.longitude,
+      locationAccuracy: geo.accuracy ?? undefined,
+    }).catch(() => {});
+    
+    localStorage.setItem('rally_location_last_sync', now.toString());
+  }, [convexUserId, geo.position, geo.reverseGeocode?.city, geo.accuracy, syncLocationMutation]);
 
   const setCity = (newCity: string) => {
     setCityState(newCity);

@@ -1,5 +1,13 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
+
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
 
 export const list = query({
   args: {},
@@ -89,13 +97,22 @@ export const create = mutation({
     rallyLatitude: v.optional(v.number()),
     rallyLongitude: v.optional(v.number()),
     category: v.optional(v.string()),
+    hashtags: v.optional(v.array(v.string())),
     eventDate: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    mediaStorageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const normalizedHashtags = (args.hashtags || []).map((h) =>
+      h.toLowerCase().replace(/^#/, "").trim()
+    ).filter((h) => h.length > 0);
+    
+    const uniqueHashtags = [...new Set(normalizedHashtags)];
+
     return await ctx.db.insert("rallies", {
       ...args,
+      hashtags: uniqueHashtags.length > 0 ? uniqueHashtags : undefined,
       peopleInterested: 0,
       status: "ACTIVE",
       createdAt: Date.now(),

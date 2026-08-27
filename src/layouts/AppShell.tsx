@@ -44,6 +44,9 @@ export default function AppShell() {
     updateLocation 
   } = useLocationContext();
   
+  const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
+  const isAdmin = user.email === SUPER_ADMIN_EMAIL;
+  
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState<{ title: string, subtitle: string } | null>(null);
 
@@ -94,8 +97,8 @@ export default function AppShell() {
   const tertiaryNavItems = [
     { label: 'Safety', icon: Shield, path: '/safety' },
     { label: 'Settings', icon: Settings, path: '/settings' },
-    { label: 'Admin CRM', icon: LayoutDashboard, path: '/admin' },
-  ];
+    { label: 'Admin CRM', icon: LayoutDashboard, path: '/admin', adminOnly: true },
+  ].filter((item) => !(item as any).adminOnly || isAdmin);
 
   const getMobileHeaderTitle = () => {
     const path = routeLocation.pathname;

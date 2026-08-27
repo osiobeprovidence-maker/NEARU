@@ -48,6 +48,16 @@ const AdminAnalytics = React.lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
 const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
 
+const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
+
+const AdminGuard = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  if (user.email !== SUPER_ADMIN_EMAIL) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
 const AppRoutes = () => {
   const { isLoggedIn, isAuthLoading, isProfileLoading, hasConvexProfile } = useAuth();
   
@@ -91,7 +101,7 @@ const AppRoutes = () => {
       <React.Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>
         <Routes>
         {/* Admin CRM Routes */}
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="rallies" element={<AdminRallies />} />

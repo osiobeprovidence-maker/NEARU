@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { MapPin, Clock, ShieldCheck, AlertCircle, Heart, Users, CheckCircle2, Star, BadgeCheck, Calendar, Play } from 'lucide-react';
+import { MapPin, Clock, ShieldCheck, AlertCircle, Heart, Users, CheckCircle2, Star, BadgeCheck, Calendar, Play, Hash } from 'lucide-react';
 import { Rally, RallyCategory } from '../types';
 import { cn } from '../lib/utils';
 
@@ -68,9 +68,13 @@ export default function RallyCard({ rally }: RallyCardProps) {
           <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ring-1 ring-inset", config.badge)}>
             {rally.type}
           </div>
-          {rally.category && CATEGORY_LABELS[rally.category] && (
-            <div className="px-3 py-1 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200">
-              {CATEGORY_LABELS[rally.category]}
+          {rally.hashtags && rally.hashtags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {rally.hashtags.slice(0, 3).map((tag) => (
+                <span key={tag} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
+                  #{tag}
+                </span>
+              ))}
             </div>
           )}
           {rally.isPaid ? (

@@ -8,12 +8,12 @@
  * @module
  */
 
+import type * as ads from "../ads.js";
 import type * as chatRequests from "../chatRequests.js";
 import type * as follows from "../follows.js";
 import type * as messages from "../messages.js";
 import type * as rallies from "../rallies.js";
 import type * as users from "../users.js";
-import type * as ads from "../ads.js";
 
 import type {
   ApiFromModules,
@@ -22,12 +22,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ads: typeof ads;
   chatRequests: typeof chatRequests;
   follows: typeof follows;
   messages: typeof messages;
   rallies: typeof rallies;
   users: typeof users;
-  ads: typeof ads;
 }>;
 
 /**

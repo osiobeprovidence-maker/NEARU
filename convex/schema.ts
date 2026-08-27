@@ -18,6 +18,12 @@ export default defineSchema({
     passwordHash: v.optional(v.string()),
     totpSecret: v.optional(v.string()),
     totpEnabled: v.optional(v.boolean()),
+    role: v.optional(v.union(
+      v.literal("super_admin"),
+      v.literal("admin"),
+      v.literal("moderator"),
+      v.literal("user")
+    )),
     badges: v.optional(v.array(v.string())),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -120,9 +126,11 @@ export default defineSchema({
     rallyLatitude: v.optional(v.number()),
     rallyLongitude: v.optional(v.number()),
     category: v.optional(v.string()),
+    hashtags: v.optional(v.array(v.string())),
     eventDate: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    mediaStorageId: v.optional(v.string()),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])

@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign, Loader2, Camera, Video, FileText, Hash, ChevronDown, Check } from 'lucide-react';
+import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign, Loader2, Camera, Video, Hash, ImagePlus } from 'lucide-react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ActivityType } from '../types';
@@ -14,39 +14,29 @@ interface CreateRallyModalProps {
   onCreated: () => void;
 }
 
-const CATEGORIES = [
-  { id: 'sports', label: 'Outdoor & Sports', icon: '🏃' },
-  { id: 'music', label: 'Music & Events', icon: '🎵' },
-  { id: 'gaming', label: 'Tech & Gaming', icon: '🎮' },
-  { id: 'social', label: 'Social Hangouts', icon: '☕' },
-  { id: 'work', label: 'Work & Business', icon: '💼' },
-  { id: 'education', label: 'Learning & Skills', icon: '📚' },
-  { id: 'creative', label: 'Art & Creativity', icon: '🎨' },
-  { id: 'fitness', label: 'Fitness & Health', icon: '💪' },
-  { id: 'travel', label: 'Travel & Explore', icon: '🧭' },
-  { id: 'food', label: 'Food & Cooking', icon: '🍽️' },
-  { id: 'general', label: 'General', icon: '📌' },
-];
-
 export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateRallyModalProps) {
   const [step, setStep] = useState(1);
   const [type, setType] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState('');
   const [isPaid, setIsPaid] = useState<boolean | null>(null);
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [peopleNeeded, setPeopleNeeded] = useState(1);
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [mediaStorageId, setMediaStorageId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [hashtags, setHashtags] = useState<string[]>([]);
+  const [hashtagInput, setHashtagInput] = useState('');
   const [isPosting, setIsPosting] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { city, locationLabel, position, geoState } = useLocation();
   const { firebaseUser } = useAuth();
   const createRally = useMutation(api.rallies.create);
   const getOrCreateUser = useMutation(api.users.getOrCreateByEmail);
+  const generateUploadUrl = useMutation(api.rallies.generateUploadUrl);
 
   const rallyLocation = city || locationLabel || 'Unknown location';
   const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
@@ -57,25 +47,56 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
     setDescription('');
     setIsPaid(null);
     setPrice('');
-    setCategory('');
     setEventDate('');
     setEventTime('');
     setPeopleNeeded(1);
     setMediaUrl('');
     setMediaType(null);
-    setShowCategoryPicker(false);
+    setMediaStorageId(null);
+    setHashtags([]);
+    setHashtagInput('');
     onClose();
   };
 
-  const handleMediaUrl = (url: string) => {
-    setMediaUrl(url);
-    if (/\.(jpg|jpeg|png|gif|webp|svg)/i.test(url)) {
-      setMediaType('image');
-    } else if (/\.(mp4|webm|ogg)/i.test(url)) {
-      setMediaType('video');
-    } else {
-      setMediaType(null);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) return;
+
+    setIsUploading(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const result = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      const { storageId } = await result.json();
+      setMediaStorageId(storageId);
+      setMediaUrl(URL.createObjectURL(file));
+      setMediaType(isImage ? 'image' : 'video');
+    } catch {
+      window.dispatchEvent(new CustomEvent('show-toast', {
+        detail: { title: 'Upload failed', subtitle: 'Could not upload media file' }
+      }));
+    } finally {
+      setIsUploading(false);
     }
+  };
+
+  const handleAddHashtag = () => {
+    const tag = hashtagInput.trim().replace(/^#/, '').toLowerCase();
+    if (tag && !hashtags.includes(tag) && hashtags.length < 5) {
+      setHashtags([...hashtags, tag]);
+      setHashtagInput('');
+    }
+  };
+
+  const handleRemoveHashtag = (tag: string) => {
+    setHashtags(hashtags.filter((t) => t !== tag));
   };
 
   const ensureConvexUser = useCallback(async (): Promise<string> => {
@@ -92,7 +113,6 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
     setIsPosting(true);
     try {
       const convexUserId = await ensureConvexUser();
-
       const title = description.split('\n')[0].slice(0, 80) || `${type} RALLY`;
 
       await createRally({
@@ -109,10 +129,11 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
         locationLabel: rallyLocation,
         rallyLatitude: position?.latitude,
         rallyLongitude: position?.longitude,
-        category: category || undefined,
+        hashtags: hashtags.length > 0 ? hashtags : undefined,
         eventDate: eventDate || undefined,
         mediaUrl: mediaUrl || undefined,
         mediaType: mediaType || undefined,
+        mediaStorageId: mediaStorageId || undefined,
       });
 
       onCreated();
@@ -132,8 +153,6 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
     HELP: { icon: Heart, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' },
     JOIN: { icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-100', border: 'border-indigo-200' },
   };
-
-  const selectedCategory = CATEGORIES.find(c => c.id === category);
 
   return (
     <AnimatePresence>
@@ -213,66 +232,83 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">Media (optional)</h3>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 flex-1 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
-                        <Camera className="w-4 h-4 text-zinc-400 shrink-0" />
-                        <input
-                          type="url"
-                          value={mediaUrl}
-                          onChange={(e) => handleMediaUrl(e.target.value)}
-                          placeholder="Paste image or video URL"
-                          className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-zinc-400"
-                        />
-                      </div>
-                      {mediaUrl && (
-                        <button onClick={() => { setMediaUrl(''); setMediaType(null); }} className="p-2 rounded-lg hover:bg-zinc-100">
-                          <X className="w-4 h-4 text-zinc-400" />
-                        </button>
-                      )}
-                    </div>
-                    {mediaUrl && mediaType && (
-                      <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
+                    <h3 className="text-sm font-bold text-zinc-900">Photo / Video (optional)</h3>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    {mediaUrl ? (
+                      <div className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
                         {mediaType === 'image' ? (
-                          <img src={mediaUrl} alt="" className="w-full h-full object-cover" onError={() => { setMediaType(null); }} />
+                          <img src={mediaUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <video src={mediaUrl} className="w-full h-full object-cover" controls onError={() => { setMediaType(null); }} />
+                          <video src={mediaUrl} className="w-full h-full object-cover" controls />
                         )}
+                        <button
+                          onClick={() => { setMediaUrl(''); setMediaType(null); setMediaStorageId(null); }}
+                          className="absolute top-2 right-2 p-1.5 bg-zinc-900/60 rounded-full text-white hover:bg-zinc-900/80"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-50 border-2 border-dashed border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-zinc-600 font-semibold text-sm"
+                      >
+                        {isUploading ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <ImagePlus className="w-5 h-5 text-zinc-400" />
+                        )}
+                        {isUploading ? 'Uploading...' : 'Tap to add photo or video'}
+                      </button>
                     )}
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">Category</h3>
-                    <button
-                      onClick={() => setShowCategoryPicker(!showCategoryPicker)}
-                      className="w-full flex items-center justify-between p-4 bg-white border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Hash className="w-4 h-4 text-zinc-400" />
-                        <span className="text-sm font-semibold text-zinc-900">
-                          {selectedCategory ? `${selectedCategory.icon} ${selectedCategory.label}` : 'Select a category'}
-                        </span>
+                    <h3 className="text-sm font-bold text-zinc-900">Hashtags (optional)</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-1 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
+                        <Hash className="w-4 h-4 text-zinc-400 shrink-0" />
+                        <input
+                          type="text"
+                          value={hashtagInput}
+                          onChange={(e) => setHashtagInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddHashtag(); } }}
+                          placeholder="Add hashtag"
+                          className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-zinc-400"
+                          maxLength={20}
+                        />
                       </div>
-                      <ChevronDown className={cn("w-4 h-4 text-zinc-400 transition-transform", showCategoryPicker && "rotate-180")} />
-                    </button>
-                    {showCategoryPicker && (
-                      <div className="grid grid-cols-2 gap-2 p-3 bg-zinc-50 border border-zinc-200 rounded-2xl">
-                        {CATEGORIES.map(cat => (
-                          <button
-                            key={cat.id}
-                            onClick={() => { setCategory(cat.id === category ? '' : cat.id); setShowCategoryPicker(false); }}
-                            className={cn(
-                              "flex items-center gap-2 p-3 rounded-xl text-left text-sm font-medium transition-all",
-                              category === cat.id ? "bg-indigo-100 text-indigo-700 border border-indigo-200" : "bg-white border border-zinc-200 hover:border-zinc-300"
-                            )}
+                      <button
+                        onClick={handleAddHashtag}
+                        disabled={!hashtagInput.trim() || hashtags.length >= 5}
+                        className="px-3 py-2.5 bg-zinc-100 hover:bg-zinc-200 rounded-xl text-xs font-bold text-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {hashtags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {hashtags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold border border-indigo-100"
                           >
-                            <span>{cat.icon}</span>
-                            <span>{cat.label}</span>
-                          </button>
+                            #{tag}
+                            <button onClick={() => handleRemoveHashtag(tag)} className="hover:text-indigo-900">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
                         ))}
                       </div>
                     )}
+                    <p className="text-[11px] text-zinc-400">Up to 5 hashtags, e.g. #football, #meetup, #lagos</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -381,7 +417,11 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                       </div>
                       <div>
                         <div className="font-bold text-zinc-900 text-sm">{type} RALLY</div>
-                        {selectedCategory && <div className="text-xs text-zinc-500">{selectedCategory.icon} {selectedCategory.label}</div>}
+                        {hashtags.length > 0 && (
+                          <div className="text-xs text-indigo-600 font-semibold mt-0.5">
+                            {hashtags.map((t) => `#${t}`).join(' ')}
+                          </div>
+                        )}
                       </div>
                       {isPaid !== null && (
                         <div className={cn("ml-auto px-2.5 py-1 rounded-full text-xs font-bold", isPaid ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
