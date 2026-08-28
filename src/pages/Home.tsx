@@ -16,6 +16,7 @@ const EXPLAINER_DISMISSED_KEY = 'rally_explainer_dismissed';
 
 export default function Home() {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const {
     city,
     radiusKm,
@@ -62,6 +63,10 @@ export default function Home() {
 
   const openCreateModal = () => {
     window.dispatchEvent(new CustomEvent('open-create-rally'));
+  };
+
+  const handleDeleted = (id: string) => {
+    setDeletedIds((prev) => new Set([...prev, id]));
   };
 
   const handleEnableNotifications = async () => {
@@ -195,6 +200,7 @@ export default function Home() {
 
   const nearbyRallies = useMemo(() => {
     return allRallies
+      .filter((rally) => !deletedIds.has(rally.id))
       .map((rally) => {
         const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
         return { ...rally, computedDistance: dist };
@@ -454,6 +460,7 @@ export default function Home() {
                         ? `${city || 'Nearby'} · ${formatDistance(rally.computedDistance)}`
                         : rally.locationLabel,
                     }}
+                    onDeleted={handleDeleted}
                   />
                 );
                 const adIndex = Math.floor(index / 3);

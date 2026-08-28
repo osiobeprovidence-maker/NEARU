@@ -105,7 +105,7 @@ export default defineSchema({
   }).index("by_username", ["username"]).index("by_email", ["email"]),
 
   rallies: defineTable({
-    type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN")),
+    type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN"), v.literal("EVENT"), v.literal("POST")),
     title: v.string(),
     description: v.string(),
     distance: v.number(),
@@ -131,6 +131,8 @@ export default defineSchema({
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
     mediaStorageId: v.optional(v.string()),
+    capacity: v.optional(v.number()),
+    endTime: v.optional(v.string()),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])
@@ -255,4 +257,43 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_status", ["verificationStatus"])
     .index("by_user_created", ["userId", "createdAt"]),
+
+  likes: defineTable({
+    userId: v.id("users"),
+    rallyId: v.id("rallies"),
+    createdAt: v.number(),
+  })
+    .index("by_rally", ["rallyId"])
+    .index("by_user_rally", ["userId", "rallyId"]),
+
+  comments: defineTable({
+    userId: v.id("users"),
+    rallyId: v.id("rallies"),
+    text: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_rally", ["rallyId"]),
+
+  rsvps: defineTable({
+    userId: v.id("users"),
+    rallyId: v.id("rallies"),
+    createdAt: v.number(),
+  })
+    .index("by_rally", ["rallyId"])
+    .index("by_user_rally", ["userId", "rallyId"]),
+
+  ratings: defineTable({
+    // User who submitted the rating
+    raterId: v.id("users"),
+    // User being rated
+    ratedUserId: v.id("users"),
+    // The rally the interaction happened through
+    rallyId: v.optional(v.id("rallies")),
+    score: v.number(),          // 1–5
+    review: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_rater", ["raterId"])
+    .index("by_rated_user", ["ratedUserId"])
+    .index("by_rater_rated", ["raterId", "ratedUserId"]),
 });

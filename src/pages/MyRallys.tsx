@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageShell from '../components/PageShell';
 import { useQuery } from 'convex/react';
@@ -14,6 +14,8 @@ export default function MyRallys() {
   const navigate = useNavigate();
   const { convexUserId } = useAuth();
   const [activeTab, setActiveTab] = useState('Created');
+  // Optimistic local delete — remove card immediately without waiting for re-query
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   const myRallies = useQuery(
     api.rallies.listByCreator,
@@ -76,9 +78,12 @@ export default function MyRallys() {
     }));
   }, [myRallies, convexUserId]);
 
-  const createdRallies = mappedRallies;
-  // Future: filter by interest/completed status once that data layer exists
+  const createdRallies = mappedRallies.filter((r) => !deletedIds.has(r.id));
   const isLoading = myRallies === undefined;
+
+  const handleDeleted = (id: string) => {
+    setDeletedIds((prev) => new Set([...prev, id]));
+  };
 
   return (
     <PageShell title="My RALLYS">
@@ -111,7 +116,7 @@ export default function MyRallys() {
         ) : activeTab === 'Created' ? (
           createdRallies.length > 0 ? (
             createdRallies.map((rally) => (
-              <RallyCard key={rally.id} rally={rally} />
+              <RallyCard key={rally.id} rally={rally} onDeleted={handleDeleted} />
             ))
           ) : (
             <EmptyState

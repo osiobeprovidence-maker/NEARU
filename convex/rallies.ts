@@ -452,3 +452,150 @@ export const deleteComment = mutation({
     await ctx.db.delete(args.commentId);
   },
 });
+
+// ---------------------------------------------------------------------------
+// Delete Rally — server-side ownership enforced
+// ---------------------------------------------------------------------------
+
+export const deleteRally = mutation({
+  args: {
+    rallyId: v.id("rallies"),
+    requestingUserId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const rally = await ctx.db.get(args.rallyId);
+    if (!rally) throw new Error("Rally not found");
+
+    // Ownership check — server-side, not bypassable from the client
+    if (rally.creatorId !== args.requestingUserId) {
+      throw new Error("Not authorised: you can only delete your own posts");
+    }
+
+    // 1. Delete all likes for this rally
+    const likes = await ctx.db
+      .query("likes")
+      .withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId))
+      .collect();
+    for (const like of likes) {
+      await ctx.db.delete(like._id);
+    }
+
+    // 2. Delete all comments for this rally
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId))
+      .collect();
+    for (const comment of comments) {
+      await ctx.db.delete(comment._id);
+    }
+
+    // 3. Delete all RSVPs for this rally
+    const rsvps = await ctx.db
+      .query("rsvps")
+      .withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId))
+      .collect();
+    for (const rsvp of rsvps) {
+      await ctx.db.delete(rsvp._id);
+    }
+
+    // 4. Delete notifications that reference this rally
+    const notifications = await ctx.db
+      .query("notifications")
+      .collect();
+    for (const notif of notifications) {
+      if (notif.rallyId === args.rallyId) {
+        await ctx.db.delete(notif._id);
+      }
+    }
+
+    // 5. Clean up storage file if exclusively owned by this rally
+    if (rally.mediaStorageId && isStorageId(rally.mediaStorageId)) {
+      try {
+        await ctx.storage.delete(rally.mediaStorageId as any);
+      } catch {
+        // Non-fatal: file may already be gone or shared
+      }
+    }
+
+    // 6. Finally delete the rally record itself
+    await ctx.db.delete(args.rallyId);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Profile statistics — derived live from source records
+// ---------------------------------------------------------------------------
+
+export const getProfileStats = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Posted: all rallies created by this user (any status)
+    const allCreated = await ctx.db
+      .query("rallies")
+      .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+      .collect();
+
+    const posted = allCreated.length;
+
+    // Completed: creator's rallies with COMPLETED status
+    const completed = allCreated.filter((r) => r.status === "COMPLETED").length;
+
+    // Rated: number of ratings THIS user has submitted (ratings given, not received)
+    const ratingsGiven = await ctx.db
+      .query("ratings")
+      .withIndex("by_rater", (q) => q.eq("raterId", args.userId))
+      .collect();
+
+    const rated = ratingsGiven.length;
+
+    return { posted, completed, rated };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Ratings
+// ---------------------------------------------------------------------------
+
+export const submitRating = mutation({
+  args: {
+    raterId: v.id("users"),
+    ratedUserId: v.id("users"),
+    rallyId: v.optional(v.id("rallies")),
+    score: v.number(),
+    review: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.raterId === args.ratedUserId) {
+      throw new Error("You cannot rate yourself");
+    }
+    if (args.score < 1 || args.score > 5) {
+      throw new Error("Score must be between 1 and 5");
+    }
+
+    // One rating per rater per rated user (update if exists)
+    const existing = await ctx.db
+      .query("ratings")
+      .withIndex("by_rater_rated", (q) =>
+        q.eq("raterId", args.raterId).eq("ratedUserId", args.ratedUserId)
+      )
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        score: args.score,
+        review: args.review,
+        createdAt: Date.now(),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("ratings", {
+      raterId: args.raterId,
+      ratedUserId: args.ratedUserId,
+      rallyId: args.rallyId,
+      score: args.score,
+      review: args.review,
+      createdAt: Date.now(),
+    });
+  },
+});

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   MapPin,
   Clock,
@@ -14,6 +14,9 @@ import {
   MessageCircle,
   X,
   Share2,
+  MoreVertical,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { Rally } from '../types';
 import { cn } from '../lib/utils';
@@ -24,9 +27,11 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface RallyCardProps {
   rally: Rally;
+  /** Called after successful deletion so parent can remove the card */
+  onDeleted?: (id: string) => void;
 }
 
-export default function RallyCard({ rally }: RallyCardProps) {
+export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   // Optimistic like state
   const [localLiked, setLocalLiked] = useState(rally.isLiked ?? false);
   const [localLikeCount, setLocalLikeCount] = useState(rally.likesCount ?? 0);
@@ -39,16 +44,25 @@ export default function RallyCard({ rally }: RallyCardProps) {
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
+  // Delete state
+  const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const { convexUserId } = useAuth();
 
-  const toggleLikeMut = useMutation(api.rallies.toggleLike);
-  const toggleRsvpMut = useMutation(api.rallies.toggleRsvp);
-  const addCommentMut = useMutation(api.rallies.addComment);
+  const toggleLikeMut   = useMutation(api.rallies.toggleLike);
+  const toggleRsvpMut   = useMutation(api.rallies.toggleRsvp);
+  const addCommentMut   = useMutation(api.rallies.addComment);
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
+  const deleteRallyMut  = useMutation(api.rallies.deleteRally);
+
   const comments = useQuery(
     api.rallies.getComments,
     showComments ? { rallyId: rally.id as any } : 'skip'
   );
+
+  const isOwner = !!convexUserId && convexUserId === rally.creator.id;
 
   const isEvent = rally.type === 'EVENT';
   const isPost = rally.type === 'POST';
@@ -211,6 +225,26 @@ export default function RallyCard({ rally }: RallyCardProps) {
     } catch {}
   };
 
+  const handleDeleteConfirmed = async () => {
+    if (!convexUserId) return;
+    setIsDeleting(true);
+    try {
+      await deleteRallyMut({
+        rallyId: rally.id as any,
+        requestingUserId: convexUserId as any,
+      });
+      setShowDeleteConfirm(false);
+      showToast('RALLY deleted.', '');
+      // Notify parent to remove card from list
+      onDeleted?.(rally.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      showToast("Couldn't delete this RALLY.", msg || 'Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -220,6 +254,59 @@ export default function RallyCard({ rally }: RallyCardProps) {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white p-5 group hover:bg-zinc-50/50 transition-colors"
     >
+      {/* Delete confirmation dialog */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-[80]"
+              onClick={() => !isDeleting && setShowDeleteConfirm(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              transition={{ type: 'spring', bounce: 0.2, duration: 0.25 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-xl z-[90] p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-rose-600" />
+              </div>
+              <h3 className="text-lg font-black text-zinc-900 text-center mb-1">
+                Delete this RALLY?
+              </h3>
+              <p className="text-sm text-zinc-500 text-center mb-6 leading-relaxed">
+                This action cannot be undone. Likes, comments, and RSVPs will also be removed.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConfirmed}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Deleting…</>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Creator row */}
       <div className="flex items-center gap-3 mb-4">
         <Avatar
@@ -253,6 +340,7 @@ export default function RallyCard({ rally }: RallyCardProps) {
             )}
           </div>
         </div>
+
         {/* Type + paid badges */}
         <div className="flex items-center gap-2 shrink-0">
           <div
@@ -273,6 +361,47 @@ export default function RallyCard({ rally }: RallyCardProps) {
             </div>
           )}
         </div>
+
+        {/* Three-dot menu — only for the owner */}
+        {isOwner && (
+          <div className="relative shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
+              className="p-1.5 rounded-full hover:bg-zinc-100 transition-colors text-zinc-400 hover:text-zinc-600"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            <AnimatePresence>
+              {showMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[30]"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-8 w-36 bg-white rounded-xl shadow-lg border border-zinc-200 overflow-hidden z-[40] py-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowDeleteConfirm(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
 
       {/* Hashtags */}
