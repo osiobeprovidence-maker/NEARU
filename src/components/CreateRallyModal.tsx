@@ -1,6 +1,18 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, Heart, Users, MapPin, Calendar, Clock, DollarSign, Loader2, Camera, Video, Hash, ImagePlus } from 'lucide-react';
+import {
+  X,
+  AlertCircle,
+  Heart,
+  Users,
+  MapPin,
+  Calendar,
+  Clock,
+  Loader2,
+  Hash,
+  ImagePlus,
+  MessageSquarePlus,
+} from 'lucide-react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ActivityType } from '../types';
@@ -14,7 +26,16 @@ interface CreateRallyModalProps {
   onCreated: () => void;
 }
 
-export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateRallyModalProps) {
+// POST type is always free and doesn't need paid/capacity fields
+const POST_ONLY_TYPES: ActivityType[] = ['POST'];
+// These types show event-specific fields (date, time, capacity, paid/free)
+const EVENT_TYPES: ActivityType[] = ['ASK', 'HELP', 'JOIN', 'EVENT'];
+
+export default function CreateRallyModal({
+  isOpen,
+  onClose,
+  onCreated,
+}: CreateRallyModalProps) {
   const [step, setStep] = useState(1);
   const [type, setType] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState('');
@@ -23,23 +44,36 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [peopleNeeded, setPeopleNeeded] = useState(1);
-  const [mediaUrl, setMediaUrl] = useState('');
+  // Media state
+  const [localPreview, setLocalPreview] = useState<string>('');   // blob: URL for immediate preview
+  const [mediaStorageId, setMediaStorageId] = useState<string>('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
-  const [mediaStorageId, setMediaStorageId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string>('');
+  // Hashtags
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [hashtagInput, setHashtagInput] = useState('');
   const [isPosting, setIsPosting] = useState(false);
+
+  const uploadedRef = useRef(false); // prevent double-upload on re-render
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { city, locationLabel, position, geoState } = useLocation();
-  const { firebaseUser } = useAuth();
+  const { city, position, geoState } = useLocation();
+  const { firebaseUser, convexUserId } = useAuth();
   const createRally = useMutation(api.rallies.create);
   const getOrCreateUser = useMutation(api.users.getOrCreateByEmail);
   const generateUploadUrl = useMutation(api.rallies.generateUploadUrl);
 
-  const rallyLocation = city || locationLabel || 'Unknown location';
-  const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
+  const rallyLocation = city || 'Unknown location';
+  const hasLocation =
+    geoState === 'active' || geoState === 'manual' || geoState === 'updating';
+
+  // POST type is always free — set isPaid automatically when type changes
+  useEffect(() => {
+    if (type && POST_ONLY_TYPES.includes(type)) {
+      setIsPaid(false);
+    }
+  }, [type]);
 
   const resetAndClose = () => {
     setStep(1);
@@ -50,43 +84,76 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
     setEventDate('');
     setEventTime('');
     setPeopleNeeded(1);
-    setMediaUrl('');
+    setLocalPreview('');
+    setMediaStorageId('');
     setMediaType(null);
-    setMediaStorageId(null);
+    setIsUploading(false);
+    setUploadError('');
     setHashtags([]);
     setHashtagInput('');
+    uploadedRef.current = false;
     onClose();
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // -------------------------------------------------------------------------
+  // Image upload
+  // -------------------------------------------------------------------------
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Clear input so the same file can be re-selected after removal
+    if (fileInputRef.current) fileInputRef.current.value = '';
     if (!file) return;
 
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
     if (!isImage && !isVideo) return;
 
+    // 1. Show a local preview immediately (blob URL)
+    const preview = URL.createObjectURL(file);
+    setLocalPreview(preview);
+    setMediaType(isImage ? 'image' : 'video');
+    setMediaStorageId('');
+    setUploadError('');
+    uploadedRef.current = false;
+
+    // 2. Upload in background
     setIsUploading(true);
     try {
       const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, {
+      const res = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': file.type },
         body: file,
       });
-      const { storageId } = await result.json();
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const { storageId } = await res.json();
+      if (!storageId) throw new Error('No storage ID returned');
       setMediaStorageId(storageId);
-      setMediaUrl(URL.createObjectURL(file));
-      setMediaType(isImage ? 'image' : 'video');
-    } catch {
-      window.dispatchEvent(new CustomEvent('show-toast', {
-        detail: { title: 'Upload failed', subtitle: 'Could not upload media file' }
-      }));
+      uploadedRef.current = true;
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setUploadError(msg);
+      // Keep the local preview so the user can see what they picked,
+      // but clear the storageId so we don't save a broken reference.
+      setMediaStorageId('');
     } finally {
       setIsUploading(false);
     }
   };
 
+  const handleRemoveMedia = () => {
+    if (localPreview) URL.revokeObjectURL(localPreview);
+    setLocalPreview('');
+    setMediaStorageId('');
+    setMediaType(null);
+    setUploadError('');
+    uploadedRef.current = false;
+  };
+
+  // -------------------------------------------------------------------------
+  // Hashtags
+  // -------------------------------------------------------------------------
   const handleAddHashtag = () => {
     const tag = hashtagInput.trim().replace(/^#/, '').toLowerCase();
     if (tag && !hashtags.includes(tag) && hashtags.length < 5) {
@@ -99,21 +166,28 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
     setHashtags(hashtags.filter((t) => t !== tag));
   };
 
+  // -------------------------------------------------------------------------
+  // Submit
+  // -------------------------------------------------------------------------
   const ensureConvexUser = useCallback(async (): Promise<string> => {
+    if (convexUserId) return convexUserId;
     if (!firebaseUser?.email) throw new Error('Please complete onboarding first');
-    const userId = await getOrCreateUser({
+    return await getOrCreateUser({
       email: firebaseUser.email,
       name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
     });
-    return userId;
-  }, [firebaseUser, getOrCreateUser]);
+  }, [convexUserId, firebaseUser, getOrCreateUser]);
 
   const handlePost = async () => {
-    if (!type || !description || isPaid === null) return;
+    if (!type || !description.trim()) return;
+    // For non-POST types, paid/free must be chosen
+    if (!POST_ONLY_TYPES.includes(type) && isPaid === null) return;
+
     setIsPosting(true);
     try {
-      const convexUserId = await ensureConvexUser();
+      const userId = await ensureConvexUser();
       const title = description.split('\n')[0].slice(0, 80) || `${type} RALLY`;
+      const effectiveIsPaid = isPaid ?? false;
 
       await createRally({
         type,
@@ -122,36 +196,94 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
         distance: 0,
         time: eventTime || 'Soon',
         peopleNeeded,
-        isPaid: isPaid,
-        price: isPaid && price ? parseInt(price, 10) : undefined,
-        creatorId: convexUserId as any,
+        capacity:
+          type === 'EVENT' && peopleNeeded > 0 ? peopleNeeded : undefined,
+        isPaid: effectiveIsPaid,
+        price:
+          effectiveIsPaid && price ? parseInt(price, 10) : undefined,
+        creatorId: userId as any,
         city: city || undefined,
         locationLabel: rallyLocation,
         rallyLatitude: position?.latitude,
         rallyLongitude: position?.longitude,
         hashtags: hashtags.length > 0 ? hashtags : undefined,
         eventDate: eventDate || undefined,
-        mediaUrl: mediaUrl || undefined,
-        mediaType: mediaType || undefined,
+        endTime: eventTime || undefined,
+        // Only send storageId if upload completed successfully
         mediaStorageId: mediaStorageId || undefined,
+        // Don't persist blob: URLs — they're session-only
+        mediaUrl: undefined,
+        mediaType: mediaType || undefined,
       });
 
       onCreated();
-      setTimeout(() => resetAndClose(), 500);
+      // Small delay so the user sees the success before modal closes
+      setTimeout(() => resetAndClose(), 400);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to post';
-      window.dispatchEvent(new CustomEvent('show-toast', {
-        detail: { title: 'Could not post RALLY', subtitle: msg }
-      }));
+      const msg =
+        err instanceof Error ? err.message : 'Failed to post. Please try again.';
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: { title: 'Could not post RALLY', subtitle: msg },
+        })
+      );
     } finally {
       setIsPosting(false);
     }
   };
 
-  const typeConfig = {
-    ASK: { icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-100', border: 'border-rose-200' },
-    HELP: { icon: Heart, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' },
-    JOIN: { icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-100', border: 'border-indigo-200' },
+  // -------------------------------------------------------------------------
+  // Validation
+  // -------------------------------------------------------------------------
+  const isPost = type && POST_ONLY_TYPES.includes(type);
+  const needsPaidChoice = type && !isPost;
+  const canReview =
+    !!description.trim() &&
+    !isUploading &&
+    (isPost || (isPaid !== null && (!isPaid || !!price)));
+
+  // -------------------------------------------------------------------------
+  // Visual config
+  // -------------------------------------------------------------------------
+  const typeConfig: Record<
+    ActivityType,
+    { icon: React.ElementType; color: string; bg: string; label: string; subtitle: string }
+  > = {
+    POST: {
+      icon: MessageSquarePlus,
+      color: 'text-zinc-600',
+      bg: 'bg-zinc-100',
+      label: 'Post',
+      subtitle: 'Share something with the community.',
+    },
+    EVENT: {
+      icon: Calendar,
+      color: 'text-violet-600',
+      bg: 'bg-violet-100',
+      label: 'Event',
+      subtitle: 'Host or share a local event.',
+    },
+    ASK: {
+      icon: AlertCircle,
+      color: 'text-rose-600',
+      bg: 'bg-rose-100',
+      label: 'Ask',
+      subtitle: 'I need something.',
+    },
+    HELP: {
+      icon: Heart,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-100',
+      label: 'Help',
+      subtitle: 'I can help someone.',
+    },
+    JOIN: {
+      icon: Users,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-100',
+      label: 'Join',
+      subtitle: 'I want people to join me.',
+    },
   };
 
   return (
@@ -169,47 +301,77 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
             initial={{ opacity: 0, y: 100, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 100, scale: 0.95 }}
-            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
             className="fixed inset-x-0 bottom-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 w-full md:w-[500px] max-h-[90vh] bg-white rounded-t-[2rem] md:rounded-3xl shadow-2xl z-[70] flex flex-col overflow-hidden"
           >
-            <div className="flex items-center justify-between p-6 border-b border-zinc-100">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-100 shrink-0">
               <h2 className="text-xl font-black text-zinc-900">
-                {step === 1 ? 'Create a RALLY' : step === 2 ? 'Details' : 'Review & Post'}
+                {step === 1
+                  ? 'Create a RALLY'
+                  : step === 2
+                  ? 'Details'
+                  : 'Review & Post'}
               </h2>
-              <button onClick={resetAndClose} className="p-2 rounded-full hover:bg-zinc-100 transition-colors">
+              <button
+                onClick={resetAndClose}
+                className="p-2 rounded-full hover:bg-zinc-100 transition-colors"
+              >
                 <X className="w-5 h-5 text-zinc-500" />
               </button>
             </div>
 
-            <div className="flex gap-1.5 px-6 pt-3">
-              {[1, 2, 3].map(s => (
-                <div key={s} className={cn("h-1 flex-1 rounded-full transition-all", s <= step ? 'bg-zinc-900' : 'bg-zinc-200')} />
+            {/* Progress */}
+            <div className="flex gap-1.5 px-6 pt-3 shrink-0">
+              {[1, 2, 3].map((s) => (
+                <div
+                  key={s}
+                  className={cn(
+                    'h-1 flex-1 rounded-full transition-all',
+                    s <= step ? 'bg-zinc-900' : 'bg-zinc-200'
+                  )}
+                />
               ))}
             </div>
 
+            {/* Body */}
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+              {/* STEP 1 — Type picker */}
               {step === 1 && (
                 <div className="space-y-6">
-                  <h3 className="text-lg font-bold text-zinc-900">What do you want to do?</h3>
+                  <h3 className="text-lg font-bold text-zinc-900">
+                    What do you want to do?
+                  </h3>
                   <div className="space-y-3">
-                    {(['ASK', 'HELP', 'JOIN'] as ActivityType[]).map((t) => {
-                      const Icon = typeConfig[t].icon;
+                    {(
+                      ['POST', 'EVENT', 'ASK', 'HELP', 'JOIN'] as ActivityType[]
+                    ).map((t) => {
+                      const cfg = typeConfig[t];
+                      const Icon = cfg.icon;
                       return (
                         <button
                           key={t}
-                          onClick={() => { setType(t); setStep(2); }}
-                          className={cn(
-                            "w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all",
-                            type === t ? `border-${typeConfig[t].border.split('-')[1]}-500 ${typeConfig[t].bg}` : "border-zinc-100 hover:border-zinc-200"
-                          )}
+                          onClick={() => {
+                            setType(t);
+                            setStep(2);
+                          }}
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-zinc-100 hover:border-zinc-200 text-left transition-all active:scale-[0.98]"
                         >
-                          <div className={cn("w-12 h-12 rounded-full flex items-center justify-center shrink-0", typeConfig[t].bg, typeConfig[t].color)}>
+                          <div
+                            className={cn(
+                              'w-12 h-12 rounded-full flex items-center justify-center shrink-0',
+                              cfg.bg,
+                              cfg.color
+                            )}
+                          >
                             <Icon className="w-6 h-6" />
                           </div>
                           <div>
-                            <div className="font-bold text-zinc-900">{t}</div>
+                            <div className="font-bold text-zinc-900">
+                              {cfg.label}
+                            </div>
                             <div className="text-sm text-zinc-500 font-medium mt-0.5">
-                              {t === 'ASK' ? 'I need something.' : t === 'HELP' ? 'I can help someone.' : 'I want people to join me.'}
+                              {cfg.subtitle}
                             </div>
                           </div>
                         </button>
@@ -219,36 +381,79 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                 </div>
               )}
 
+              {/* STEP 2 — Details */}
               {step === 2 && type && (
                 <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                  {/* Description */}
                   <div className="space-y-2">
-                    <h3 className="text-lg font-bold text-zinc-900">What's happening?</h3>
+                    <h3 className="text-lg font-bold text-zinc-900">
+                      What's happening?
+                    </h3>
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder={type === 'ASK' ? 'Tell people what you need...' : type === 'HELP' ? 'Tell people how you can help...' : 'What are we doing?'}
+                      placeholder={
+                        type === 'ASK'
+                          ? 'Tell people what you need...'
+                          : type === 'HELP'
+                          ? 'Tell people how you can help...'
+                          : type === 'EVENT'
+                          ? 'Describe your event...'
+                          : 'What do you want to share?'
+                      }
                       className="w-full h-32 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-zinc-900 placeholder:text-zinc-400"
                     />
                   </div>
 
+                  {/* Image upload */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">Photo / Video (optional)</h3>
+                    <h3 className="text-sm font-bold text-zinc-900">
+                      Photo (optional)
+                    </h3>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*,video/*"
-                      onChange={handleFileUpload}
+                      accept="image/*"
+                      onChange={handleFileSelect}
                       className="hidden"
                     />
-                    {mediaUrl ? (
+                    {localPreview ? (
                       <div className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
-                        {mediaType === 'image' ? (
-                          <img src={mediaUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <video src={mediaUrl} className="w-full h-full object-cover" controls />
+                        <img
+                          src={localPreview}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Upload status overlay */}
+                        {isUploading && (
+                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="w-7 h-7 text-white animate-spin" />
+                            <span className="text-white text-xs font-bold">
+                              Uploading…
+                            </span>
+                          </div>
+                        )}
+                        {uploadError && !isUploading && (
+                          <div className="absolute inset-0 bg-rose-900/60 flex flex-col items-center justify-center gap-2 p-4">
+                            <AlertCircle className="w-7 h-7 text-white" />
+                            <span className="text-white text-xs font-bold text-center">
+                              {uploadError}
+                            </span>
+                            <button
+                              onClick={() => fileInputRef.current?.click()}
+                              className="px-3 py-1.5 bg-white text-rose-700 text-xs font-bold rounded-full mt-1"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        )}
+                        {!isUploading && !uploadError && mediaStorageId && (
+                          <div className="absolute top-2 left-2 px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full">
+                            ✓ Uploaded
+                          </div>
                         )}
                         <button
-                          onClick={() => { setMediaUrl(''); setMediaType(null); setMediaStorageId(null); }}
+                          onClick={handleRemoveMedia}
                           className="absolute top-2 right-2 p-1.5 bg-zinc-900/60 rounded-full text-white hover:bg-zinc-900/80"
                         >
                           <X className="w-4 h-4" />
@@ -257,21 +462,19 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                     ) : (
                       <button
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading}
                         className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-50 border-2 border-dashed border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-zinc-600 font-semibold text-sm"
                       >
-                        {isUploading ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <ImagePlus className="w-5 h-5 text-zinc-400" />
-                        )}
-                        {isUploading ? 'Uploading...' : 'Tap to add photo or video'}
+                        <ImagePlus className="w-5 h-5 text-zinc-400" />
+                        Tap to add a photo
                       </button>
                     )}
                   </div>
 
+                  {/* Hashtags */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">Hashtags (optional)</h3>
+                    <h3 className="text-sm font-bold text-zinc-900">
+                      Hashtags (optional)
+                    </h3>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-2 flex-1 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
                         <Hash className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -279,7 +482,12 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                           type="text"
                           value={hashtagInput}
                           onChange={(e) => setHashtagInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddHashtag(); } }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddHashtag();
+                            }
+                          }}
                           placeholder="Add hashtag"
                           className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-zinc-400"
                           maxLength={20}
@@ -301,163 +509,273 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold border border-indigo-100"
                           >
                             #{tag}
-                            <button onClick={() => handleRemoveHashtag(tag)} className="hover:text-indigo-900">
+                            <button
+                              onClick={() => handleRemoveHashtag(tag)}
+                              className="hover:text-indigo-900"
+                            >
                               <X className="w-3 h-3" />
                             </button>
                           </span>
                         ))}
                       </div>
                     )}
-                    <p className="text-[11px] text-zinc-400">Up to 5 hashtags, e.g. #football, #meetup, #lagos</p>
+                    <p className="text-[11px] text-zinc-400">
+                      Up to 5 hashtags, e.g. #football, #meetup, #udu
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-bold text-zinc-900">Date</h3>
-                      <input
-                        type="date"
-                        value={eventDate}
-                        onChange={(e) => setEventDate(e.target.value)}
-                        className="w-full p-3 bg-white border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-bold text-zinc-900">Time</h3>
-                      <input
-                        type="time"
-                        value={eventTime}
-                        onChange={(e) => setEventTime(e.target.value)}
-                        className="w-full p-3 bg-white border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                  </div>
+                  {/* Event-specific fields (not for POST type) */}
+                  {!isPost && (
+                    <>
+                      {/* Date + Time */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <h3 className="text-sm font-bold text-zinc-900">
+                            Date
+                          </h3>
+                          <input
+                            type="date"
+                            value={eventDate}
+                            onChange={(e) => setEventDate(e.target.value)}
+                            className="w-full p-3 bg-white border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <h3 className="text-sm font-bold text-zinc-900">
+                            Time
+                          </h3>
+                          <input
+                            type="time"
+                            value={eventTime}
+                            onChange={(e) => setEventTime(e.target.value)}
+                            className="w-full p-3 bg-white border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                      </div>
 
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-bold text-zinc-900">People needed</h3>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setPeopleNeeded(Math.max(1, peopleNeeded - 1))}
-                        className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg font-bold text-zinc-600 hover:bg-zinc-200 active:scale-95 transition-all"
-                      >
-                        −
-                      </button>
-                      <span className="w-12 text-center text-lg font-bold text-zinc-900">{peopleNeeded}</span>
-                      <button
-                        onClick={() => setPeopleNeeded(Math.min(50, peopleNeeded + 1))}
-                        className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg font-bold text-zinc-600 hover:bg-zinc-200 active:scale-95 transition-all"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
+                      {/* People / Capacity */}
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-bold text-zinc-900">
+                          {type === 'EVENT' ? 'Max capacity' : 'People needed'}
+                        </h3>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() =>
+                              setPeopleNeeded(Math.max(1, peopleNeeded - 1))
+                            }
+                            className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg font-bold text-zinc-600 hover:bg-zinc-200 active:scale-95 transition-all"
+                          >
+                            −
+                          </button>
+                          <span className="w-12 text-center text-lg font-bold text-zinc-900">
+                            {peopleNeeded}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setPeopleNeeded(Math.min(500, peopleNeeded + 1))
+                            }
+                            className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-lg font-bold text-zinc-600 hover:bg-zinc-200 active:scale-95 transition-all"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
 
+                      {/* Free / Paid */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-zinc-900">
+                          Free or Paid?
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => setIsPaid(false)}
+                            className={cn(
+                              'py-3 rounded-xl font-bold text-sm transition-all border-2',
+                              isPaid === false
+                                ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                                : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
+                            )}
+                          >
+                            FREE
+                          </button>
+                          <button
+                            onClick={() => setIsPaid(true)}
+                            className={cn(
+                              'py-3 rounded-xl font-bold text-sm transition-all border-2',
+                              isPaid === true
+                                ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-xs'
+                                : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
+                            )}
+                          >
+                            PAID
+                          </button>
+                        </div>
+                        {isPaid && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="pt-2"
+                          >
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span className="text-zinc-500 font-semibold">
+                                  ₦
+                                </span>
+                              </div>
+                              <input
+                                type="number"
+                                value={price}
+                                onChange={(e) => setPrice(e.target.value)}
+                                placeholder="Amount"
+                                className="w-full pl-8 p-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Location (informational only) */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">Location</h3>
+                    <h3 className="text-sm font-bold text-zinc-900">
+                      Location
+                    </h3>
                     <div className="flex items-center gap-3 p-4 bg-zinc-50 border border-zinc-100 rounded-2xl">
-                      <MapPin className={cn("w-5 h-5 shrink-0", hasLocation ? "text-indigo-600" : "text-zinc-400")} />
+                      <MapPin
+                        className={cn(
+                          'w-5 h-5 shrink-0',
+                          hasLocation ? 'text-indigo-600' : 'text-zinc-400'
+                        )}
+                      />
                       <div>
                         <div className="text-sm font-semibold text-zinc-900">
-                          {hasLocation ? rallyLocation : 'Location not available'}
+                          {hasLocation
+                            ? rallyLocation
+                            : 'Location not available'}
                         </div>
                         <div className="text-xs text-zinc-500 mt-0.5">
-                          {hasLocation ? '📍 Posted at your current location' : 'Enable location to attach your position'}
+                          {hasLocation
+                            ? '📍 Posted at your current location'
+                            : 'Enable location to attach your position'}
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">Free or Paid?</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => setIsPaid(false)}
-                        className={cn(
-                          "py-3 rounded-xl font-bold text-sm transition-all border-2",
-                          isPaid === false ? "border-zinc-900 bg-zinc-900 text-white shadow-xs" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                        )}
-                      >
-                        FREE
-                      </button>
-                      <button
-                        onClick={() => setIsPaid(true)}
-                        className={cn(
-                          "py-3 rounded-xl font-bold text-sm transition-all border-2",
-                          isPaid === true ? "border-amber-500 bg-amber-50 text-amber-800 shadow-xs" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                        )}
-                      >
-                        PAID
-                      </button>
-                    </div>
-                    {isPaid && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-2">
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <span className="text-zinc-500 font-semibold">₦</span>
-                          </div>
-                          <input
-                            type="number"
-                            value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            placeholder="Amount"
-                            className="w-full pl-8 p-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
-                          />
-                        </div>
-                      </motion.div>
-                    )}
                   </div>
                 </div>
               )}
 
+              {/* STEP 3 — Review */}
               {step === 3 && type && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                   <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-4">
+                    {/* Type badge + paid badge */}
                     <div className="flex items-center gap-3">
-                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", typeConfig[type].bg, typeConfig[type].color)}>
-                        {React.createElement(typeConfig[type].icon, { className: "w-5 h-5" })}
-                      </div>
+                      {(() => {
+                        const cfg = typeConfig[type];
+                        const Icon = cfg.icon;
+                        return (
+                          <div
+                            className={cn(
+                              'w-10 h-10 rounded-full flex items-center justify-center',
+                              cfg.bg,
+                              cfg.color
+                            )}
+                          >
+                            <Icon className="w-5 h-5" />
+                          </div>
+                        );
+                      })()}
                       <div>
-                        <div className="font-bold text-zinc-900 text-sm">{type} RALLY</div>
+                        <div className="font-bold text-zinc-900 text-sm">
+                          {typeConfig[type].label}
+                        </div>
                         {hashtags.length > 0 && (
                           <div className="text-xs text-indigo-600 font-semibold mt-0.5">
                             {hashtags.map((t) => `#${t}`).join(' ')}
                           </div>
                         )}
                       </div>
-                      {isPaid !== null && (
-                        <div className={cn("ml-auto px-2.5 py-1 rounded-full text-xs font-bold", isPaid ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
+                      {!isPost && isPaid !== null && (
+                        <div
+                          className={cn(
+                            'ml-auto px-2.5 py-1 rounded-full text-xs font-bold',
+                            isPaid
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          )}
+                        >
                           {isPaid ? `₦${price || '?'}` : 'FREE'}
                         </div>
                       )}
                     </div>
-                    <p className="text-sm text-zinc-700 leading-relaxed">{description}</p>
-                    {mediaUrl && mediaType && (
-                      <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
-                        {mediaType === 'image' ? (
-                          <img src={mediaUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <video src={mediaUrl} className="w-full h-full object-cover" controls />
+
+                    {/* Content */}
+                    <p className="text-sm text-zinc-700 leading-relaxed">
+                      {description}
+                    </p>
+
+                    {/* Image preview */}
+                    {localPreview && mediaType === 'image' && (
+                      <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100 relative">
+                        <img
+                          src={localPreview}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                        {!mediaStorageId && (
+                          <div className="absolute inset-0 bg-amber-900/40 flex items-center justify-center">
+                            <span className="text-white text-xs font-bold bg-amber-700 px-3 py-1 rounded-full">
+                              Upload incomplete — remove and retry
+                            </span>
+                          </div>
                         )}
                       </div>
                     )}
+
+                    {/* Meta */}
                     <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
-                      {eventDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{eventDate}</span>}
-                      {eventTime && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{eventTime}</span>}
-                      {peopleNeeded > 0 && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{peopleNeeded} needed</span>}
-                      {hasLocation && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{rallyLocation}</span>}
+                      {eventDate && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {eventDate}
+                        </span>
+                      )}
+                      {eventTime && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {eventTime}
+                        </span>
+                      )}
+                      {!isPost && peopleNeeded > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {type === 'EVENT'
+                            ? `${peopleNeeded} spots max`
+                            : `${peopleNeeded} needed`}
+                        </span>
+                      )}
+                      {hasLocation && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {rallyLocation}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="p-6 border-t border-zinc-100 bg-white">
+            {/* Footer */}
+            <div className="p-6 border-t border-zinc-100 bg-white shrink-0">
               {step === 2 && (
                 <button
                   onClick={() => setStep(3)}
-                  disabled={!description || isPaid === null || (isPaid && !price)}
+                  disabled={!canReview}
                   className="w-full py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all"
                 >
-                  Review
+                  {isUploading ? 'Uploading image…' : 'Review'}
                 </button>
               )}
               {step === 3 && (
@@ -470,11 +788,18 @@ export default function CreateRallyModal({ isOpen, onClose, onCreated }: CreateR
                   </button>
                   <button
                     onClick={handlePost}
-                    disabled={isPosting}
+                    disabled={
+                      isPosting ||
+                      isUploading ||
+                      // Block if image was selected but upload failed
+                      (!!localPreview && !mediaStorageId && !uploadError)
+                    }
                     className="flex-1 py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                   >
                     {isPosting ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Posting...</>
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Posting…
+                      </>
                     ) : (
                       'POST RALLY'
                     )}

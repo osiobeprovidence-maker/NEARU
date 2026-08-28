@@ -13,7 +13,7 @@ async function api<T>(path: string): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || "Request failed");
+    const err = new Error(data.error || "Request failed") as Error & { code?: string };
     err.code = data.code;
     throw err;
   }

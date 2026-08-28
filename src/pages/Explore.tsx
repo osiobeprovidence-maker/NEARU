@@ -7,14 +7,19 @@ import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import { cn } from '../lib/utils';
 import { Rally } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Explore() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('Nearby');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('Nearest');
+  const [sortBy, setSortBy] = useState('Newest');
 
-  const convexRallies = useQuery(api.rallies.listWithCreators);
+  const { convexUserId } = useAuth();
+  const convexRallies = useQuery(
+    api.rallies.listWithCreators,
+    convexUserId ? { userId: convexUserId as any } : { userId: undefined }
+  );
 
   const categories = ['Nearby', 'Trending', 'Events', 'Help', 'Paid', 'Free', 'Activities', 'Transport', 'Errands', 'Community'];
 
@@ -66,6 +71,12 @@ export default function Explore() {
       eventDate: r.eventDate,
       mediaUrl: r.mediaUrl,
       mediaType: r.mediaType as Rally['mediaType'],
+      capacity: r.capacity,
+      likesCount: r.likesCount,
+      commentsCount: r.commentsCount,
+      rsvpsCount: r.rsvpsCount,
+      isLiked: r.isLiked,
+      isRsvpd: r.isRsvpd,
     }));
   }, [convexRallies]);
 
@@ -88,10 +99,12 @@ export default function Explore() {
       result = result.filter(r => r.isPaid);
     } else if (activeCategory === 'Free') {
       result = result.filter(r => !r.isPaid);
-    } else if (activeCategory === 'Events' || activeCategory === 'Activities') {
+    } else if (activeCategory === 'Events') {
+      result = result.filter(r => r.type === 'EVENT');
+    } else if (activeCategory === 'Activities') {
       result = result.filter(r => r.type === 'JOIN');
     } else if (activeCategory === 'Trending') {
-      result = result.sort((a, b) => b.peopleInterested - a.peopleInterested);
+      result = result.sort((a, b) => (b.likesCount ?? 0) - (a.likesCount ?? 0));
     } else if (activeCategory === 'Nearby') {
       result = result.sort((a, b) => a.distance - b.distance);
     }

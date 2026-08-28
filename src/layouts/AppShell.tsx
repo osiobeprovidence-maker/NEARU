@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Avatar from '../components/Avatar';
 import { Outlet, NavLink, useNavigate, Link, useLocation as useRouteLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -254,7 +255,7 @@ export default function AppShell() {
             className="flex-1 flex items-center gap-3 p-2 rounded-xl hover:bg-zinc-50 cursor-pointer transition-colors"
             onClick={() => navigate('/profile')}
           >
-            <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full bg-zinc-200 object-cover" />
+            <Avatar src={user.avatar} name={user.name} size="md" className="border-2 border-white shadow-sm" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-zinc-900 truncate">{user.name}</p>
               <div className={cn("flex items-center gap-1 text-xs font-semibold", user.isNINVerified ? "text-emerald-600" : "text-zinc-400")}>

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { NIGERIA_STATES, COUNTRIES } from '../data/nigeria';
+import Avatar from '../components/Avatar';
 import { 
   User, 
   Mail, 
@@ -237,10 +238,11 @@ export default function EditProfile() {
           {/* Profile Photo */}
           <div className="py-4 sm:py-5 px-4 sm:px-6 text-center">
             <div className="relative inline-block mb-1.5">
-              <img 
-                src={avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=faces'} 
-                alt={name} 
-                className="w-20 h-20 sm:w-22 sm:h-22 rounded-full mx-auto object-cover border-2 border-white shadow-sm bg-zinc-100 ring-1 ring-zinc-200"
+              <Avatar
+                src={avatar || undefined}
+                name={name || user.name}
+                size="xl"
+                className="mx-auto border-2 border-white shadow-sm ring-1 ring-zinc-200"
               />
               <button
                 type="button"

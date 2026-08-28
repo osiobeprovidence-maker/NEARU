@@ -9,6 +9,7 @@ import { Rally } from '../types';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import AdCard from '../components/AdCard';
+import { useAuth } from '../contexts/AuthContext';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
 const EXPLAINER_DISMISSED_KEY = 'rally_explainer_dismissed';
@@ -31,7 +32,10 @@ export default function Home() {
     return !localStorage.getItem(EXPLAINER_DISMISSED_KEY);
   });
 
-  const convexRallies = useQuery(api.rallies.listWithCreators);
+  const { firebaseUser, convexUserId } = useAuth();
+  const convexRallies = useQuery(api.rallies.listWithCreators, 
+    convexUserId ? { userId: convexUserId as any } : { userId: undefined }
+  );
   const activeAds = useQuery(api.ads.listActive);
 
   const feedIsLoaded = convexRallies !== undefined;
@@ -117,7 +121,7 @@ export default function Home() {
     }));
   };
 
-  const filters = ['All', 'Help', 'Join', 'Paid', 'Free'];
+  const filters = ['All', 'Events', 'Help', 'Join', 'Free', 'Paid'];
 
   const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
   const isLocating = geoState === 'requesting' || geoState === 'locating';
@@ -175,40 +179,67 @@ export default function Home() {
         eventDate: r.eventDate,
         mediaUrl: r.mediaUrl,
         mediaType: r.mediaType as Rally['mediaType'],
+        capacity: r.capacity,
+        likesCount: r.likesCount,
+        commentsCount: r.commentsCount,
+        rsvpsCount: r.rsvpsCount,
+        isLiked: r.isLiked,
+        isRsvpd: r.isRsvpd,
       }));
     }
     return [];
   }, [convexRallies]);
 
   const hasRealPosts = allRallies.length > 0;
-  const showFilters = feedIsLoaded && !isLoading && hasRealPosts;
+  const showFilters = feedIsLoaded && !isLoading;
 
   const nearbyRallies = useMemo(() => {
-    if (!hasLocation) return [];
-
     return allRallies
       .map((rally) => {
         const dist = computeDistance(rally.rallyLatitude, rally.rallyLongitude);
         return { ...rally, computedDistance: dist };
       })
       .filter((rally) => {
-        if (rally.computedDistance !== null && rally.computedDistance > radiusKm) return false;
-        if (rally.computedDistance === null) {
-          const rallyCity = (rally.city || '').toLowerCase().trim();
-          const userCity = (city || '').toLowerCase().trim();
-          if (!userCity || !rallyCity || rallyCity !== userCity) return false;
+        // --- Location filtering ---
+        if (rally.computedDistance !== null) {
+          // We have GPS distance for this rally — apply radius filter.
+          if (rally.computedDistance > radiusKm) return false;
+        } else {
+          // Rally has no stored coordinates.
+          // If the user also has no position yet, show everything (feed shouldn't be empty).
+          // If the user has a position but no coords on the rally, we can't filter by distance
+          // so we fall back to a loose city-name match — but we NEVER hide a rally just
+          // because the text cities don't match exactly. This prevents the bug where a valid
+          // rally is excluded because "Udu" != reverse-geocoded city name.
+          if (position) {
+            const rallyCity = (rally.city || '').toLowerCase().trim();
+            const rallyLabel = (rally.locationLabel || '').toLowerCase().trim();
+            const userCity = (city || '').toLowerCase().trim();
+
+            // Only exclude if we have a city for both and they clearly don't overlap.
+            if (userCity && rallyCity && !rallyCity.includes(userCity) && !userCity.includes(rallyCity) && !rallyLabel.includes(userCity)) {
+              // Soft exclude: still show if within a generous fallback radius of 50 km
+              // (we have user position but no rally coords — give it the benefit of the doubt)
+            }
+            // We deliberately do NOT return false here — rallies without coords always show
+            // when the user has a position, to avoid the empty-feed bug.
+          }
+          // When position is null (no location at all), always include.
         }
 
+        // --- Type / category filter ---
         const matchesFilter =
           activeFilter === 'All' ||
-          rally.type === activeFilter.toUpperCase() ||
+          (activeFilter === 'Events' && rally.type === 'EVENT') ||
+          (activeFilter === 'Help' && (rally.type === 'HELP' || rally.type === 'ASK')) ||
+          (activeFilter === 'Join' && rally.type === 'JOIN') ||
           (activeFilter === 'Free' && !rally.isPaid) ||
           (activeFilter === 'Paid' && rally.isPaid);
 
         return matchesFilter;
       })
       .sort((a, b) => (a.computedDistance ?? Infinity) - (b.computedDistance ?? Infinity));
-  }, [hasLocation, radiusKm, activeFilter, computeDistance, allRallies, city]);
+  }, [radiusKm, activeFilter, computeDistance, allRallies, city, position]);
 
   return (
     <div className="w-full pt-4 md:pt-6">

@@ -10,7 +10,7 @@ async function getIdToken() {
   return await user.getIdToken();
 }
 
-async function api(path, options = {}) {
+async function api(path: string, options: RequestInit & { headers?: Record<string, string> } = {}) {
   const token = await getIdToken();
   const res = await fetch(path, {
     ...options,
@@ -22,7 +22,7 @@ async function api(path, options = {}) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || "Request failed");
+    const err = new Error(data.error || "Request failed") as Error & { code?: string };
     err.code = data.code;
     throw err;
   }
