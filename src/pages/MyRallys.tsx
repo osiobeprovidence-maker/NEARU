@@ -49,6 +49,9 @@ export default function MyRallys() {
             isNINVerified: r.creator.isNINVerified,
             isPhoneVerified: false,
             badges: r.creator.badges,
+            accountType: r.creator.accountType || 'personal',
+            organizationName: r.creator.organizationName,
+            isPro: r.creator.isPro,
           }
         : {
             id: convexUserId || 'me',

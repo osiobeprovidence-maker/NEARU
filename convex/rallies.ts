@@ -96,6 +96,9 @@ export const listWithCreators = query({
           avatar: user.avatar,
           isNINVerified: user.isNINVerified,
           badges: user.badges,
+          accountType: user.accountType || "personal",
+          organizationName: user.organizationName,
+          isPro: user.isPro ?? false,
         };
       }
     }
@@ -288,6 +291,9 @@ export const listByInterest = query({
           avatar: user.avatar,
           isNINVerified: user.isNINVerified,
           badges: user.badges,
+          accountType: user.accountType || "personal",
+          organizationName: user.organizationName,
+          isPro: user.isPro ?? false,
         };
       }
     }
@@ -455,6 +461,9 @@ export const getEventPosts = query({
           avatar: user.avatar,
           isNINVerified: user.isNINVerified,
           badges: user.badges,
+          accountType: user.accountType || "personal",
+          organizationName: user.organizationName,
+          isPro: user.isPro ?? false,
         };
       }
     }

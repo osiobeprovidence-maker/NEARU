@@ -198,6 +198,18 @@ export default function Profile() {
             <span>My RALLYS</span>
             <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all" />
           </Link>
+          {isPro && (
+            <Link
+              to="/my-rallys"
+              className="flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-50/80 transition-colors font-bold text-zinc-900 text-sm group border-t border-zinc-100"
+            >
+              <span className="flex items-center gap-2">
+                Manage Events
+                <Crown className="w-3.5 h-3.5 text-amber-500" />
+              </span>
+              <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all" />
+            </Link>
+          )}
           <Link
             to="/verification"
             className="flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-50/80 transition-colors font-bold text-zinc-900 text-sm group border-t border-zinc-100"

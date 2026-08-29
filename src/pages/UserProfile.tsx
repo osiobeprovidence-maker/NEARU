@@ -152,6 +152,9 @@ export default function UserProfile() {
           isNINVerified: target.isNINVerified,
           isPhoneVerified: false,
           badges: target.badges,
+          accountType: target.accountType || 'personal',
+          organizationName: target.organizationName,
+          isPro: target.isPro,
         }
       : { id: id || '', name: 'User', username: '', avatar: '', isNINVerified: false, isPhoneVerified: false },
     status: r.status,
@@ -184,9 +187,14 @@ export default function UserProfile() {
 
           <div className="flex items-center justify-center gap-1.5 mb-0.5">
             <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-              {target?.name || 'Loading…'}
+              {target?.organizationName || target?.name || 'Loading…'}
             </h2>
             {target?.isNINVerified && <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />}
+            {(target?.accountType === 'organization' || target?.accountType === 'business') && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200">
+                {target?.accountType === 'business' ? 'Business' : 'Organization'}
+              </span>
+            )}
           </div>
           <p className="text-xs font-bold text-zinc-400 mb-2.5">{target ? `@${target.username}` : ''}</p>
 

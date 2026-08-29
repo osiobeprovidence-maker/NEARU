@@ -329,10 +329,15 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         >
           <div className="flex items-center gap-1">
             <span className="font-bold text-sm text-zinc-900 truncate">
-              {rally.creator.name}
+              {rally.creator.organizationName || rally.creator.name}
             </span>
             {rally.creator.isNINVerified && (
               <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            )}
+            {(rally.creator.accountType === 'organization' || rally.creator.accountType === 'business') && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
+                {rally.creator.accountType === 'business' ? 'Biz' : 'Org'}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">

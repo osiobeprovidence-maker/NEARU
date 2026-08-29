@@ -58,6 +58,9 @@ async function resolveUserCard(ctx, cache, userId) {
       avatar,
       isNINVerified: user.isNINVerified,
       badges: user.badges,
+      accountType: user.accountType || "personal",
+      organizationName: user.organizationName,
+      isPro: user.isPro ?? false,
     };
   }
   cache[userId] = card;
