@@ -32,6 +32,27 @@ async function resolveStorageUrl(
   return cache[id];
 }
 
+/**
+ * Build the playable media URL for a rally.
+ * Prefers a Mux playback id (video is transcoded/streamed by Mux); falls back
+ * to Convex storage for images/legacy files; otherwise uses an external URL.
+ */
+async function resolveMediaUrl(
+  ctx: any,
+  cache: Record<string, string | undefined>,
+  rally: any
+): Promise<string | undefined> {
+  if (rally.muxPlaybackId) {
+    // MP4 rendition: plays natively in <video> across iOS/Android WebView and
+    // all desktop browsers without needing an HLS player (hls.js).
+    return `https://stream.mux.com/${rally.muxPlaybackId}/high.mp4`;
+  }
+  if (isStorageId(rally.mediaStorageId)) {
+    return await resolveStorageUrl(ctx, cache, rally.mediaStorageId);
+  }
+  return rally.mediaUrl;
+}
+
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -140,10 +161,7 @@ export const listWithCreators = query({
         }
 
         // Resolve media URL
-        let mediaUrl = rally.mediaUrl;
-        if (isStorageId(rally.mediaStorageId)) {
-          mediaUrl = await resolveStorageUrl(ctx, mediaCache, rally.mediaStorageId!);
-        }
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
 
         // Resolve creator avatar
         const creator = rally.creatorId in creators ? creators[rally.creatorId] : null;
@@ -280,10 +298,7 @@ export const listByInterest = query({
       rallies.map(async (rally) => {
         if (blockedSet.has(rally.creatorId.toString())) return null;
 
-        let mediaUrl = rally.mediaUrl;
-        if (isStorageId(rally.mediaStorageId)) {
-          mediaUrl = await resolveStorageUrl(ctx, mediaCache, rally.mediaStorageId!);
-        }
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
 
         const creator = rally.creatorId in creators ? creators[rally.creatorId] : null;
         let avatar = creator?.avatar || "";
@@ -364,10 +379,7 @@ export const listByCreator = query({
     return await Promise.all(
       rallies.map(async (rally) => {
         // Resolve media URL
-        let mediaUrl = rally.mediaUrl;
-        if (isStorageId(rally.mediaStorageId)) {
-          mediaUrl = await resolveStorageUrl(ctx, mediaCache, rally.mediaStorageId!);
-        }
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
 
         // Engagement counts
         const likes = await ctx.db
@@ -401,6 +413,99 @@ export const listByCreator = query({
         };
       })
     );
+  },
+});
+
+/**
+ * Event hub: Posts linked to a specific RALLY (rallyLinkId), resolved with
+ * creator + engagement, newest first. Powers the RALLY detail "Event Posts" tab
+ * and is discoverable by participants, followers and interest-matched users.
+ */
+export const getEventPosts = query({
+  args: {
+    rallyId: v.id("rallies"),
+    viewerId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const posts = await ctx.db
+      .query("rallies")
+      .withIndex("by_rally_link", (q) => q.eq("rallyLinkId", args.rallyId))
+      .filter((q) => q.eq(q.field("type"), "POST"))
+      .order("desc")
+      .collect();
+
+    const creatorIds = [...new Set(posts.map((p) => p.creatorId))];
+    const creators: Record<string, any> = {};
+    for (const id of creatorIds) {
+      const user = await ctx.db.get(id);
+      if (user) {
+        creators[id] = {
+          _id: user._id,
+          name: user.name,
+          username: user.username,
+          avatar: user.avatar,
+          isNINVerified: user.isNINVerified,
+          badges: user.badges,
+        };
+      }
+    }
+
+    const mediaCache: Record<string, string | undefined> = {};
+    const avatarCache: Record<string, string | undefined> = {};
+
+    const blocked = new Set<string>();
+    if (args.viewerId) {
+      const viewer = await ctx.db.get(args.viewerId);
+      (viewer?.blockedUsers || []).forEach((b) => blocked.add(b.id));
+    }
+
+    const results = await Promise.all(
+      posts.map(async (post) => {
+        if (blocked.has(post.creatorId.toString())) return null;
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, post);
+        const creator = post.creatorId in creators ? creators[post.creatorId] : null;
+        let avatar = creator?.avatar || "";
+        if (creator && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        const resolvedCreator = creator ? { ...creator, avatar } : null;
+
+        const likes = await ctx.db
+          .query("likes")
+          .withIndex("by_rally", (q) => q.eq("rallyId", post._id))
+          .collect();
+        const commentsCount = (
+          await ctx.db
+            .query("comments")
+            .withIndex("by_rally", (q) => q.eq("rallyId", post._id))
+            .collect()
+        ).length;
+        const rsvps = await ctx.db
+          .query("rsvps")
+          .withIndex("by_rally", (q) => q.eq("rallyId", post._id))
+          .collect();
+
+        const isLiked = args.viewerId
+          ? likes.some((l) => l.userId === args.viewerId)
+          : false;
+        const isRsvpd = args.viewerId
+          ? rsvps.some((r) => r.userId === args.viewerId)
+          : false;
+
+        return {
+          ...post,
+          mediaUrl,
+          creator: resolvedCreator,
+          likesCount: likes.length,
+          commentsCount,
+          rsvpsCount: rsvps.length,
+          isLiked,
+          isRsvpd,
+        };
+      })
+    );
+
+    return results.filter((r): r is NonNullable<typeof r> => r !== null);
   },
 });
 
@@ -444,6 +549,8 @@ export const create = mutation({
     isPaid: v.boolean(),
     price: v.optional(v.number()),
     creatorId: v.id("users"),
+    // Event hub: optional pre-configured event tag; auto-generated if absent.
+    eventTag: v.optional(v.string()),
     city: v.optional(v.string()),
     locationLabel: v.optional(v.string()),
     rallyLatitude: v.optional(v.number()),
@@ -457,8 +564,23 @@ export const create = mutation({
     mediaStorageId: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    // Mux video: for video uploads the client creates a Mux direct upload
+    // first and passes the uploadId here. The playbackId is attached later by
+    // saveMuxResult once Mux finishes transcoding.
+    muxUploadId: v.optional(v.string()),
     // Phase 1: interest tag for POST type (makes it an Interest Post)
     interest: v.optional(v.string()),
+    // Event hub (POST type): link this Post to a RALLY event.
+    rallyLinkId: v.optional(v.id("rallies")),
+    // Event hub (RALLY types): event-level interests + scoring model.
+    interests: v.optional(v.array(v.string())),
+    scoring: v.optional(
+      v.union(
+        v.literal("sum_scores"),
+        v.literal("matches_won"),
+        v.literal("total_points")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const normalizedHashtags = (args.hashtags || [])
@@ -466,15 +588,51 @@ export const create = mutation({
       .filter((h) => h.length > 0);
     const uniqueHashtags = [...new Set(normalizedHashtags)];
 
+    // Event hub: generate a unique event tag for RALLY types (not Posts).
+    const isRallyType = args.type !== "POST";
+    let eventTag = args.eventTag;
+    if (isRallyType && !eventTag) {
+      const base = args.title
+        .replace(/[^a-zA-Z0-9 ]/g, "")
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join("");
+      if (base) eventTag = `#${base}`;
+    }
+
     const rallyId = await ctx.db.insert("rallies", {
       ...args,
       // Only store interest on POST type; clear it for RALLY types to keep data clean
       interest: args.type === "POST" && args.interest ? args.interest.toLowerCase().trim() : undefined,
+      // Event tag only meaningful on RALLY types
+      eventTag: isRallyType && eventTag ? eventTag.toLowerCase() : undefined,
+      // rallyLinkId only meaningful on POST type
+      rallyLinkId: args.type === "POST" ? args.rallyLinkId : undefined,
+      // Rally-level interests normalize to lowercase
+      interests:
+        !isRallyType && args.interests
+          ? undefined
+          : (args.interests || []).map((i) => i.toLowerCase().trim()).filter(Boolean),
       hashtags: uniqueHashtags.length > 0 ? uniqueHashtags : undefined,
       peopleInterested: 0,
       status: "ACTIVE",
       createdAt: Date.now(),
     });
+
+    // Event hub: the organizer is automatically the first participant.
+    if (isRallyType) {
+      try {
+        await ctx.db.insert("rallyParticipants", {
+          rallyId,
+          userId: args.creatorId,
+          role: "organizer",
+          joinedAt: Date.now(),
+        });
+      } catch {
+        // Non-fatal: organizer may already be a participant
+      }
+    }
 
     if (args.city) {
       try {
@@ -491,6 +649,32 @@ export const create = mutation({
     }
 
     return rallyId;
+  },
+});
+
+/**
+ * Attach the Mux asset/playback ids to a rally once Mux finishes transcoding a
+ * video. The client calls this after polling /api/mux/status reaches "ready".
+ * Only the creator may update their own rally's Mux result.
+ */
+export const saveMuxResult = mutation({
+  args: {
+    rallyId: v.id("rallies"),
+    requestingUserId: v.id("users"),
+    assetId: v.string(),
+    playbackId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const rally = await ctx.db.get(args.rallyId);
+    if (!rally) throw new Error("Rally not found");
+    if (rally.creatorId.toString() !== args.requestingUserId.toString()) {
+      throw new Error("Not authorised: you can only update your own posts");
+    }
+    await ctx.db.patch(args.rallyId, {
+      muxAssetId: args.assetId,
+      muxPlaybackId: args.playbackId,
+      mediaType: "video",
+    });
   },
 });
 

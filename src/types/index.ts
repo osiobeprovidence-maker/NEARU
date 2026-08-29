@@ -86,7 +86,7 @@ export interface Rally {
   isPaid: boolean;
   price?: number;
   creator: User;
-  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  status: 'ACTIVE' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
   city?: string;
   locationLabel?: string;
@@ -95,6 +95,7 @@ export interface Rally {
   category?: RallyCategory;
   hashtags?: string[];
   eventDate?: string;
+  endTime?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   capacity?: number;
@@ -103,6 +104,49 @@ export interface Rally {
   rsvpsCount?: number;
   isLiked?: boolean;
   isRsvpd?: boolean;
+  // Event Hub fields
+  eventTag?: string;
+  interests?: string[];
+  scoring?: 'sum_scores' | 'matches_won' | 'total_points';
+  rallyLinkId?: string;
+  participantCount?: number;
+  followerCount?: number;
+  isParticipant?: boolean;
+  isFollowing?: boolean;
+}
+
+export interface RallyParticipant {
+  id: string;
+  userId: string;
+  name: string;
+  username: string;
+  avatar: string;
+  role?: 'organizer' | 'participant';
+  isNINVerified?: boolean;
+}
+
+export interface RallyResult {
+  id: string;
+  submittedBy: string;
+  submitterName: string;
+  submitterAvatar: string;
+  match: number;
+  score?: string;
+  opponent?: string;
+  opponentName?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: number;
+  decidedBy?: string;
+  submittedById?: string;
+}
+
+export interface RallyAnnouncement {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  text: string;
+  createdAt: number;
 }
 
 export interface ChatRequest {

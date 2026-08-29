@@ -12,9 +12,12 @@ import {
   Hash,
   ImagePlus,
   MessageSquarePlus,
+  Tag,
+  Link2,
 } from 'lucide-react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { createMuxUpload, putFileToMux, waitForPlayback } from '../lib/mux';
 import { ActivityType } from '../types';
 import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
@@ -71,13 +74,18 @@ export default function CreateRallyModal({
   // Media state
   const [localPreview, setLocalPreview] = useState<string>('');   // blob: URL for immediate preview
   const [mediaStorageId, setMediaStorageId] = useState<string>('');
+  const [muxUploadId, setMuxUploadId] = useState<string>('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string>('');
+  const [isProcessingVideo, setIsProcessingVideo] = useState(false); // Mux transcoding
   // Hashtags
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [hashtagInput, setHashtagInput] = useState('');
   const [isPosting, setIsPosting] = useState(false);
+  // Event Hub: interests for RALLY types + linked RALLY for POST type
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [linkedRally, setLinkedRally] = useState<string>('');
 
   const uploadedRef = useRef(false); // prevent double-upload on re-render
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,8 +93,18 @@ export default function CreateRallyModal({
   const { city, position, geoState } = useLocation();
   const { firebaseUser, convexUserId } = useAuth();
   const createRally = useMutation(api.rallies.create);
+  const saveMuxResult = useMutation(api.rallies.saveMuxResult);
   const getOrCreateUser = useMutation(api.users.getOrCreateByEmail);
   const generateUploadUrl = useMutation(api.rallies.generateUploadUrl);
+  // The user's RALLYs, for attaching a POST to a RALLY in the Event Hub.
+  const myRallies = useQuery(
+    api.rallies.listByCreator,
+    convexUserId ? { creatorId: convexUserId as any } : 'skip'
+  );
+  const linkableRallies = (myRallies ?? []).filter(
+    (r: any) => r.type !== 'POST'
+  );
+  const selectedRally = linkableRallies.find((r: any) => r._id === linkedRally);
 
   const rallyLocation = city || 'Unknown location';
   const hasLocation =
@@ -120,17 +138,21 @@ export default function CreateRallyModal({
     setInterest('');
     setLocalPreview('');
     setMediaStorageId('');
+    setMuxUploadId('');
     setMediaType(null);
     setIsUploading(false);
+    setIsProcessingVideo(false);
     setUploadError('');
     setHashtags([]);
     setHashtagInput('');
+    setSelectedInterests([]);
+    setLinkedRally('');
     uploadedRef.current = false;
     onClose();
   };
 
   // -------------------------------------------------------------------------
-  // Image upload
+  // Media upload — images go to Convex storage, videos go to Mux
   // -------------------------------------------------------------------------
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -147,30 +169,41 @@ export default function CreateRallyModal({
     setLocalPreview(preview);
     setMediaType(isImage ? 'image' : 'video');
     setMediaStorageId('');
+    setMuxUploadId('');
     setUploadError('');
     uploadedRef.current = false;
 
     // 2. Upload in background
     setIsUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl();
-      const res = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const { storageId } = await res.json();
-      if (!storageId) throw new Error('No storage ID returned');
-      setMediaStorageId(storageId);
-      uploadedRef.current = true;
+      if (isVideo) {
+        // Mux direct upload: browser PUTs raw bytes straight to Mux.
+        const { uploadId, url } = await createMuxUpload();
+        await putFileToMux(url, file);
+        setMuxUploadId(uploadId);
+        uploadedRef.current = true;
+      } else {
+        // Image → Convex storage (unchanged).
+        const uploadUrl = await generateUploadUrl();
+        const res = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+        const { storageId } = await res.json();
+        if (!storageId) throw new Error('No storage ID returned');
+        setMediaStorageId(storageId);
+        uploadedRef.current = true;
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : 'Upload failed. Please try again.';
       setUploadError(msg);
       // Keep the local preview so the user can see what they picked,
-      // but clear the storageId so we don't save a broken reference.
+      // but clear the upload refs so we don't save a broken reference.
       setMediaStorageId('');
+      setMuxUploadId('');
     } finally {
       setIsUploading(false);
     }
@@ -180,6 +213,7 @@ export default function CreateRallyModal({
     if (localPreview) URL.revokeObjectURL(localPreview);
     setLocalPreview('');
     setMediaStorageId('');
+    setMuxUploadId('');
     setMediaType(null);
     setUploadError('');
     uploadedRef.current = false;
@@ -223,7 +257,7 @@ export default function CreateRallyModal({
       const title = description.split('\n')[0].slice(0, 80) || `${type} RALLY`;
       const effectiveIsPaid = isPaid ?? false;
 
-      await createRally({
+      const rallyId = await createRally({
         type,
         title,
         description,
@@ -246,12 +280,26 @@ export default function CreateRallyModal({
         // Interest Post: only POST type may carry an interest tag.
         interest:
           type === 'POST' && interest.trim() ? interest.trim() : undefined,
-        // Only send storageId if upload completed successfully
+        // Only send storageId if upload completed successfully (images)
         mediaStorageId: mediaStorageId || undefined,
         // Don't persist blob: URLs — they're session-only
         mediaUrl: undefined,
         mediaType: mediaType || undefined,
+        // Videos: reference the Mux direct upload; the playback id is attached
+        // below (fire-and-forget) once Mux finishes transcoding.
+        muxUploadId: muxUploadId || undefined,
+        // Event Hub: interests for RALLY types (interest discovery + follower match)
+        interests:
+          !isPost && selectedInterests.length > 0 ? selectedInterests : undefined,
+        // Event Hub: attach a POST to a RALLY
+        rallyLinkId:
+          type === 'POST' && linkedRally ? (linkedRally as any) : undefined,
       });
+
+      // Fire-and-forget: attach the Mux playback id when transcoding finishes.
+      if (muxUploadId) {
+        attachMuxResult(rallyId, userId, muxUploadId);
+      }
 
       onCreated();
       // Small delay so the user sees the success before modal closes
@@ -266,6 +314,31 @@ export default function CreateRallyModal({
       );
     } finally {
       setIsPosting(false);
+    }
+  };
+
+  // Poll Mux until the video is ready, then store the playback id on the rally.
+  // Runs in the background so the user isn't blocked while Mux transcodes.
+  const attachMuxResult = async (
+    rallyId: string,
+    userId: string,
+    uploadId: string
+  ) => {
+    setIsProcessingVideo(true);
+    try {
+      const { assetId, playbackId } = await waitForPlayback(uploadId);
+      if (!assetId || !playbackId) return;
+      await saveMuxResult({
+        rallyId: rallyId as any,
+        requestingUserId: userId as any,
+        assetId,
+        playbackId,
+      });
+    } catch {
+      // Non-fatal: the post is already live; video just won't play until Mux
+      // resolves. The user can be retried later.
+    } finally {
+      setIsProcessingVideo(false);
     }
   };
 
@@ -442,25 +515,35 @@ export default function CreateRallyModal({
                     />
                   </div>
 
-                  {/* Image upload */}
+                  {/* Photo / Video upload */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-bold text-zinc-900">
-                      Photo (optional)
+                      Photo or Video (optional)
                     </h3>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/*"
                       onChange={handleFileSelect}
                       className="hidden"
                     />
                     {localPreview ? (
                       <div className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
-                        <img
-                          src={localPreview}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                        />
+                        {mediaType === 'video' ? (
+                          <video
+                            src={localPreview}
+                            controls
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={localPreview}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
                         {/* Upload status overlay */}
                         {isUploading && (
                           <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2">
@@ -484,7 +567,8 @@ export default function CreateRallyModal({
                             </button>
                           </div>
                         )}
-                        {!isUploading && !uploadError && mediaStorageId && (
+                        {!isUploading && !uploadError &&
+                          (mediaStorageId || muxUploadId) && (
                           <div className="absolute top-2 left-2 px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full">
                             ✓ Uploaded
                           </div>
@@ -502,7 +586,7 @@ export default function CreateRallyModal({
                         className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-50 border-2 border-dashed border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-zinc-600 font-semibold text-sm"
                       >
                         <ImagePlus className="w-5 h-5 text-zinc-400" />
-                        Tap to add a photo
+                        Tap to add a photo or video
                       </button>
                     )}
                   </div>
@@ -547,6 +631,98 @@ export default function CreateRallyModal({
                         Pick an interest to reach people who share it anywhere.
                         Leave blank for a normal location-based post.
                       </p>
+                    </div>
+                  )}
+
+                  {/* Event Hub: interests for RALLY types */}
+                  {!isPost && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                          <Tag className="w-4 h-4 text-violet-500" /> Event interests (optional)
+                        </h3>
+                        {selectedInterests.length > 0 && (
+                          <button
+                            onClick={() => setSelectedInterests([])}
+                            className="text-[11px] font-bold text-zinc-400 hover:text-zinc-600"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {INTEREST_OPTIONS.map((opt) => {
+                          const selected = selectedInterests.includes(opt);
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() =>
+                                setSelectedInterests((prev) =>
+                                  selected
+                                    ? prev.filter((i) => i !== opt)
+                                    : [...prev, opt]
+                                )
+                              }
+                              className={cn(
+                                'px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95',
+                                selected
+                                  ? 'bg-violet-600 text-white shadow-sm'
+                                  : 'bg-zinc-50 border border-zinc-200 text-zinc-600 hover:border-violet-200 hover:text-violet-600'
+                              )}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        Tag your RALLY with interests so the right people discover it.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Event Hub: attach a POST to a RALLY */}
+                  {isPost && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                        <Link2 className="w-4 h-4 text-violet-500" /> Attach to a RALLY (optional)
+                      </h3>
+                      {linkableRallies.length === 0 ? (
+                        <p className="text-xs text-zinc-400 bg-zinc-50 border border-zinc-100 rounded-xl p-3">
+                          You don't have any RALLYs yet. Create a RALLY first, then
+                          link posts to it from its Event Hub.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            {linkableRallies.map((r: any) => {
+                              const selected = linkedRally === r._id;
+                              return (
+                                <button
+                                  key={r._id}
+                                  type="button"
+                                  onClick={() => setLinkedRally(selected ? '' : r._id)}
+                                  className={cn(
+                                    'px-3 py-1.5 rounded-full text-xs font-semibold truncate max-w-full transition-all active:scale-95',
+                                    selected
+                                      ? 'bg-violet-600 text-white shadow-sm'
+                                      : 'bg-zinc-50 border border-zinc-200 text-zinc-600 hover:border-violet-200 hover:text-violet-600'
+                                  )}
+                                >
+                                  {r.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {selectedRally && (
+                            <p className="text-[11px] text-violet-600 font-semibold">
+                              This post will appear in the feed of “{selectedRally.title}”
+                              and its followers.
+                            </p>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -795,15 +971,26 @@ export default function CreateRallyModal({
                       {description}
                     </p>
 
-                    {/* Image preview */}
-                    {localPreview && mediaType === 'image' && (
+                    {/* Media preview */}
+                    {(localPreview && mediaType === 'image') ||
+                      (localPreview && mediaType === 'video') ? (
                       <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100 relative">
-                        <img
-                          src={localPreview}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                        {!mediaStorageId && (
+                        {mediaType === 'video' ? (
+                          <video
+                            src={localPreview}
+                            controls
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={localPreview}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        {!mediaStorageId && !muxUploadId && (
                           <div className="absolute inset-0 bg-amber-900/40 flex items-center justify-center">
                             <span className="text-white text-xs font-bold bg-amber-700 px-3 py-1 rounded-full">
                               Upload incomplete — remove and retry
@@ -811,7 +998,7 @@ export default function CreateRallyModal({
                           </div>
                         )}
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Meta */}
                     <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
@@ -855,7 +1042,7 @@ export default function CreateRallyModal({
                   disabled={!canReview}
                   className="w-full py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all"
                 >
-                  {isUploading ? 'Uploading image…' : 'Review'}
+                  {isUploading ? 'Uploading media…' : 'Review'}
                 </button>
               )}
               {step === 3 && (
@@ -871,8 +1058,9 @@ export default function CreateRallyModal({
                     disabled={
                       isPosting ||
                       isUploading ||
-                      // Block if image was selected but upload failed
-                      (!!localPreview && !mediaStorageId && !uploadError)
+                      isProcessingVideo ||
+                      // Block if media was selected but upload failed
+                      (!!localPreview && !mediaStorageId && !muxUploadId && !uploadError)
                     }
                     className="flex-1 py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                   >

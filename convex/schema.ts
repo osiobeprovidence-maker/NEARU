@@ -121,10 +121,26 @@ export default defineSchema({
     creatorId: v.id("users"),
     status: v.union(
       v.literal("ACTIVE"),
+      v.literal("LIVE"),
       v.literal("COMPLETED"),
       v.literal("CANCELLED")
     ),
     createdAt: v.number(),
+    // Event hub: a unique, human-identifiable event tag (e.g. "#RydersCup")
+    // generated at creation. Links event Posts back to this RALLY.
+    eventTag: v.optional(v.string()),
+    // Event hub: one or more interests relevant to the event (e.g. "Tech &
+    // Gaming"). Distinct from a POST's single `interest` — this is Rally-level.
+    interests: v.optional(v.array(v.string())),
+    // Event hub scoring model, kept extensible. "sum_scores" aggregates the
+    // highest approved score per match for each participant.
+    scoring: v.optional(
+      v.union(
+        v.literal("sum_scores"),
+        v.literal("matches_won"),
+        v.literal("total_points")
+      )
+    ),
     city: v.optional(v.string()),
     locationLabel: v.optional(v.string()),
     rallyLatitude: v.optional(v.number()),
@@ -135,6 +151,11 @@ export default defineSchema({
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
     mediaStorageId: v.optional(v.string()),
+    // Mux video: a video uploaded via Mux direct upload resolves to a playback
+    // id/asset id once transcoding completes. playbackId drives the player.
+    muxUploadId: v.optional(v.string()),
+    muxAssetId: v.optional(v.string()),
+    muxPlaybackId: v.optional(v.string()),
     capacity: v.optional(v.number()),
     endTime: v.optional(v.string()),
     // Phase 1: interest tag — only set on POST type when creator picks an interest.
@@ -143,11 +164,70 @@ export default defineSchema({
     // A POST without this field is a "Normal Post" (local + following).
     // RALLY types never use this field — they remain location-bound.
     interest: v.optional(v.string()),
+    // Event hub: when this POST belongs to a RALLY event, the id of the event
+    // RALLY. Used for event discovery + event Posts. Name avoids confusion with
+    // the `creatorId`/`rallyId` used in messaging/notifications.
+    rallyLinkId: v.optional(v.id("rallies")),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])
     .index("by_creator", ["creatorId"])
-    .index("by_interest", ["interest"]),
+    .index("by_interest", ["interest"])
+    .index("by_rally_link", ["rallyLinkId"]),
+
+  // Event hub: a user who JOINED a RALLY (participating). Distinct from
+  // following. Indexed to prevent duplicate participation.
+  rallyParticipants: defineTable({
+    rallyId: v.id("rallies"),
+    userId: v.id("users"),
+    role: v.union(v.literal("organizer"), v.literal("participant")),
+    joinedAt: v.number(),
+  })
+    .index("by_rally", ["rallyId"])
+    .index("by_user", ["userId"])
+    .index("by_rally_user", ["rallyId", "userId"]),
+
+  // Event hub: a user who FOLLOWS a RALLY (wants updates). Not a participant.
+  rallyFollowers: defineTable({
+    rallyId: v.id("rallies"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_rally", ["rallyId"])
+    .index("by_user", ["userId"])
+    .index("by_rally_user", ["rallyId", "userId"]),
+
+  // Event hub: a result submitted by a participant. It never directly mutates
+  // the official leaderboard — only APPROVED results do (enforced server-side).
+  rallyResults: defineTable({
+    rallyId: v.id("rallies"),
+    userId: v.id("users"),
+    match: v.string(),
+    score: v.number(),
+    opponent: v.optional(v.string()),
+    // Evidence (Convex storage id) uploaded by the submitter, optional.
+    evidenceStorageId: v.optional(v.string()),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED")
+    ),
+    organizerNote: v.optional(v.string()),
+    submittedAt: v.number(),
+    decidedAt: v.optional(v.number()),
+    decidedBy: v.optional(v.id("users")),
+  })
+    .index("by_rally", ["rallyId", "status"])
+    .index("by_rally_user", ["rallyId", "userId", "status"]),
+
+  // Event hub: official announcements published by the organizer. Distinguished
+  // from ordinary community Posts.
+  rallyAnnouncements: defineTable({
+    rallyId: v.id("rallies"),
+    authorId: v.id("users"),
+    text: v.string(),
+    createdAt: v.number(),
+  }).index("by_rally", ["rallyId"]),
 
   follows: defineTable({
     followerId: v.id("users"),

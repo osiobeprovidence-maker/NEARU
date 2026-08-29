@@ -18,6 +18,7 @@ import {
   MoreVertical,
   Trash2,
   Loader2,
+  Trophy,
 } from 'lucide-react';
 import { Rally } from '../types';
 import { cn } from '../lib/utils';
@@ -451,9 +452,21 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       )}
 
       {/* Title + Description */}
-      <h3 className="text-base font-bold text-zinc-900 mb-1.5 leading-snug">
-        {rally.title}
-      </h3>
+      {!isPost ? (
+        <Link
+          to={`/rally/${rally.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="block"
+        >
+          <h3 className="text-base font-bold text-zinc-900 hover:text-indigo-600 transition-colors mb-1.5 leading-snug">
+            {rally.title}
+          </h3>
+        </Link>
+      ) : (
+        <h3 className="text-base font-bold text-zinc-900 mb-1.5 leading-snug">
+          {rally.title}
+        </h3>
+      )}
       <p className="text-sm text-zinc-600 leading-relaxed mb-4 line-clamp-3">
         {rally.description}
       </p>
@@ -583,6 +596,20 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             className="flex items-center gap-1.5 text-sm font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
           >
             <MessageCircle className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Event Hub — full feature hub for RALLY types */}
+        {!isPost && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/rally/${rally.id}`);
+            }}
+            title="Open Event Hub"
+            className="flex items-center gap-1.5 text-sm font-semibold text-violet-500 hover:text-violet-700 transition-colors"
+          >
+            <Trophy className="w-5 h-5" />
           </button>
         )}
 

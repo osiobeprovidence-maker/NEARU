@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import PageShell from '../components/PageShell';
-import { Heart, Users, MapPin, Bell, CheckCheck, Trash2, MessageCircle, UserPlus } from 'lucide-react';
+import { Heart, Users, MapPin, Bell, CheckCheck, Trash2, MessageCircle, UserPlus, Calendar, Trophy, ShieldCheck, XCircle, Megaphone } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +17,13 @@ const NOTIF_ICONS: Record<string, { icon: typeof Heart; color: string; bg: strin
   message_request_accepted: { icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   rally_participant_joined: { icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   rally_participant_left: { icon: Users, color: 'text-zinc-500', bg: 'bg-zinc-100' },
+  // Event Hub notification types
+  event_participant_joined: { icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  result_submitted: { icon: Trophy, color: 'text-amber-600', bg: 'bg-amber-50' },
+  result_approved: { icon: Trophy, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  result_rejected: { icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50' },
+  event_update: { icon: Megaphone, color: 'text-violet-600', bg: 'bg-violet-50' },
+  event_status: { icon: ShieldCheck, color: 'text-cyan-600', bg: 'bg-cyan-50' },
 };
 
 function timeAgo(timestamp: number): string {
@@ -60,6 +67,12 @@ export default function Notifications() {
     }
     if (notif.type === 'message_request' || notif.type === 'message_request_accepted') {
       navigate('/messages', { state: { tab: 'requests' } });
+      return;
+    }
+    // Event Hub notifications deep-link into the RALLY hub.
+    const eventTypes = ['event_participant_joined', 'result_submitted', 'result_approved', 'result_rejected', 'event_update', 'event_status'];
+    if (eventTypes.includes(notif.type) && notif.rallyId) {
+      navigate(`/rally/${notif.rallyId}`);
       return;
     }
     if (notif.rallyId) {
