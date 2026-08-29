@@ -128,6 +128,10 @@ export const send = mutation({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     text: v.string(),
+    // Voice note payload (optional): an audio blob already uploaded to Convex
+    // storage + its length in seconds. `text` may be empty when audio is sent.
+    audioStorageId: v.optional(v.string()),
+    audioDuration: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     return await sendToConversationImpl(ctx, args);
@@ -144,15 +148,27 @@ export const sendToConversation = mutation({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     text: v.string(),
+    audioStorageId: v.optional(v.string()),
+    audioDuration: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     return await sendToConversationImpl(ctx, args);
   },
 });
 
+/** Generate a Convex storage upload URL for sending voice notes / attachments. */
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 async function sendToConversationImpl(ctx: any, args: any) {
-  const text = args.text.trim();
-  if (!text) throw new Error("Message cannot be empty");
+  const text = args.text?.trim() ?? "";
+  const audioStorageId = args.audioStorageId;
+  const hasAudio = !!audioStorageId;
+  if (!text && !hasAudio) throw new Error("Message cannot be empty");
 
   const conv = await ctx.db.get(args.conversationId);
   if (!conv) throw new Error("Conversation not found");
@@ -166,7 +182,10 @@ async function sendToConversationImpl(ctx: any, args: any) {
     }
   }
 
-  const msgId = await insertMessage(ctx, args.conversationId, args.senderId, text);
+  const msgId = await insertMessage(ctx, args.conversationId, args.senderId, text, {
+    audioStorageId,
+    audioDuration: args.audioDuration,
+  });
 
   // Notify the other participants in the conversation.
   const sender: any = await ctx.db.get(args.senderId);
@@ -176,7 +195,7 @@ async function sendToConversationImpl(ctx: any, args: any) {
       userId: otherId,
       type: "new_message",
       title: conv.type === "rally" ? "New message in RALLY chat" : "New message",
-      body: `${sender?.name || "Someone"}: ${text.length > 60 ? text.slice(0, 60) + "…" : text}`,
+      body: `${sender?.name || "Someone"}: ${hasAudio ? "🎤 Voice note" : text.length > 60 ? text.slice(0, 60) + "…" : text}`,
       rallyId: conv.rallyId,
     });
   }
@@ -305,13 +324,33 @@ export const listConversationsWithParticipants = query({
 export const listByConversation = query({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const msgs = await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) =>
         q.eq("conversationId", args.conversationId)
       )
       .order("asc")
       .collect();
+
+    // Resolve stored audio blobs to playable URLs (voice notes).
+    const cache: Record<string, string | undefined> = {};
+    const audioIds = [
+      ...new Set(
+        msgs.map((m: any) => m.audioStorageId).filter(Boolean) as string[]
+      ),
+    ];
+    for (const sid of audioIds) {
+      try {
+        cache[sid] = (await ctx.storage.getUrl(sid)) ?? undefined;
+      } catch {
+        cache[sid] = undefined;
+      }
+    }
+
+    return msgs.map((m: any) => ({
+      ...m,
+      audioUrl: m.audioStorageId ? (cache[m.audioStorageId] ?? undefined) : undefined,
+    }));
   },
 });
 

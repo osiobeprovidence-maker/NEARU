@@ -313,6 +313,9 @@ export default defineSchema({
     timestamp: v.number(),
     // Phase 3: which participants have read this message (Read status).
     readByIds: v.optional(v.array(v.id("users"))),
+    // Voice note: audio blob in Convex storage + its length in seconds.
+    audioStorageId: v.optional(v.string()),
+    audioDuration: v.optional(v.number()),
   }).index("by_conversation", ["conversationId"]),
 
   ads: defineTable({

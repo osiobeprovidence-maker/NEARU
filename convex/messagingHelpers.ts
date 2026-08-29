@@ -94,13 +94,14 @@ function otherUnreadMap(
  * Shared send logic used by both direct DMs and RALLY chats.
  * Updates lastMessage + per-user unread counts and stamps the message.
  * Throws when the sender is blocked or not a participant.
+ * A message must carry either `text` or an `audioStorageId` (voice note).
  */
 export async function insertMessage(
   ctx: MutationCtx,
   conversationId: any,
   senderId: any,
   text: string,
-  options?: { queryCtx?: QueryCtx }
+  options?: { queryCtx?: QueryCtx; audioStorageId?: string; audioDuration?: number }
 ) {
   const conv: any = await ctx.db.get(conversationId);
   if (!conv) throw new Error("Conversation not found");
@@ -115,17 +116,24 @@ export async function insertMessage(
     }
   }
 
+  const trimmed = text.trim();
+  const hasAudio = !!options?.audioStorageId;
+  if (!trimmed && !hasAudio) throw new Error("Message cannot be empty");
+
   const now = Date.now();
+  const preview = hasAudio ? "🎤 Voice note" : trimmed;
   const msgId = await ctx.db.insert("messages", {
     conversationId,
     senderId,
-    text,
+    text: trimmed,
     timestamp: now,
     readByIds: [senderId],
+    audioStorageId: options?.audioStorageId,
+    audioDuration: options?.audioDuration,
   });
 
   await ctx.db.patch(conversationId, {
-    lastMessage: { senderId: id(senderId), text, timestamp: now },
+    lastMessage: { senderId: id(senderId), text: preview, timestamp: now },
     unreadCount: 1,
     unreadByUser: otherUnreadMap(
       conv.unreadByUser ?? emptyUnread(conv.participantIds),
