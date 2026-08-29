@@ -48,7 +48,14 @@ export const list = query({
 });
 
 export const listWithCreators = query({
-  args: { userId: v.optional(v.id("users")) },
+  args: {
+    userId: v.optional(v.id("users")),
+    // Phase 1 feed eligibility args:
+    // - userInterests: the viewer's interests array for Interest Post matching
+    // - followingIds: the IDs of users the viewer follows (for Normal Post visibility)
+    userInterests: v.optional(v.array(v.string())),
+    followingIds: v.optional(v.array(v.id("users"))),
+  },
   handler: async (ctx, args) => {
     const rallies = await ctx.db
       .query("rallies")
@@ -75,8 +82,63 @@ export const listWithCreators = query({
     const mediaCache: Record<string, string | undefined> = {};
     const avatarCache: Record<string, string | undefined> = {};
 
-    return await Promise.all(
+    const followingSet = new Set((args.followingIds ?? []).map((id) => id.toString()));
+    const viewerInterests = new Set(
+      (args.userInterests ?? []).map((i) => i.toLowerCase().trim())
+    );
+
+    // Phase 2: resolve the IDs of users the viewer has blocked so their
+    // content (posts and RALLYs) is excluded from the feed.
+    let viewerBlockedDbIds = new Map<string, string>();
+    if (args.userId) {
+      const viewer = await ctx.db.get(args.userId);
+      if (viewer) {
+        viewerBlockedDbIds = new Map(
+          (viewer.blockedUsers ?? []).map((b) => [b.id, b.id])
+        );
+      }
+    }
+
+    const results = await Promise.all(
       rallies.map(async (rally) => {
+        // ---------------------------------------------------------------
+        // Phase 1 feed eligibility filter
+        //
+        // Rule A — RALLY types (ASK/HELP/JOIN/EVENT): always eligible.
+        //   Location filtering happens client-side (haversineDistance).
+        //
+        // Rule B — POST type WITHOUT interest: "Normal Post"
+        //   Eligible when:
+        //     (a) viewer is the creator, OR
+        //     (b) creator is in viewer's following list, OR
+        //     (c) location filtering will handle local visibility
+        //   → always include; client applies location filter same as RALLYs.
+        //
+        // Rule C — POST type WITH interest: "Interest Post"
+        //   Eligible ONLY when viewer's interests include the post's interest.
+        //   Following does NOT bypass this check.
+        //   Location does NOT restrict this post type.
+        //   Exception: the creator always sees their own posts.
+        //   Exception: when no userInterests provided (unauthenticated), skip.
+        // ---------------------------------------------------------------
+        const isPostType = rally.type === "POST";
+        const isInterestPost = isPostType && Boolean(rally.interest);
+
+        if (isInterestPost && args.userId) {
+          const postInterest = (rally.interest ?? "").toLowerCase().trim();
+          const isOwnPost = args.userId.toString() === rally.creatorId.toString();
+          const viewerHasInterest = viewerInterests.has(postInterest);
+          if (!isOwnPost && !viewerHasInterest) {
+            // Viewer doesn't share this interest — exclude from feed.
+            return null;
+          }
+        }
+
+        // Phase 2: hide content created by anyone the viewer has blocked.
+        if (viewerBlockedDbIds.has(rally.creatorId.toString())) {
+          return null;
+        }
+
         // Resolve media URL
         let mediaUrl = rally.mediaUrl;
         if (isStorageId(rally.mediaStorageId)) {
@@ -126,6 +188,142 @@ export const listWithCreators = query({
         };
       })
     );
+
+    // Remove nulls (Interest Posts filtered out above)
+    return results.filter((r): r is NonNullable<typeof r> => r !== null);
+  },
+});
+
+/**
+ * Phase 2: distinct interest tags currently in use, with post counts.
+ * Powers the Explore "Interests" discovery surface.
+ */
+export const listInterests = query({
+  args: {
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const rallies = await ctx.db
+      .query("rallies")
+      .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
+      .collect();
+
+    const counts = new Map<string, number>();
+    let viewerBlocked = new Set<string>();
+    if (args.userId) {
+      const viewer = await ctx.db.get(args.userId);
+      if (viewer) {
+        viewerBlocked = new Set((viewer.blockedUsers ?? []).map((b) => b.id));
+      }
+    }
+
+    for (const r of rallies) {
+      if (viewerBlocked.has(r.creatorId.toString())) continue;
+      if (!r.interest) continue;
+      const label = r.interest.trim();
+      if (!label) continue;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+  },
+});
+
+/**
+ * Phase 2: posts tagged with a specific interest, with full creator/engagement
+ * resolution (same shape as listWithCreators). Used by the interest page.
+ * Only ACTIVE status is returned and viewer-blocked creators are excluded.
+ */
+export const listByInterest = query({
+  args: {
+    interest: v.string(),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const rallies = await ctx.db
+      .query("rallies")
+      .withIndex("by_interest", (q) => q.eq("interest", args.interest.toLowerCase()))
+      .filter((q) => q.eq(q.field("status"), "ACTIVE"))
+      .order("desc")
+      .collect();
+
+    const creatorIds = [...new Set(rallies.map((r) => r.creatorId))];
+    const creators: Record<string, any> = {};
+    for (const id of creatorIds) {
+      const user = await ctx.db.get(id);
+      if (user) {
+        creators[id] = {
+          _id: user._id,
+          name: user.name,
+          username: user.username,
+          avatar: user.avatar,
+          isNINVerified: user.isNINVerified,
+          badges: user.badges,
+        };
+      }
+    }
+
+    const mediaCache: Record<string, string | undefined> = {};
+    const avatarCache: Record<string, string | undefined> = {};
+
+    let blockedSet = new Set<string>();
+    if (args.userId) {
+      const viewer = await ctx.db.get(args.userId);
+      if (viewer) {
+        blockedSet = new Set((viewer.blockedUsers ?? []).map((b) => b.id));
+      }
+    }
+
+    const results = await Promise.all(
+      rallies.map(async (rally) => {
+        if (blockedSet.has(rally.creatorId.toString())) return null;
+
+        let mediaUrl = rally.mediaUrl;
+        if (isStorageId(rally.mediaStorageId)) {
+          mediaUrl = await resolveStorageUrl(ctx, mediaCache, rally.mediaStorageId!);
+        }
+
+        const creator = rally.creatorId in creators ? creators[rally.creatorId] : null;
+        let avatar = creator?.avatar || "";
+        if (creator && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        const resolvedCreator = creator ? { ...creator, avatar } : null;
+
+        const likes = await ctx.db
+          .query("likes")
+          .withIndex("by_rally", (q) => q.eq("rallyId", rally._id))
+          .collect();
+        const commentsCount = (
+          await ctx.db
+            .query("comments")
+            .withIndex("by_rally", (q) => q.eq("rallyId", rally._id))
+            .collect()
+        ).length;
+        const rsvps = await ctx.db
+          .query("rsvps")
+          .withIndex("by_rally", (q) => q.eq("rallyId", rally._id))
+          .collect();
+
+        const isLiked = args.userId ? likes.some((l) => l.userId === args.userId) : false;
+        const isRsvpd = args.userId ? rsvps.some((r) => r.userId === args.userId) : false;
+
+        return {
+          ...rally,
+          mediaUrl,
+          creator: resolvedCreator,
+          likesCount: likes.length,
+          commentsCount,
+          rsvpsCount: rsvps.length,
+          isLiked,
+          isRsvpd,
+        };
+      })
+    );
+
+    return results.filter((r): r is NonNullable<typeof r> => r !== null);
   },
 });
 
@@ -259,6 +457,8 @@ export const create = mutation({
     mediaStorageId: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    // Phase 1: interest tag for POST type (makes it an Interest Post)
+    interest: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const normalizedHashtags = (args.hashtags || [])
@@ -268,6 +468,8 @@ export const create = mutation({
 
     const rallyId = await ctx.db.insert("rallies", {
       ...args,
+      // Only store interest on POST type; clear it for RALLY types to keep data clean
+      interest: args.type === "POST" && args.interest ? args.interest.toLowerCase().trim() : undefined,
       hashtags: uniqueHashtags.length > 0 ? uniqueHashtags : undefined,
       peopleInterested: 0,
       status: "ACTIVE",
@@ -466,8 +668,11 @@ export const deleteRally = mutation({
     const rally = await ctx.db.get(args.rallyId);
     if (!rally) throw new Error("Rally not found");
 
-    // Ownership check — server-side, not bypassable from the client
-    if (rally.creatorId !== args.requestingUserId) {
+    // Ownership check — server-side, not bypassable from the client.
+    // Use .toString() comparison: Convex Id values are not reference-equal
+    // across deserialization boundaries, so === would always return false and
+    // every delete attempt would throw "Not authorised" — even for the owner.
+    if (rally.creatorId.toString() !== args.requestingUserId.toString()) {
       throw new Error("Not authorised: you can only delete your own posts");
     }
 
@@ -498,14 +703,15 @@ export const deleteRally = mutation({
       await ctx.db.delete(rsvp._id);
     }
 
-    // 4. Delete notifications that reference this rally
+    // 4. Delete notifications that reference this rally.
+    // Use the by_rally index (defined in schema) — avoids a full table scan
+    // that would hit Convex's per-mutation document-read limit on large datasets.
     const notifications = await ctx.db
       .query("notifications")
+      .withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId))
       .collect();
     for (const notif of notifications) {
-      if (notif.rallyId === args.rallyId) {
-        await ctx.db.delete(notif._id);
-      }
+      await ctx.db.delete(notif._id);
     }
 
     // 5. Clean up storage file if exclusively owned by this rally

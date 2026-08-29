@@ -79,6 +79,116 @@ export const getByIds = query({
   },
 });
 
+/**
+ * Phase 2: discover/search people for the Explore "People" surface and
+ * interest discovery. Returns lightweight user cards with follow status.
+ *
+ * Visibility rules (no search loophole):
+ *  - The viewer is excluded.
+ *  - Anyone the viewer has blocked is excluded.
+ *  - Users whose profileVisibility === "private" are only returned when the
+ *    viewer already follows them (they are never surfaced in open discovery).
+ *  - filteredInterests: if provided (e.g. viewing an interest page), only
+ *    users who selected that interest are returned.
+ */
+export const listPeople = query({
+  args: {
+    viewerId: v.id("users"),
+    query: v.optional(v.string()),
+    filteredInterest: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const viewer = await ctx.db.get(args.viewerId);
+    if (!viewer) return [];
+
+    const viewerBlockedIds = new Set(
+      (viewer.blockedUsers ?? []).map((b) => b.id)
+    );
+    const viewerBlockedDb = new Set<string>();
+
+    const viewerFollowing = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.viewerId))
+      .collect();
+    const followingSet = new Set(
+      viewerFollowing.map((f) => f.followingId.toString())
+    );
+
+    const all = await ctx.db.query("users").collect();
+    const q = (args.query ?? "").toLowerCase().trim();
+
+    const results: any[] = [];
+    const avatarCache: Record<string, string | undefined> = {};
+
+    for (const u of all) {
+      if (u._id.toString() === args.viewerId.toString()) continue;
+      if (viewerBlockedIds.has(u._id.toString())) continue;
+
+      const isFollowing = followingSet.has(u._id.toString());
+
+      // Private accounts are hidden from open discovery unless following
+      if (u.privacySettings?.profileVisibility === "private" && !isFollowing) {
+        continue;
+      }
+
+      // Interest filter
+      if (args.filteredInterest) {
+        const interest = (u.interests ?? []).some(
+          (i) => i.toLowerCase() === args.filteredInterest.toLowerCase()
+        );
+        if (!interest) continue;
+      }
+
+      // Text filter on name / username
+      if (q) {
+        if (
+          !u.name.toLowerCase().includes(q) &&
+          !u.username.toLowerCase().includes(q)
+        ) {
+          continue;
+        }
+      }
+
+      let avatar = u.avatar || "";
+      if (avatar && !avatar.startsWith("http")) {
+        try {
+          if (!(avatar in avatarCache)) {
+            avatarCache[avatar] = (await ctx.storage.getUrl(avatar)) ?? undefined;
+          }
+          avatar = avatarCache[avatar] || "";
+        } catch {
+          avatar = "";
+        }
+      }
+
+      const followers = await ctx.db
+        .query("follows")
+        .withIndex("by_following", (q2) => q2.eq("followingId", u._id))
+        .collect();
+
+      results.push({
+        _id: u._id,
+        name: u.name,
+        username: u.username,
+        avatar,
+        badges: u.badges,
+        bio: u.bio,
+        isNINVerified: u.isNINVerified,
+        location: u.location,
+        interests: u.interests ?? [],
+        profileVisibility: u.privacySettings?.profileVisibility ?? "public",
+        isFollowing,
+        followersCount: followers.length,
+      });
+
+      if (args.limit && results.length >= args.limit) break;
+    }
+
+    return results;
+  },
+});
+
 export const create = mutation({
   args: {
     name: v.string(),
@@ -137,6 +247,7 @@ export const update = mutation({
     locationAccuracy: v.optional(v.number()),
     locationUpdatedAt: v.optional(v.number()),
     interests: v.optional(v.array(v.string())),
+    showInterests: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { userId, ...fields } = args;
@@ -248,8 +359,24 @@ export const addBlockedUser = mutation({
     const user = await ctx.db.get(args.userId);
     if (!user) return;
     const blocked = user.blockedUsers ?? [];
+    if (blocked.some((b) => b.id === args.blockedUser.id)) return;
     await ctx.db.patch(args.userId, {
       blockedUsers: [...blocked, args.blockedUser],
+    });
+  },
+});
+
+export const unblockUser = mutation({
+  args: {
+    userId: v.id("users"),
+    blockedId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return;
+    const blocked = user.blockedUsers ?? [];
+    await ctx.db.patch(args.userId, {
+      blockedUsers: blocked.filter((b) => b.id !== args.blockedId),
     });
   },
 });

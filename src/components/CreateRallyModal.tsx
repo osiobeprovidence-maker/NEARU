@@ -24,6 +24,12 @@ interface CreateRallyModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: () => void;
+  /**
+   * When set and the modal opens, skip the type-picker (step 1) and go
+   * straight into creation for that content type. Used by the create sheet:
+   * selecting "Post" opens with type "POST" pre-selected.
+   */
+  initialType?: ActivityType;
 }
 
 // POST type is always free and doesn't need paid/capacity fields
@@ -31,10 +37,26 @@ const POST_ONLY_TYPES: ActivityType[] = ['POST'];
 // These types show event-specific fields (date, time, capacity, paid/free)
 const EVENT_TYPES: ActivityType[] = ['ASK', 'HELP', 'JOIN', 'EVENT'];
 
+// Interests a Post can be tagged with — must match the labels stored on
+// user profiles (see Onboarding) so Interest-Post matching works.
+const INTEREST_OPTIONS = [
+  'Outdoor & Sports',
+  'Music & Events',
+  'Tech & Gaming',
+  'Social Hangouts',
+  'Work & Business',
+  'Learning & Skills',
+  'Art & Creativity',
+  'Photography',
+  'Travel & Explore',
+  'Fitness & Health',
+];
+
 export default function CreateRallyModal({
   isOpen,
   onClose,
   onCreated,
+  initialType,
 }: CreateRallyModalProps) {
   const [step, setStep] = useState(1);
   const [type, setType] = useState<ActivityType | null>(null);
@@ -44,6 +66,8 @@ export default function CreateRallyModal({
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [peopleNeeded, setPeopleNeeded] = useState(1);
+  // Interest tag — only used (and only meaningful) for POST type
+  const [interest, setInterest] = useState<string>('');
   // Media state
   const [localPreview, setLocalPreview] = useState<string>('');   // blob: URL for immediate preview
   const [mediaStorageId, setMediaStorageId] = useState<string>('');
@@ -75,6 +99,15 @@ export default function CreateRallyModal({
     }
   }, [type]);
 
+  // When opened with an initialType (e.g. "Post" chosen in the create sheet),
+  // skip the type-picker and start directly in that type's detail step.
+  useEffect(() => {
+    if (isOpen && initialType) {
+      setType(initialType);
+      setStep(2);
+    }
+  }, [isOpen, initialType]);
+
   const resetAndClose = () => {
     setStep(1);
     setType(null);
@@ -84,6 +117,7 @@ export default function CreateRallyModal({
     setEventDate('');
     setEventTime('');
     setPeopleNeeded(1);
+    setInterest('');
     setLocalPreview('');
     setMediaStorageId('');
     setMediaType(null);
@@ -209,6 +243,9 @@ export default function CreateRallyModal({
         hashtags: hashtags.length > 0 ? hashtags : undefined,
         eventDate: eventDate || undefined,
         endTime: eventTime || undefined,
+        // Interest Post: only POST type may carry an interest tag.
+        interest:
+          type === 'POST' && interest.trim() ? interest.trim() : undefined,
         // Only send storageId if upload completed successfully
         mediaStorageId: mediaStorageId || undefined,
         // Don't persist blob: URLs — they're session-only
@@ -469,6 +506,49 @@ export default function CreateRallyModal({
                       </button>
                     )}
                   </div>
+
+                  {/* Interest (POST only) — turns a Post into an Interest Post */}
+                  {isPost && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-zinc-900">
+                          Interest (optional)
+                        </h3>
+                        {interest && (
+                          <button
+                            onClick={() => setInterest('')}
+                            className="text-[11px] font-bold text-zinc-400 hover:text-zinc-600"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {INTEREST_OPTIONS.map((opt) => {
+                          const selected = interest === opt;
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setInterest(selected ? '' : opt)}
+                              className={cn(
+                                'px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95',
+                                selected
+                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                  : 'bg-zinc-50 border border-zinc-200 text-zinc-600 hover:border-indigo-200 hover:text-indigo-600'
+                              )}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        Pick an interest to reach people who share it anywhere.
+                        Leave blank for a normal location-based post.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Hashtags */}
                   <div className="space-y-3">

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Avatar from '../components/Avatar';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 
 const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
@@ -162,10 +163,11 @@ export default function Settings() {
           <div className="p-4 sm:p-5 flex items-center justify-between hover:bg-zinc-50/60 transition-colors">
             <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
               <div className="relative shrink-0">
-                <img 
+                <Avatar 
                   src={user.avatar} 
-                  alt={user.name} 
-                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover bg-zinc-200 border-2 border-white shadow-xs ring-1 ring-zinc-200"
+                  name={user.name} 
+                  size="lg"
+                  className="border-2 border-white shadow-xs ring-1 ring-zinc-200"
                 />
                 {user.isNINVerified && (
                   <div className="absolute -bottom-0.5 -right-0.5 bg-white rounded-full p-0.5 shadow-xs">
@@ -279,7 +281,7 @@ export default function Settings() {
               className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all font-bold text-xs sm:text-sm active:scale-98 shadow-sm"
             >
               <Download className="w-4 h-4" />
-              <span>Install RALLY</span>
+              <span>Install LALOA</span>
             </button>
           )}
 

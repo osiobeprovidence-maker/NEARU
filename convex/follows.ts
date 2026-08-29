@@ -36,6 +36,22 @@ export const getFollowing = query({
   },
 });
 
+/**
+ * Returns just the IDs of users that `userId` follows.
+ * Used by the Home feed to pass `followingIds` to listWithCreators so Normal
+ * Posts from followed creators are eligible regardless of location.
+ */
+export const listFollowingIds = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const follows = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .collect();
+    return follows.map((f) => f.followingId);
+  },
+});
+
 export const getFollowerCount = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {

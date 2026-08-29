@@ -129,7 +129,7 @@ function AdminLayoutContent() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="text-lg font-black text-zinc-900 tracking-tight">RALLY</h1>
+                <h1 className="text-lg font-black text-zinc-900 tracking-tight">LALOA</h1>
                 <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full tracking-wider">
                   CRM
                 </span>
@@ -177,7 +177,7 @@ function AdminLayoutContent() {
             className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-100 transition-colors shadow-2xs"
           >
             <ArrowLeft className="w-4 h-4 text-zinc-500" />
-            <span>Back to RALLY App</span>
+            <span>Back to LALOA App</span>
           </Link>
 
           {/* Admin Info Badge */}
@@ -558,7 +558,7 @@ function AdminLayoutContent() {
                     <span className="text-white font-black text-xl italic">R</span>
                   </div>
                   <div>
-                    <h2 className="font-black text-base text-zinc-900">RALLY CRM</h2>
+                    <h2 className="font-black text-base text-zinc-900">LALOA CRM</h2>
                     <p className="text-[10px] font-bold text-zinc-400">Operations Suite</p>
                   </div>
                 </div>
@@ -609,7 +609,7 @@ function AdminLayoutContent() {
                   className="flex items-center gap-2.5 w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-zinc-700 bg-zinc-100"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Back to RALLY App</span>
+                  <span>Back to LALOA App</span>
                 </Link>
                 <button 
                   onClick={handleLogout}

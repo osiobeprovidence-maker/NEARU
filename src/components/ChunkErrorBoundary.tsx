@@ -41,7 +41,7 @@ export default class ChunkErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center px-6 text-center">
           <div className="w-16 h-16 rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-6">
-            <span className="text-indigo-600 font-black text-2xl">R</span>
+            <span className="text-indigo-600 font-black text-2xl">L</span>
           </div>
           <h1 className="text-xl font-bold text-zinc-900 mb-2">Something went wrong</h1>
           <p className="text-sm text-zinc-500 max-w-sm mb-6">

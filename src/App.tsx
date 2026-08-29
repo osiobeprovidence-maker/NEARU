@@ -21,6 +21,8 @@ const Messages = React.lazy(() => import('./pages/Messages'));
 const Chat = React.lazy(() => import('./pages/Chat'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Profile = React.lazy(() => import('./pages/Profile'));
+const UserProfile = React.lazy(() => import('./pages/UserProfile'));
+const InterestPage = React.lazy(() => import('./pages/InterestPage'));
 const EditProfile = React.lazy(() => import('./pages/EditProfile'));
 const Verification = React.lazy(() => import('./pages/Verification'));
 const Plus = React.lazy(() => import('./pages/Plus'));
@@ -64,7 +66,7 @@ const AppRoutes = () => {
   if (isAuthLoading) {
     return <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
       <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
-        <span className="text-white font-black text-lg tracking-tighter">R</span>
+        <span className="text-white font-black text-lg tracking-tighter">L</span>
       </div>
     </div>;
   }
@@ -82,7 +84,7 @@ const AppRoutes = () => {
   if (isProfileLoading) {
     return <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
       <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
-        <span className="text-white font-black text-lg tracking-tighter">R</span>
+        <span className="text-white font-black text-lg tracking-tighter">L</span>
       </div>
     </div>;
   }
@@ -121,6 +123,8 @@ const AppRoutes = () => {
           <Route path="messages/:id" element={<Chat />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="user/:id" element={<UserProfile />} />
+          <Route path="interest/:label" element={<InterestPage />} />
           <Route path="profile/edit" element={<EditProfile />} />
           <Route path="verification" element={<Verification />} />
           <Route path="plus" element={<Plus />} />

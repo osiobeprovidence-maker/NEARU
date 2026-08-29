@@ -1,4 +1,4 @@
-export type ActivityType = 'ASK' | 'HELP' | 'JOIN';
+export type ActivityType = 'ASK' | 'HELP' | 'JOIN' | 'EVENT' | 'POST';
 
 export type RallyCategory = 'sports' | 'music' | 'gaming' | 'social' | 'work' | 'education' | 'creative' | 'fitness' | 'travel' | 'food' | 'general';
 
@@ -61,6 +61,7 @@ export interface User {
   badges?: string[];
   bio?: string;
   location?: string;
+  showInterests?: boolean;
   stats?: {
     rallies: number;
     completed: number;
@@ -96,6 +97,12 @@ export interface Rally {
   eventDate?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
+  capacity?: number;
+  likesCount?: number;
+  commentsCount?: number;
+  rsvpsCount?: number;
+  isLiked?: boolean;
+  isRsvpd?: boolean;
 }
 
 export interface ChatRequest {

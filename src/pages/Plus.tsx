@@ -17,7 +17,7 @@ export default function Plus() {
             <Crown className="w-7 h-7" />
           </div>
           
-          <h2 className="text-2xl font-black mb-2 text-white">RALLY is free for everyone.</h2>
+          <h2 className="text-2xl font-black mb-2 text-white">LALOA is free for everyone.</h2>
           <p className="text-zinc-300 text-sm mb-6 max-w-sm mx-auto font-medium leading-relaxed">
             RALLY+ removes advertising and supports the community infrastructure.
           </p>

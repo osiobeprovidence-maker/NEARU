@@ -27,6 +27,10 @@ export default defineSchema({
     badges: v.optional(v.array(v.string())),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
+    // Phase 2: whether this user is okay with their interest tags shown on
+    // their public profile. Defaults to true. Interests always remain usable
+    // for recommendations regardless of this flag.
+    showInterests: v.optional(v.boolean()),
     locationLatitude: v.optional(v.number()),
     locationLongitude: v.optional(v.number()),
     locationAccuracy: v.optional(v.number()),
@@ -133,10 +137,17 @@ export default defineSchema({
     mediaStorageId: v.optional(v.string()),
     capacity: v.optional(v.number()),
     endTime: v.optional(v.string()),
+    // Phase 1: interest tag — only set on POST type when creator picks an interest.
+    // A POST with an interest becomes an "Interest Post" eligible for
+    // interest-based distribution (not location-restricted).
+    // A POST without this field is a "Normal Post" (local + following).
+    // RALLY types never use this field — they remain location-bound.
+    interest: v.optional(v.string()),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])
-    .index("by_creator", ["creatorId"]),
+    .index("by_creator", ["creatorId"])
+    .index("by_interest", ["interest"]),
 
   follows: defineTable({
     followerId: v.id("users"),
@@ -205,7 +216,10 @@ export default defineSchema({
     rallyId: v.optional(v.id("rallies")),
     read: v.boolean(),
     createdAt: v.number(),
-  }).index("by_user", ["userId", "read"]).index("by_user_created", ["userId", "createdAt"]),
+  })
+    .index("by_user", ["userId", "read"])
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_rally", ["rallyId"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),

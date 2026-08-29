@@ -6,6 +6,7 @@ import { ShieldAlert, BadgeCheck, Star, Inbox, Send, UserPlus } from 'lucide-rea
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
+import Avatar from '../components/Avatar';
 
 export default function Messages() {
   const navigate = useNavigate();
@@ -84,10 +85,11 @@ export default function Messages() {
                   className="p-4 sm:p-5 bg-white hover:bg-zinc-50/75 transition-colors cursor-pointer flex items-center justify-between gap-3.5 sm:gap-4 group"
                 >
                   <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
-                    <img
+                    <Avatar
                       src={otherUser.avatar}
-                      alt={otherUser.name}
-                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-zinc-200 object-cover border-2 border-white shadow-sm shrink-0"
+                      name={otherUser.name}
+                      size="lg"
+                      className="border-2 border-white shadow-sm"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 mb-0.5">
@@ -148,7 +150,7 @@ export default function Messages() {
         <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-500 shrink-0 mt-0.5" />
         <div>
           <span className="font-bold text-zinc-800 block mb-0.5">Trust & Safety Reminder</span>
-          <p className="text-zinc-500">Keep communication inside RALLY. Do not share personal contact details like phone numbers or exact residential addresses until you have built trust.</p>
+          <p className="text-zinc-500">Keep communication inside LALOA. Do not share personal contact details like phone numbers or exact residential addresses until you have built trust.</p>
         </div>
       </div>
     </PageShell>

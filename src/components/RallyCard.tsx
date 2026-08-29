@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Link } from 'react-router-dom';
 import {
   MapPin,
   Clock,
@@ -309,13 +310,23 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
 
       {/* Creator row */}
       <div className="flex items-center gap-3 mb-4">
-        <Avatar
-          src={rally.creator.avatar}
-          name={rally.creator.name}
-          size="md"
-          className="border-2 border-white shadow-sm shrink-0"
-        />
-        <div className="flex-1 min-w-0">
+        <Link
+          to={`/user/${rally.creator.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0"
+        >
+          <Avatar
+            src={rally.creator.avatar}
+            name={rally.creator.name}
+            size="md"
+            className="border-2 border-white shadow-sm"
+          />
+        </Link>
+        <Link
+          to={`/user/${rally.creator.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex-1 min-w-0 block"
+        >
           <div className="flex items-center gap-1">
             <span className="font-bold text-sm text-zinc-900 truncate">
               {rally.creator.name}
@@ -339,7 +350,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
               </>
             )}
           </div>
-        </div>
+        </Link>
 
         {/* Type + paid badges */}
         <div className="flex items-center gap-2 shrink-0">

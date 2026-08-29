@@ -13,12 +13,36 @@ let appInit = false;
 function getFirebaseApp() {
   if (!appInit) {
     const projectId = process.env.FIREBASE_PROJECT_ID || "usenearu";
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+
     try {
       if (admin.apps.length === 0) {
-        admin.initializeApp({ projectId });
+        if (clientEmail && rawPrivateKey) {
+          // Production / Vercel: initialize with an explicit service-account
+          // credential so verifyIdToken() can validate tokens without needing
+          // Application Default Credentials (which are unavailable on Vercel).
+          // The private key is stored in Vercel with literal \n sequences;
+          // replace them with real newlines before passing to the SDK.
+          const privateKey = rawPrivateKey.replace(/\\n/g, "\n");
+          admin.initializeApp({
+            credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+          });
+        } else {
+          // Local dev fallback: relies on Application Default Credentials
+          // (e.g. `gcloud auth application-default login`) or a local emulator.
+          // This will NOT work on Vercel — set FIREBASE_CLIENT_EMAIL and
+          // FIREBASE_PRIVATE_KEY in your Vercel environment variables.
+          console.warn(
+            "[auth] FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY not set. " +
+            "Firebase Admin is initializing without explicit credentials. " +
+            "Token verification will fail on Vercel."
+          );
+          admin.initializeApp({ projectId });
+        }
       }
     } catch {
-      // already initialized
+      // already initialized — safe to ignore
     }
     appInit = true;
   }
@@ -44,7 +68,9 @@ export async function requireFirebaseUser(req) {
     const decoded = await app.auth().verifyIdToken(token);
     return decoded;
   } catch (err) {
-    // Invalid or expired token
+    // Log the real reason server-side (credential misconfiguration, clock skew,
+    // genuinely expired token, etc.) without exposing details to the browser.
+    console.error("[auth] verifyIdToken failed:", err?.message || err);
     const e = new Error("Invalid or expired authentication token");
     e.statusCode = 401;
     e.code = "AUTHENTICATION_ERROR";

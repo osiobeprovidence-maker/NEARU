@@ -26,6 +26,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation as useLocationContext } from '../contexts/LocationContext';
 import CreateRallyModal from '../components/CreateRallyModal';
+import CreateContentSheet from '../components/CreateContentSheet';
 import LocationFilterModal from '../components/LocationFilterModal';
 import LocationDebug from '../components/LocationDebug';
 import NotificationListener from '../components/NotificationListener';
@@ -50,14 +51,20 @@ export default function AppShell() {
   const isAdmin = user.email === SUPER_ADMIN_EMAIL;
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createInitialType, setCreateInitialType] = useState<'POST' | undefined>(undefined);
+  const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState<{ title: string, subtitle: string } | null>(null);
 
   const isLocationHidden = 
     routeLocation.pathname !== '/';
 
   useEffect(() => {
-    const handleOpenCreate = () => setIsCreateModalOpen(true);
-    
+    // "Create a RALLY" buttons (e.g. empty states) open the RALLY modal directly.
+    const handleOpenCreate = () => {
+      setCreateInitialType(undefined);
+      setIsCreateModalOpen(true);
+    };
+
     const handleShowToast = (e: Event) => {
       const customEvent = e as CustomEvent;
       setToastConfig(customEvent.detail);
@@ -73,10 +80,22 @@ export default function AppShell() {
     };
   }, []);
 
+  // Called when the user picks "Post" or "RALLY" in the create sheet.
+  const handleCreateSelect = (choice: 'post' | 'rally') => {
+    setIsCreateContentOpen(false);
+    setCreateInitialType(choice === 'post' ? 'POST' : undefined);
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateModalClose = () => {
+    setIsCreateModalOpen(false);
+    setCreateInitialType(undefined);
+  };
+
   const handleRallyCreated = () => {
     setIsCreateModalOpen(false);
     setToastConfig({
-      title: "Your RALLY is live.",
+      title: "Posted to LALOA.",
       subtitle: "People around you can now discover it."
     });
     setTimeout(() => setToastConfig(null), 4000);
@@ -124,7 +143,7 @@ export default function AppShell() {
     if (path === '/settings/help' || path === '/help') return 'Help & Support';
     if (path === '/terms') return 'Terms of Service';
     if (path === '/privacy') return 'Privacy Policy';
-    return 'RALLY';
+    return 'LALOA';
   };
 
   const mobileTitle = getMobileHeaderTitle();
@@ -151,8 +170,15 @@ export default function AppShell() {
 
       <CreateRallyModal 
         isOpen={isCreateModalOpen} 
-        onClose={() => setIsCreateModalOpen(false)} 
+        onClose={handleCreateModalClose} 
         onCreated={handleRallyCreated}
+        initialType={createInitialType}
+      />
+
+      <CreateContentSheet
+        isOpen={isCreateContentOpen}
+        onClose={() => setIsCreateContentOpen(false)}
+        onSelect={handleCreateSelect}
       />
 
       <LocationFilterModal 
@@ -168,9 +194,9 @@ export default function AppShell() {
         <div className="p-6">
           <div className="flex items-center gap-2 font-black text-2xl tracking-tighter text-zinc-900 mb-6 cursor-pointer" onClick={() => navigate('/')}>
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-              R
+              L
             </div>
-            RALLY
+            LALOA
           </div>
 
           {/* Desktop Location Selector */}
@@ -310,7 +336,7 @@ export default function AppShell() {
                 </button>
               )}
               <h1 className="text-xl font-black tracking-tight text-zinc-900 truncate">
-                {mobileTitle || 'RALLY'}
+                {mobileTitle || 'LALOA'}
               </h1>
             </div>
           )}
@@ -367,7 +393,7 @@ export default function AppShell() {
         <div className="relative -top-6 px-4">
           <button 
             className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-create-rally'))}
+            onClick={() => setIsCreateContentOpen(true)}
           >
             <Plus className="w-8 h-8" />
           </button>

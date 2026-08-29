@@ -1,18 +1,26 @@
 import React from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
-import { BadgeCheck, Edit3, ChevronRight, MapPin } from 'lucide-react';
+import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 export default function Profile() {
-  const { user, convexUserId } = useAuth();
+  const { user, convexUserId, persistProfile } = useAuth();
 
   // Live stats derived from actual database records
   const stats = useQuery(
     api.rallies.getProfileStats,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
+  const followerCount = useQuery(
+    api.follows.getFollowerCount,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
+  const followingCount = useQuery(
+    api.follows.getFollowingCount,
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
 
@@ -82,17 +90,48 @@ export default function Profile() {
           </Link>
         </div>
 
+        {/* Interests visibility toggle */}
+        <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Tag className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-zinc-900 text-xs sm:text-sm">Show interests on profile</p>
+              <p className="text-[11px] text-zinc-500 font-medium">Your interest tags are always used for recommendations, but you control whether they appear publicly.</p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={user.showInterests !== false}
+              onChange={(e) => persistProfile({ showInterests: e.target.checked })}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-zinc-900"></div>
+          </label>
+        </div>
+
         {/* 2. Statistics — live from DB */}
         <div className="py-4 sm:py-5 px-4 bg-zinc-50/50">
-          <div className="grid grid-cols-3 divide-x divide-zinc-200/70 text-center max-w-md mx-auto">
+          <div className="grid grid-cols-5 divide-x divide-zinc-200/70 text-center max-w-lg mx-auto">
             <StatCell label="Posted"    value={posted} />
-            <StatCell label="Completed" value={completed} />
+            <StatCell label="Followers" value={followerCount ?? (followerCount === undefined ? null : 0)} />
+            <StatCell label="Following" value={followingCount ?? (followingCount === undefined ? null : 0)} />
             <StatCell label="Rated"     value={rated} amber />
+            <StatCell label="Done"      value={completed} />
           </div>
         </div>
 
-        {/* 3. Navigation */}
+        {/* Public profile + navigation */}
         <div>
+          <Link
+            to={`/user/${convexUserId}`}
+            className="flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-50/80 transition-colors font-bold text-zinc-900 text-sm group"
+          >
+            <span>View Public Profile</span>
+            <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all" />
+          </Link>
           <Link
             to="/settings/personal-info"
             className="flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-50/80 transition-colors font-bold text-zinc-900 text-sm group"

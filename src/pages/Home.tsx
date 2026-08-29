@@ -33,9 +33,19 @@ export default function Home() {
     return !localStorage.getItem(EXPLAINER_DISMISSED_KEY);
   });
 
-  const { firebaseUser, convexUserId } = useAuth();
+  const { firebaseUser, convexUserId, user } = useAuth();
+  const followingIds = useQuery(
+    api.follows.listFollowingIds,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
   const convexRallies = useQuery(api.rallies.listWithCreators, 
-    convexUserId ? { userId: convexUserId as any } : { userId: undefined }
+    convexUserId
+      ? {
+          userId: convexUserId as any,
+          userInterests: user?.interests?.length ? user.interests : undefined,
+          followingIds: (followingIds ?? []) as any,
+        }
+      : { userId: undefined }
   );
   const activeAds = useQuery(api.ads.listActive);
 
@@ -126,7 +136,7 @@ export default function Home() {
     }));
   };
 
-  const filters = ['All', 'Events', 'Help', 'Join', 'Free', 'Paid'];
+  const filters = ['All', 'Posts', 'Events', 'Help', 'Join', 'Free', 'Paid'];
 
   const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
   const isLocating = geoState === 'requesting' || geoState === 'locating';
@@ -236,6 +246,7 @@ export default function Home() {
         // --- Type / category filter ---
         const matchesFilter =
           activeFilter === 'All' ||
+          (activeFilter === 'Posts' && rally.type === 'POST') ||
           (activeFilter === 'Events' && rally.type === 'EVENT') ||
           (activeFilter === 'Help' && (rally.type === 'HELP' || rally.type === 'ASK')) ||
           (activeFilter === 'Join' && rally.type === 'JOIN') ||

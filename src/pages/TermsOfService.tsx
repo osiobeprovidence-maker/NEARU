@@ -26,7 +26,7 @@ export default function TermsOfService() {
             <FileText className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-zinc-900">RALLY Community Agreement</h3>
+            <h3 className="text-xl font-bold text-zinc-900">LALOA Community Agreement</h3>
             <p className="text-xs text-zinc-500 font-medium">Please review the rules and legal terms governing our platform.</p>
           </div>
         </div>
@@ -34,21 +34,21 @@ export default function TermsOfService() {
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">1. Acceptance of Terms</h4>
           <p>
-            By creating an account or using the RALLY mobile and web applications, you agree to comply with and be bound by these Terms of Service. If you do not agree to these terms, please do not use the RALLY platform.
+            By creating an account or using the LALOA mobile and web applications, you agree to comply with and be bound by these Terms of Service. If you do not agree to these terms, please do not use the LALOA platform.
           </p>
         </section>
 
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">2. Eligibility & Identity Verification</h4>
           <p>
-            You must be at least 18 years old to create an account on RALLY. To ensure neighborhood safety, RALLY provides optional and required verification channels, including phone verification and National Identification Number (NIN) authentication. Providing false, stolen, or fraudulent identity information is strictly prohibited and grounds for immediate termination and reporting to relevant authorities.
+            You must be at least 18 years old to create an account on LALOA. To ensure neighborhood safety, LALOA provides optional and required verification channels, including phone verification and National Identification Number (NIN) authentication. Providing false, stolen, or fraudulent identity information is strictly prohibited and grounds for immediate termination and reporting to relevant authorities.
           </p>
         </section>
 
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">3. Community Conduct & Prohibited Activities</h4>
           <p>
-            RALLY is dedicated to fostering safe, spontaneous, and genuine peer-to-peer neighborhood connections. Users agree NOT to:
+            LALOA is dedicated to fostering safe, spontaneous, and genuine peer-to-peer neighborhood connections. Users agree NOT to:
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-zinc-600">
             <li>Post illegal, harmful, threatening, abusive, or sexually explicit content or activities.</li>
@@ -62,21 +62,21 @@ export default function TermsOfService() {
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">4. Peer-to-Peer Agreements & Responsibilities</h4>
           <p>
-            RALLY acts solely as a communication and discovery venue facilitating neighborhood interactions. RALLY does not organize, control, or employ individual members. Users are solely responsible for exercising personal safety, verifying meeting spots, and adhering to local laws when meeting in real life.
+            LALOA acts solely as a communication and discovery venue facilitating neighborhood interactions. LALOA does not organize, control, or employ individual members. Users are solely responsible for exercising personal safety, verifying meeting spots, and adhering to local laws when meeting in real life.
           </p>
         </section>
 
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">5. Payments & Financial Transactions</h4>
           <p>
-            Where a RALLY includes cost-sharing, transport splitting, or mutual task assistance, users agree to transparent, fair handling of funds. RALLY is not responsible for off-platform peer payment disputes, though confirmed fraudulent activity will result in permanent account banning and bad-standing records.
+            Where a RALLY includes cost-sharing, transport splitting, or mutual task assistance, users agree to transparent, fair handling of funds. LALOA is not responsible for off-platform peer payment disputes, though confirmed fraudulent activity will result in permanent account banning and bad-standing records.
           </p>
         </section>
 
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">6. Account Termination & Moderation</h4>
           <p>
-            RALLY reserves the right to suspend, restrict, or terminate any account that violates our safety principles, terms of service, or community guidelines, with or without prior notice.
+            LALOA reserves the right to suspend, restrict, or terminate any account that violates our safety principles, terms of service, or community guidelines, with or without prior notice.
           </p>
         </section>
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
+import Avatar from '../components/Avatar';
 import { 
   Eye, 
   MapPin, 
@@ -201,7 +202,7 @@ export default function PrivacySettings() {
                 {user.blockedUsers.map((blocked) => (
                   <div key={blocked.id} className="flex items-center justify-between p-2.5 bg-zinc-50 rounded-xl border border-zinc-100">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <img src={blocked.avatar} alt={blocked.name} className="w-8 h-8 rounded-full object-cover bg-zinc-200 shrink-0" />
+                      <Avatar src={blocked.avatar} name={blocked.name} size="sm" />
                       <div className="min-w-0">
                         <p className="font-bold text-zinc-900 text-xs truncate">{blocked.name}</p>
                         <p className="text-[10px] text-zinc-400 font-medium truncate">{blocked.username}</p>

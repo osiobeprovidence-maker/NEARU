@@ -47,8 +47,15 @@ interface AuthContextType {
   updateAppSettings: (settings: Partial<AppSettings>) => void;
   addTrustedContact: (contact: Omit<TrustedContact, 'id'>) => void;
   removeTrustedContact: (id: string) => void;
+  blockUser: (id: string, name: string, username: string, avatar: string) => void;
   unblockUser: (userId: string) => void;
   clearAppCache: () => void;
+  persistProfile: (updates: {
+    bio?: string;
+    location?: string;
+    interests?: string[];
+    showInterests?: boolean;
+  }) => Promise<void>;
 }
 
 const defaultPrivacySettings: PrivacySettings = {
@@ -113,8 +120,10 @@ const AuthContext = createContext<AuthContextType>({
   updateAppSettings: () => {},
   addTrustedContact: () => {},
   removeTrustedContact: () => {},
+  blockUser: () => {},
   unblockUser: () => {},
   clearAppCache: () => {},
+  persistProfile: async () => {},
 });
 
 const STORAGE_KEY = 'rally_user_profile_v1';
@@ -136,6 +145,7 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
     badges: cu.badges,
     bio: cu.bio,
     location: cu.location,
+    showInterests: cu.showInterests,
     stats: cu.rallies != null ? {
       rallies: cu.rallies ?? 0,
       completed: cu.completed ?? 0,
@@ -165,6 +175,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const convexCreateUser = useMutation(api.users.create);
   const convexUpdateAuth = useMutation(api.users.updateAuth);
   const convexGetOrCreateByEmail = useMutation(api.users.getOrCreateByEmail);
+  const convexUpdatePrivacy = useMutation(api.users.updatePrivacySettings);
+  const convexUpdateNotifications = useMutation(api.users.updateNotificationSettings);
+  const convexUpdateApp = useMutation(api.users.updateAppSettings);
+  const convexUnblock = useMutation(api.users.unblockUser);
+  const convexBlock = useMutation(api.users.addBlockedUser);
+  const convexUpdateUser = useMutation(api.users.update);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -382,33 +398,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePrivacySettings = (settings: Partial<PrivacySettings>) => {
-    setUser((prev) => ({
-      ...prev,
-      privacySettings: {
-        ...(prev.privacySettings || defaultPrivacySettings),
-        ...settings,
-      },
-    }));
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        privacySettings: {
+          ...(prev.privacySettings || defaultPrivacySettings),
+          ...settings,
+        },
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (convexUserId) {
+      const current = user.privacySettings || defaultPrivacySettings;
+      const merged = { ...current, ...settings };
+      convexUpdatePrivacy({
+        userId: convexUserId as any,
+        profileVisibility: merged.profileVisibility,
+        locationPrecision: merged.locationPrecision,
+        whoCanMessage: merged.whoCanMessage,
+        showOnlineStatus: merged.showOnlineStatus,
+        showReadReceipts: merged.showReadReceipts,
+      }).catch((err) => console.error('Failed to persist privacy settings:', err));
+    }
   };
 
   const updateNotificationSettings = (settings: Partial<NotificationSettings>) => {
-    setUser((prev) => ({
-      ...prev,
-      notificationSettings: {
-        ...(prev.notificationSettings || defaultNotificationSettings),
-        ...settings,
-      },
-    }));
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        notificationSettings: {
+          ...(prev.notificationSettings || defaultNotificationSettings),
+          ...settings,
+        },
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (convexUserId) {
+      const current = user.notificationSettings || defaultNotificationSettings;
+      const merged = { ...current, ...settings };
+      convexUpdateNotifications({
+        userId: convexUserId as any,
+        pushEnabled: merged.pushEnabled,
+        rallyMatches: merged.rallyMatches,
+        chatMessages: merged.chatMessages,
+        activityReminders: merged.activityReminders,
+        safetyAlerts: merged.safetyAlerts,
+        emailDigest: merged.emailDigest,
+        marketingUpdates: merged.marketingUpdates,
+        soundEnabled: merged.soundEnabled,
+        vibrationEnabled: merged.vibrationEnabled,
+      }).catch((err) => console.error('Failed to persist notification settings:', err));
+    }
   };
 
   const updateAppSettings = (settings: Partial<AppSettings>) => {
-    setUser((prev) => ({
-      ...prev,
-      appSettings: {
-        ...(prev.appSettings || defaultAppSettings),
-        ...settings,
-      },
-    }));
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        appSettings: {
+          ...(prev.appSettings || defaultAppSettings),
+          ...settings,
+        },
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (convexUserId) {
+      const current = user.appSettings || defaultAppSettings;
+      const merged = { ...current, ...settings };
+      convexUpdateApp({
+        userId: convexUserId as any,
+        theme: merged.theme,
+        language: merged.language,
+        dataSaver: merged.dataSaver,
+        autoPlayMedia: merged.autoPlayMedia,
+        cacheSizeMB: merged.cacheSizeMB,
+      }).catch((err) => console.error('Failed to persist app settings:', err));
+    }
   };
 
   const addTrustedContact = (contact: Omit<TrustedContact, 'id'>) => {
@@ -416,24 +484,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...contact,
       id: `tc-${Date.now()}`,
     };
-    setUser((prev) => ({
-      ...prev,
-      trustedContacts: [...(prev.trustedContacts || []), newContact],
-    }));
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        trustedContacts: [...(prev.trustedContacts || []), newContact],
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   };
 
   const removeTrustedContact = (id: string) => {
-    setUser((prev) => ({
-      ...prev,
-      trustedContacts: (prev.trustedContacts || []).filter((c) => c.id !== id),
-    }));
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        trustedContacts: (prev.trustedContacts || []).filter((c) => c.id !== id),
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  const blockUser = (id: string, name: string, username: string, avatar: string) => {
+    setUser((prev) => {
+      if ((prev.blockedUsers || []).some((u) => u.id === id)) return prev;
+      const updated = {
+        ...prev,
+        blockedUsers: [
+          ...(prev.blockedUsers || []),
+          { id, name, username, avatar, blockedAt: new Date().toISOString() },
+        ],
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (convexUserId) {
+      convexBlock({
+        userId: convexUserId as any,
+        blockedUser: {
+          id,
+          name,
+          username,
+          avatar,
+          blockedAt: new Date().toISOString(),
+        },
+      }).catch((err) => console.error('Failed to persist block:', err));
+    }
   };
 
   const unblockUser = (userId: string) => {
-    setUser((prev) => ({
-      ...prev,
-      blockedUsers: (prev.blockedUsers || []).filter((u) => u.id !== userId),
-    }));
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        blockedUsers: (prev.blockedUsers || []).filter((u) => u.id !== userId),
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (convexUserId) {
+      convexUnblock({
+        userId: convexUserId as any,
+        blockedId: userId,
+      }).catch((err) => console.error('Failed to persist unblock:', err));
+    }
+  };
+
+  const persistProfile = async (updates: {
+    bio?: string;
+    location?: string;
+    interests?: string[];
+    showInterests?: boolean;
+  }) => {
+    if (convexUserId) {
+      await convexUpdateUser({
+        userId: convexUserId as any,
+        bio: updates.bio,
+        location: updates.location,
+        interests: updates.interests,
+        showInterests: updates.showInterests,
+      });
+    }
+    setUser((prev) => {
+      const updated = { ...prev, ...updates };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   };
 
   const clearAppCache = () => {
@@ -473,8 +608,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateAppSettings,
         addTrustedContact,
         removeTrustedContact,
+        blockUser,
         unblockUser,
         clearAppCache,
+        persistProfile,
       }}
     >
       {children}

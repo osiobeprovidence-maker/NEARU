@@ -4,6 +4,7 @@ import { ArrowLeft, Send, MapPin, MoreVertical, BadgeCheck, Star, Image as Image
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
+import Avatar from '../components/Avatar';
 
 const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀'];
 
@@ -115,10 +116,10 @@ export default function Chat() {
             <ArrowLeft className="w-5 h-5 text-zinc-900" />
           </button>
           <div className="flex items-center gap-3">
-            <img 
-              src={otherUser.avatar} 
-              alt={otherUser.name}
-              className="w-10 h-10 rounded-full object-cover bg-zinc-200"
+            <Avatar
+              src={otherUser.avatar}
+              name={otherUser.name}
+              size="md"
             />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">

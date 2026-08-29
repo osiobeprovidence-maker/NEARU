@@ -169,7 +169,7 @@ export default function AdminAnalytics() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg font-black text-zinc-900">Cohort Retention Curve</h3>
-              <p className="text-xs text-zinc-500 font-medium mt-0.5">RALLY users retention vs social benchmark</p>
+              <p className="text-xs text-zinc-500 font-medium mt-0.5">LALOA users retention vs social benchmark</p>
             </div>
             <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
               Top 5% Quartile
@@ -193,7 +193,7 @@ export default function AdminAnalytics() {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="retention" name="RALLY User Retention %" fill="#4F46E5" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="retention" name="LALOA User Retention %" fill="#4F46E5" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="benchmark" name="Industry Benchmark %" fill="#E4E4E7" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

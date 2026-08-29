@@ -55,7 +55,7 @@ const INTERESTS = [
 const TOTAL_STEPS = 9;
 
 export default function Onboarding() {
-  const { user, firebaseUser, register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex } = useAuth();
+  const { user, firebaseUser, register, updateUser, waitForEmailVerification, resendVerificationEmail, setupTOTP, verifyTOTP, saveUserToConvex, persistProfile } = useAuth();
   const [step, setStep] = useState<Step>('welcome');
   const [stepIndex, setStepIndex] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -67,6 +67,7 @@ export default function Onboarding() {
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [geoPosition, setGeoPosition] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
 
   const [totpSecret, setTotpSecret] = useState('');
   const [totpQrCode, setTotpQrCode] = useState('');
@@ -225,7 +226,12 @@ export default function Onboarding() {
   const handleLocationAllow = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        () => {
+        (pos) => {
+          setGeoPosition({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
           setTimeout(() => navigateTo('done', 9), 600);
         },
         () => {
@@ -239,6 +245,9 @@ export default function Onboarding() {
 
   const handleFinish = async () => {
     const fullName = `${firstName} ${lastName}`.trim();
+    const interestsLabels = selectedInterests
+      .map((id) => INTERESTS.find((i) => i.id === id)?.label)
+      .filter(Boolean) as string[];
     const userData = {
       name: fullName || firstName,
       username: username || email.split('@')[0].toLowerCase(),
@@ -265,6 +274,17 @@ export default function Onboarding() {
     } catch (err) {
       console.error('Convex save failed (will retry later):', err);
     }
+
+    // Persist onboarding selection (interests, interview-friendly profile flag)
+    try {
+      await persistProfile({
+        interests: interestsLabels.length > 0 ? interestsLabels : undefined,
+        showInterests: true,
+      });
+    } catch (err) {
+      console.error('Failed to persist onboarding interests:', err);
+    }
+
     window.location.href = '/';
   };
 
@@ -304,7 +324,7 @@ export default function Onboarding() {
         transition={{ duration: 0.5 }}
         className="w-20 h-20 rounded-3xl bg-indigo-600 flex items-center justify-center mb-8 shadow-lg shadow-indigo-600/20"
       >
-        <span className="text-white font-black text-4xl tracking-tighter">R</span>
+        <span className="text-white font-black text-4xl tracking-tighter">L</span>
       </motion.div>
       <motion.h1
         initial={{ y: 20, opacity: 0 }}
@@ -312,7 +332,7 @@ export default function Onboarding() {
         transition={{ delay: 0.15, duration: 0.5 }}
         className="text-3xl sm:text-4xl font-black text-zinc-900 tracking-tight"
       >
-        Welcome to RALLY
+        Welcome to LALOA
       </motion.h1>
       <motion.p
         initial={{ y: 20, opacity: 0 }}
@@ -583,7 +603,7 @@ export default function Onboarding() {
           Choose a username
         </h2>
         <p className="mt-2 text-sm text-zinc-500 mb-8">
-          This is how people will find you on RALLY.
+          This is how people will find you on LALOA.
         </p>
         <form onSubmit={(e) => { e.preventDefault(); navigateTo('profile', 7); }} className="space-y-5">
           <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
@@ -622,7 +642,7 @@ export default function Onboarding() {
           Tell us your name
         </h2>
         <p className="mt-2 text-sm text-zinc-500 mb-8">
-          This is how other members will see you on RALLY.
+          This is how other members will see you on LALOA.
         </p>
         <form onSubmit={handleProfileSubmit} className="space-y-4">
           <input
