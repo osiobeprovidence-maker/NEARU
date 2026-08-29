@@ -51,7 +51,7 @@ export default function AppShell() {
   const isAdmin = user.email === SUPER_ADMIN_EMAIL;
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [createInitialType, setCreateInitialType] = useState<'POST' | undefined>(undefined);
+  const [createInitialType, setCreateInitialType] = useState<'POST' | 'EVENT' | undefined>(undefined);
   const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState<{ title: string, subtitle: string } | null>(null);
 
@@ -80,10 +80,12 @@ export default function AppShell() {
     };
   }, []);
 
-  // Called when the user picks "Post" or "RALLY" in the create sheet.
-  const handleCreateSelect = (choice: 'post' | 'rally') => {
+  // Called when the user picks "Post", "RALLY" or "Event" in the create sheet.
+  const handleCreateSelect = (choice: 'post' | 'rally' | 'event') => {
     setIsCreateContentOpen(false);
-    setCreateInitialType(choice === 'post' ? 'POST' : undefined);
+    if (choice === 'post') setCreateInitialType('POST');
+    else if (choice === 'event') setCreateInitialType('EVENT');
+    else setCreateInitialType(undefined);
     setIsCreateModalOpen(true);
   };
 
@@ -378,6 +380,16 @@ export default function AppShell() {
           <Outlet />
         </div>
       </main>
+
+      {/* Desktop Floating Create Button */}
+      <button
+        onClick={() => setIsCreateContentOpen(true)}
+        className="hidden md:flex fixed bottom-6 right-6 items-center gap-2 px-5 py-3 rounded-full bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all z-40"
+        title="Create"
+      >
+        <Plus className="w-5 h-5" />
+        Create
+      </button>
 
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 z-50 px-4 py-3 flex items-center justify-between safe-area-bottom">

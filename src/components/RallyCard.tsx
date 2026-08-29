@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   MapPin,
   Clock,
@@ -18,7 +18,6 @@ import {
   MoreVertical,
   Trash2,
   Loader2,
-  Trophy,
 } from 'lucide-react';
 import { Rally } from '../types';
 import { cn } from '../lib/utils';
@@ -41,8 +40,6 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   const [localRsvpd, setLocalRsvpd] = useState(rally.isRsvpd ?? false);
   const [localRsvpCount, setLocalRsvpCount] = useState(rally.rsvpsCount ?? 0);
 
-  const navigate = useNavigate();
-
   const [imgError, setImgError] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -60,7 +57,6 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   const addCommentMut   = useMutation(api.rallies.addComment);
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
   const deleteRallyMut  = useMutation(api.rallies.deleteRally);
-  const openRallyChatMut = useMutation(api.messages.getOrOpenRallyChat);
 
   const comments = useQuery(
     api.rallies.getComments,
@@ -228,24 +224,6 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       await navigator.clipboard.writeText(text);
       showToast('Copied!', 'Post details copied to clipboard.');
     } catch {}
-  };
-
-  const handleOpenRallyChat = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!convexUserId) {
-      showToast('Not logged in', 'Please log in to join the chat.');
-      return;
-    }
-    try {
-      const convId = await openRallyChatMut({
-        rallyId: rally.id as any,
-        userId: convexUserId as any,
-      });
-      navigate(`/messages/${convId}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'You must be a participant to join the chat.';
-      showToast('Error', msg);
-    }
   };
 
   const handleDeleteConfirmed = async () => {
@@ -451,6 +429,18 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         </div>
       )}
 
+      {/* Event association (event posts in feed) */}
+      {rally.rallyLinkId && rally.linkedEvent && (
+        <Link
+          to={`/rally/${rally.rallyLinkId}`}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 text-[11px] font-bold mb-3 hover:bg-violet-100 transition-colors"
+        >
+          <Calendar className="w-3 h-3" />
+          Event: {rally.linkedEvent}
+        </Link>
+      )}
+
       {/* Title + Description */}
       {!isPost ? (
         <Link
@@ -587,31 +577,6 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         >
           <Share2 className="w-5 h-5" />
         </button>
-
-        {/* RALLY chat — for participants & the creator */}
-        {!isPost && (isOwner || localRsvpd) && (
-          <button
-            onClick={handleOpenRallyChat}
-            title="Open RALLY chat"
-            className="flex items-center gap-1.5 text-sm font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
-          >
-            <MessageCircle className="w-5 h-5" />
-          </button>
-        )}
-
-        {/* Event Hub — full feature hub for RALLY types */}
-        {!isPost && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/rally/${rally.id}`);
-            }}
-            title="Open Event Hub"
-            className="flex items-center gap-1.5 text-sm font-semibold text-violet-500 hover:text-violet-700 transition-colors"
-          >
-            <Trophy className="w-5 h-5" />
-          </button>
-        )}
 
         {/* Spacer + action CTA */}
         {defaultActionText && (

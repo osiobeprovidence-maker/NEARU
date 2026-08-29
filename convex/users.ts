@@ -208,6 +208,8 @@ export const create = mutation({
       rallies: 0,
       completed: 0,
       rating: 0,
+      accountType: "personal",
+      isPro: false,
       role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
     });
     return userId;
@@ -405,6 +407,8 @@ export const getOrCreateByEmail = mutation({
       rallies: 0,
       completed: 0,
       rating: 0,
+      accountType: "personal",
+      isPro: false,
       role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
     });
     return userId;
@@ -466,3 +470,80 @@ export const syncLocation = mutation({
     });
   },
 });
+
+// ---------------------------------------------------------------------------
+// Account types & LALOA Pro
+// ---------------------------------------------------------------------------
+
+/**
+ * Grant or revoke LALOA Pro. Billing is deferred to a later Paystack phase;
+ * until then this is the explicit upgrade path (called from the Plus page).
+ */
+export const setPro = mutation({
+  args: {
+    userId: v.id("users"),
+    isPro: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      isPro: args.isPro,
+      proSince: args.isPro ? Date.now() : undefined,
+    });
+    return { isPro: args.isPro };
+  },
+});
+
+/**
+ * Set the account type (personal | organization | business).
+ * Professional account types (organization/business) require LALOA Pro.
+ * Default for all users is "personal".
+ */
+export const setAccountType = mutation({
+  args: {
+    userId: v.id("users"),
+    accountType: v.union(
+      v.literal("personal"),
+      v.literal("organization"),
+      v.literal("business")
+    ),
+    organizationName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+
+    const professional = args.accountType === "organization" || args.accountType === "business";
+    if (professional && user.isPro !== true) {
+      throw new Error("You need LALOA Pro to create an Organization or Business account.");
+    }
+
+    const patch: Record<string, unknown> = {
+      accountType: args.accountType,
+      organizationName:
+        args.accountType === "organization" || args.accountType === "business"
+          ? args.organizationName?.trim() || user.name || undefined
+          : undefined,
+    };
+    await ctx.db.patch(args.userId, patch);
+    return {
+      accountType: args.accountType,
+      organizationName: patch.organizationName as string | undefined,
+    };
+  },
+});
+
+/**
+ * Whether the user is allowed to act as a professional (organization/business)
+ * account. Used by the frontend to gate org-only features.
+ */
+export const canUseProfessional = query({
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    if (!args.userId) return false;
+    const user = await ctx.db.get(args.userId);
+    if (!user) return false;
+    const professional = user.accountType === "organization" || user.accountType === "business";
+    return professional && user.isPro === true;
+  },
+});
+

@@ -194,10 +194,19 @@ export const listWithCreators = query({
           ? rsvps.some((r) => r.userId === args.userId)
           : false;
 
+        // Event-posts-in-feed: if this rally/post is linked to an EVENT, surface
+        // its title so the feed card can render a clickable association.
+        let linkedEvent: string | undefined;
+        if (rally.rallyLinkId) {
+          const linked = await ctx.db.get(rally.rallyLinkId);
+          linkedEvent = linked?.title;
+        }
+
         return {
           ...rally,
           mediaUrl,
           creator: resolvedCreator,
+          linkedEvent,
           likesCount: likes.length,
           commentsCount,
           rsvpsCount: rsvps.length,
@@ -587,6 +596,16 @@ export const create = mutation({
       .map((h) => h.toLowerCase().replace(/^#/, "").trim())
       .filter((h) => h.length > 0);
     const uniqueHashtags = [...new Set(normalizedHashtags)];
+
+    // Event Hub / LALOA Pro: creating an EVENT requires Pro (server-side gate).
+    if (args.type === "EVENT") {
+      const creator = await ctx.db.get(args.creatorId);
+      if (!creator?.isPro) {
+        throw new Error(
+          "Creating an Event requires LALOA Pro. Upgrade to create events."
+        );
+      }
+    }
 
     // Event hub: generate a unique event tag for RALLY types (not Posts).
     const isRallyType = args.type !== "POST";

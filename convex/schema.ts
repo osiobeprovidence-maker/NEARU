@@ -25,6 +25,18 @@ export default defineSchema({
       v.literal("user")
     )),
     badges: v.optional(v.array(v.string())),
+    // Account type: personal (default) vs professional (organization/business).
+    // Professional account types require LALOA Pro (isPro === true).
+    accountType: v.optional(
+      v.union(
+        v.literal("personal"),
+        v.literal("organization"),
+        v.literal("business")
+      )
+    ),
+    isPro: v.optional(v.boolean()),
+    proSince: v.optional(v.number()),
+    organizationName: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
     // Phase 2: whether this user is okay with their interest tags shown on

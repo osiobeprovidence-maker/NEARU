@@ -596,9 +596,14 @@ export const createAnnouncement = mutation({
       .query("rallyFollowers")
       .withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId))
       .collect();
+    const rsvpRows = await ctx.db
+      .query("rsvps")
+      .withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId))
+      .collect();
     const targets = new Map<string, any>();
     for (const p of participantRows) if (p.userId.toString() !== args.authorId.toString()) targets.set(p.userId.toString(), p.userId);
     for (const f of followerRows) if (f.userId.toString() !== args.authorId.toString()) targets.set(f.userId.toString(), f.userId);
+    for (const r of rsvpRows) if (r.userId.toString() !== args.authorId.toString()) targets.set(r.userId.toString(), r.userId);
     for (const targetId of targets.values()) {
       try {
         await ctx.db.insert("notifications", {

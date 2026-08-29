@@ -10,13 +10,15 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, FileText, Zap } from 'lucide-react';
+import { X, FileText, Zap, Calendar, Crown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CreateContentSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called with 'post' or 'rally' when the user makes a selection. */
-  onSelect: (type: 'post' | 'rally') => void;
+  /** Called with 'post', 'rally' or 'event' when the user makes a selection. */
+  onSelect: (type: 'post' | 'rally' | 'event') => void;
 }
 
 export default function CreateContentSheet({
@@ -24,6 +26,20 @@ export default function CreateContentSheet({
   onClose,
   onSelect,
 }: CreateContentSheetProps) {
+  const { isPro } = useAuth();
+  const navigate = useNavigate();
+
+  const showToast = (title: string, subtitle: string) =>
+    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title, subtitle } }));
+
+  const handleEventClick = () => {
+    if (!isPro) {
+      showToast('LALOA Pro required', 'Upgrade to create and manage events.');
+      navigate('/plus');
+      return;
+    }
+    onSelect('event');
+  };
   return (
     <AnimatePresence>
       {isOpen && (
@@ -109,6 +125,32 @@ export default function CreateContentSheet({
                     something in your area.
                   </p>
                 </div>
+              </button>
+
+              {/* Event */}
+              <button
+                onClick={handleEventClick}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-zinc-100 hover:border-violet-200 hover:bg-violet-50/40 text-left transition-all active:scale-[0.98] group"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
+                  <Calendar className="w-6 h-6 text-violet-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-zinc-900 text-base tracking-tight flex items-center gap-1.5">
+                    Event
+                    {!isPro && <Crown className="w-3.5 h-3.5 text-amber-500" />}
+                  </p>
+                  <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
+                    {isPro
+                      ? 'Plan and manage an event your followers can join.'
+                      : 'Plan and manage an event your followers can join.'}
+                  </p>
+                </div>
+                {!isPro && (
+                  <span className="shrink-0 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200">
+                    PRO
+                  </span>
+                )}
               </button>
             </div>
           </motion.div>

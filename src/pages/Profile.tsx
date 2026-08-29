@@ -1,14 +1,66 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
-import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag, Crown, Building2, Store, User as UserIcon } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 export default function Profile() {
-  const { user, convexUserId, persistProfile } = useAuth();
+  const { user, convexUserId, persistProfile, isPro, setAccountType } = useAuth();
+  const navigate = useNavigate();
+  const [orgName, setOrgName] = useState(user.organizationName || '');
+  const [pendingType, setPendingType] = useState<'organization' | 'business' | null>(null);
+  const [orgModalOpen, setOrgModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const showToast = (t: string, s: string) =>
+    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: t, subtitle: s } }));
+
+  const accountTypes: {
+    key: 'personal' | 'organization' | 'business';
+    label: string;
+    desc: string;
+    icon: any;
+    needsPro: boolean;
+  }[] = [
+    { key: 'personal', label: 'Personal', desc: 'A standard personal profile for yourself.', icon: UserIcon, needsPro: false },
+    { key: 'organization', label: 'Organization', desc: 'Manage events, RALLYs and posts as an organization.', icon: Building2, needsPro: true },
+    { key: 'business', label: 'Business', desc: 'Promote a business and run events & offers.', icon: Store, needsPro: true },
+  ];
+
+  const currentType = user.accountType || 'personal';
+
+  const requestType = async (key: 'personal' | 'organization' | 'business') => {
+    const t = accountTypes.find((a) => a.key === key)!;
+    if (t.needsPro && !isPro) {
+      showToast('LALOA Pro required', 'Upgrade to create an Organization or Business account.');
+      navigate('/plus');
+      return;
+    }
+    if (key === 'personal') {
+      await apply(key);
+    } else {
+      setOrgName(user.organizationName || user.name || '');
+      setPendingType(key);
+      setOrgModalOpen(true);
+    }
+  };
+
+  const apply = async (key: 'personal' | 'organization' | 'business', name?: string) => {
+    setSaving(true);
+    try {
+      await setAccountType(key, name);
+      showToast('Account type updated', accountTypes.find((a) => a.key === key)?.label);
+      setOrgModalOpen(false);
+    } catch (e: any) {
+      showToast('Error', e?.message || 'Could not update account type.');
+    } finally {
+      setSaving(false);
+      setOrgModalOpen(false);
+    }
+  };
 
   // Live stats derived from actual database records
   const stats = useQuery(
@@ -161,7 +213,90 @@ export default function Profile() {
             <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all" />
           </Link>
         </div>
+
+        {/* Account Type */}
+        <div className="p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Crown className="w-4 h-4 text-amber-500" />
+            <h3 className="font-black text-zinc-900 text-sm">Account Type</h3>
+          </div>
+          <p className="text-[11px] text-zinc-500 font-medium mb-4">
+            {isPro
+              ? 'You can act as a Personal, Organization or Business account.'
+              : 'Organizations & Businesses require LALOA Pro.'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {accountTypes.map((t) => {
+              const active = currentType === t.key;
+              const locked = t.needsPro && !isPro;
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => requestType(t.key)}
+                  className={`text-left rounded-2xl border p-4 transition-all ${
+                    active
+                      ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                      : 'border-zinc-200 hover:border-zinc-300 bg-white'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${active ? 'bg-white/10 text-amber-400' : 'bg-zinc-100 text-zinc-600'}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <p className={`font-bold text-sm flex items-center gap-1 ${active ? 'text-white' : 'text-zinc-900'}`}>
+                    {t.label}
+                    {locked && <Crown className="w-3 h-3 text-amber-500" />}
+                    {active && <span className="ml-auto text-[9px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">Active</span>}
+                  </p>
+                  <p className={`text-[11px] font-medium mt-0.5 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>{t.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
+
+      {orgModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={() => !saving && setOrgModalOpen(false)}>
+          <div
+            className="w-full sm:max-w-md bg-white sm:rounded-[2rem] rounded-t-[2rem] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-black text-zinc-900 text-lg mb-1">
+              {pendingType === 'business' ? 'Business' : 'Organization'} name
+            </h3>
+            <p className="text-xs text-zinc-500 font-medium mb-4">
+              Choose the {pendingType === 'business' ? 'business' : 'organization'} name shown on your profile and events.
+            </p>
+            <input
+              type="text"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              placeholder={user.name || 'Organization name'}
+              className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-900 mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setOrgModalOpen(false)}
+                className="flex-1 py-3 rounded-xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !orgName.trim()}
+                onClick={() => pendingType && apply(pendingType, orgName.trim())}
+                className="flex-1 py-3 rounded-xl bg-zinc-900 text-white font-bold text-sm hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

@@ -61,6 +61,9 @@ export interface User {
   badges?: string[];
   bio?: string;
   location?: string;
+  accountType?: 'personal' | 'organization' | 'business';
+  isPro?: boolean;
+  organizationName?: string;
   showInterests?: boolean;
   stats?: {
     rallies: number;
@@ -109,6 +112,7 @@ export interface Rally {
   interests?: string[];
   scoring?: 'sum_scores' | 'matches_won' | 'total_points';
   rallyLinkId?: string;
+  linkedEvent?: string;
   participantCount?: number;
   followerCount?: number;
   isParticipant?: boolean;

@@ -19,6 +19,7 @@ interface AuthContextType {
   isAuthLoading: boolean;
   isProfileLoading: boolean;
   hasConvexProfile: boolean;
+  isPro: boolean;
   user: User;
   convexUserId: string | null;
   firebaseUser: FirebaseUser | null;
@@ -56,6 +57,11 @@ interface AuthContextType {
     interests?: string[];
     showInterests?: boolean;
   }) => Promise<void>;
+  grantPro: () => Promise<void>;
+  setAccountType: (
+    type: 'personal' | 'organization' | 'business',
+    organizationName?: string
+  ) => Promise<void>;
 }
 
 const defaultPrivacySettings: PrivacySettings = {
@@ -93,6 +99,8 @@ const EMPTY_USER: User = {
   avatar: '',
   isNINVerified: false,
   isPhoneVerified: false,
+  accountType: 'personal',
+  isPro: false,
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -100,6 +108,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthLoading: true,
   isProfileLoading: true,
   hasConvexProfile: false,
+  isPro: false,
   user: EMPTY_USER,
   convexUserId: null,
   firebaseUser: null,
@@ -124,6 +133,8 @@ const AuthContext = createContext<AuthContextType>({
   unblockUser: () => {},
   clearAppCache: () => {},
   persistProfile: async () => {},
+  grantPro: async () => {},
+  setAccountType: async () => {},
 });
 
 const STORAGE_KEY = 'rally_user_profile_v1';
@@ -145,6 +156,9 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
     badges: cu.badges,
     bio: cu.bio,
     location: cu.location,
+    accountType: cu.accountType || 'personal',
+    isPro: cu.isPro ?? false,
+    organizationName: cu.organizationName,
     showInterests: cu.showInterests,
     stats: cu.rallies != null ? {
       rallies: cu.rallies ?? 0,
@@ -181,6 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const convexUnblock = useMutation(api.users.unblockUser);
   const convexBlock = useMutation(api.users.addBlockedUser);
   const convexUpdateUser = useMutation(api.users.update);
+  const convexSetPro = useMutation(api.users.setPro);
+  const convexSetAccountType = useMutation(api.users.setAccountType);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -581,6 +597,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  // LALOA Pro + account types
+  const grantPro = async () => {
+    if (!convexUserId) throw new Error('Not logged in');
+    await convexSetPro({ userId: convexUserId as any, isPro: true });
+    setUser((prev) => {
+      const updated = { ...prev, isPro: true };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  const setAccountType = async (
+    type: 'personal' | 'organization' | 'business',
+    organizationName?: string
+  ) => {
+    if (!convexUserId) throw new Error('Not logged in');
+    const res = await convexSetAccountType({
+      userId: convexUserId as any,
+      accountType: type,
+      organizationName,
+    });
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        accountType: res.accountType as User['accountType'],
+        organizationName: res.organizationName,
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  const isPro = !!user.isPro;
+
   return (
     <AuthContext.Provider
       value={{
@@ -588,6 +638,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthLoading,
         isProfileLoading,
         hasConvexProfile,
+        isPro,
         user,
         convexUserId,
         firebaseUser,
@@ -612,6 +663,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unblockUser,
         clearAppCache,
         persistProfile,
+        grantPro,
+        setAccountType,
       }}
     >
       {children}
