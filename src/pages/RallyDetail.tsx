@@ -27,6 +27,7 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { cn } from '../lib/utils';
+import { waitForPlayback } from '../lib/mux';
 import { Rally } from '../types';
 
 type Tab = 'feed' | 'participants' | 'results' | 'leaderboard' | 'updates';
@@ -144,6 +145,7 @@ export default function RallyDetail() {
   const deleteAnnounceMut = useMutation(api.eventHub.deleteAnnouncement);
   const setStatusMut = useMutation(api.eventHub.updateEventStatus);
   const openRallyChatMut = useMutation(api.messages.getOrOpenRallyChat);
+  const saveMuxResult = useMutation(api.rallies.saveMuxResult);
 
   const [busyJoin, setBusyJoin] = useState(false);
   const [busyFollow, setBusyFollow] = useState(false);
@@ -154,6 +156,7 @@ export default function RallyDetail() {
   const [score, setScore] = useState('');
   const [opponent, setOpponent] = useState('');
   const [submittingResult, setSubmittingResult] = useState(false);
+  const [retryingVideo, setRetryingVideo] = useState(false);
 
   const rally = useMemo(() => (rallyDoc ? mapRally(rallyDoc) : null), [rallyDoc]);
   const isOrg = rel?.isOrganizer ?? false;
@@ -241,6 +244,32 @@ export default function RallyDetail() {
       showToast('Error', e?.message || 'Could not post update.');
     } finally {
       setPostingUpdate(false);
+    }
+  };
+
+  // Resume processing for a Mux video that uploaded but never got a playback id
+  // (e.g. the uploader closed the app before Mux finished transcoding, so the
+  // fire-and-forget saveMuxResult never ran). The rally still holds muxUploadId;
+  // we poll Mux again and persist the result.
+  const handleRetryVideo = async () => {
+    if (!convexUserId || retryingVideo) return;
+    const uploadId = rallyDoc.muxUploadId as string | undefined;
+    if (!uploadId) return;
+    setRetryingVideo(true);
+    try {
+      const { assetId, playbackId } = await waitForPlayback(uploadId, undefined, 120);
+      if (!assetId || !playbackId) throw new Error('Video is still processing.');
+      await saveMuxResult({
+        rallyId: rallyId as any,
+        requestingUserId: convexUserId as any,
+        assetId,
+        playbackId,
+      });
+      showToast('Video ready', 'Your video is now playing.');
+    } catch (e: any) {
+      showToast('Still processing', e?.message || 'Try again in a moment.');
+    } finally {
+      setRetryingVideo(false);
     }
   };
 
@@ -335,7 +364,27 @@ export default function RallyDetail() {
           </div>
         )}
 
-        {rally.mediaUrl && (
+        {rally.mediaType === 'video' && !rallyDoc.muxPlaybackId && rallyDoc.muxUploadId ? (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col items-center gap-2 text-center">
+            <Loader2 className="w-6 h-6 text-amber-500" />
+            <p className="text-sm font-bold text-amber-800">Video still processing</p>
+            <p className="text-xs text-amber-700">
+              Mux hasn't finished transcoding this video yet.
+              {rallyDoc.creatorId?.toString() === convexUserId
+                ? ' You can retry it now to attach the playback link.'
+                : ' Check back shortly.'}
+            </p>
+            {rallyDoc.creatorId?.toString() === convexUserId && (
+              <button
+                onClick={handleRetryVideo}
+                disabled={retryingVideo}
+                className="mt-1 px-4 py-2 rounded-full bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-50"
+              >
+                {retryingVideo ? 'Checking…' : 'Retry video'}
+              </button>
+            )}
+          </div>
+        ) : rally.mediaUrl && (
           <div className="mb-4 rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-100">
             {rally.mediaType === 'video' ? (
               <div className="relative w-full h-52">
