@@ -161,23 +161,44 @@ export default defineSchema({
   chatRequests: defineTable({
     fromUserId: v.id("users"),
     toUserId: v.id("users"),
-    rallyId: v.id("rallies"),
+    // Phase 3: rallyId is only set for rally-context requests; direct DMs
+    // leave it unset and set type: "direct".
+    rallyId: v.optional(v.id("rallies")),
+    type: v.optional(
+      v.union(
+        v.literal("direct"),
+        v.literal("rally")
+      )
+    ),
     message: v.string(),
     status: v.union(
       v.literal("PENDING"),
       v.literal("ACCEPTED"),
-      v.literal("DECLINED")
+      v.literal("DECLINED"),
+      v.literal("CANCELLED")
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_toUser", ["toUserId", "status"])
     .index("by_fromUser", ["fromUserId"])
-    .index("by_pair", ["fromUserId", "toUserId", "rallyId"]),
+    .index("by_pair", ["fromUserId", "toUserId"])
+    .index("by_pair_rally", ["fromUserId", "toUserId", "rallyId"]),
 
   conversations: defineTable({
-    rallyId: v.id("rallies"),
-    rallyTitle: v.string(),
+    // Phase 3: "direct" = 1:1 mutual-follow or accepted-request DM;
+    // "rally" = RALLY participant chat scoped to a rally.
+    type: v.optional(
+      v.union(
+        v.literal("direct"),
+        v.literal("rally")
+      )
+    ),
+    // Sorted "<lowerId>:<higherId>" pair key for direct conversations,
+    // enabling a unique index to find-or-create without duplicates.
+    directKey: v.optional(v.string()),
+    rallyId: v.optional(v.id("rallies")),
+    rallyTitle: v.optional(v.string()),
     participantIds: v.array(v.id("users")),
     lastMessage: v.object({
       senderId: v.string(),
@@ -185,13 +206,21 @@ export default defineSchema({
       timestamp: v.number(),
     }),
     unreadCount: v.number(),
-  }).index("by_rally", ["rallyId"]),
+    // Phase 3: per-user unread counts and last-read timestamps for
+    // distinguishing Sent / Delivered / Read.
+    unreadByUser: v.optional(v.record(v.string(), v.number())),
+    lastRead: v.optional(v.record(v.string(), v.number())),
+  })
+    .index("by_rally", ["rallyId"])
+    .index("by_direct_key", ["directKey"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     text: v.string(),
     timestamp: v.number(),
+    // Phase 3: which participants have read this message (Read status).
+    readByIds: v.optional(v.array(v.id("users"))),
   }).index("by_conversation", ["conversationId"]),
 
   ads: defineTable({

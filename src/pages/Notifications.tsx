@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import PageShell from '../components/PageShell';
-import { Heart, Users, MapPin, Bell, CheckCheck, Trash2 } from 'lucide-react';
+import { Heart, Users, MapPin, Bell, CheckCheck, Trash2, MessageCircle, UserPlus } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,11 @@ const NOTIF_ICONS: Record<string, { icon: typeof Heart; color: string; bg: strin
   interest: { icon: Heart, color: 'text-rose-600', bg: 'bg-rose-50' },
   responses: { icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   reminder: { icon: Bell, color: 'text-amber-600', bg: 'bg-amber-50' },
+  new_message: { icon: MessageCircle, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  message_request: { icon: UserPlus, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  message_request_accepted: { icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  rally_participant_joined: { icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  rally_participant_left: { icon: Users, color: 'text-zinc-500', bg: 'bg-zinc-100' },
 };
 
 function timeAgo(timestamp: number): string {
@@ -48,6 +53,14 @@ export default function Notifications() {
   const handleNotifClick = async (notif: any) => {
     if (!notif.read) {
       await markAsRead({ notificationId: notif._id });
+    }
+    if (notif.type === 'new_message' || notif.type === 'rally_participant_joined' || notif.type === 'rally_participant_left') {
+      navigate('/messages', { state: { tab: 'conversations' } });
+      return;
+    }
+    if (notif.type === 'message_request' || notif.type === 'message_request_accepted') {
+      navigate('/messages', { state: { tab: 'requests' } });
+      return;
     }
     if (notif.rallyId) {
       navigate('/explore');

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import Avatar from '../components/Avatar';
-import { BadgeCheck, MapPin, UserPlus, UserCheck, Flag, Ban, ChevronRight } from 'lucide-react';
+import { BadgeCheck, MapPin, UserPlus, UserCheck, Flag, Ban, ChevronRight, MessageCircle, X, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
@@ -16,6 +16,10 @@ export default function UserProfile() {
   const { user: me, convexUserId, blockUser } = useAuth();
 
   const isSelf = !!convexUserId && convexUserId === id;
+
+  const [requestModal, setRequestModal] = useState(false);
+  const [requestText, setRequestText] = useState('');
+  const [isMessaging, setIsMessaging] = useState(false);
 
   const target = useQuery(api.users.get, id ? { userId: id as any } : 'skip');
   const stats = useQuery(api.rallies.getProfileStats, id ? { userId: id as any } : 'skip');
@@ -29,9 +33,15 @@ export default function UserProfile() {
     api.rallies.listByCreator,
     id ? { creatorId: id as any, userId: convexUserId as any } : 'skip'
   );
+  const directStatus = useQuery(
+    api.chatRequests.getDirectStatus,
+    convexUserId && id ? { viewerId: convexUserId as any, targetId: id as any } : 'skip'
+  );
 
   const followMut = useMutation(api.follows.follow);
   const unfollowMut = useMutation(api.follows.unfollow);
+  const openDirectMut = useMutation(api.messages.getOrOpenDirect);
+  const sendDirectMut = useMutation(api.chatRequests.sendDirect);
 
   const [isFollowBusy, setIsFollowBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'media'>('posts');
@@ -64,6 +74,51 @@ export default function UserProfile() {
     blockUser(target._id, target.name || 'User', target.username || '', target.avatar || '');
     showToast('User blocked', `${target.name} has been blocked.`);
     navigate('/');
+  };
+
+  const handleMessage = async () => {
+    if (!convexUserId || !id || isSelf) return;
+    if (!directStatus) return;
+    setIsMessaging(true);
+    try {
+      const status = (directStatus as any).status;
+      if (status === 'mutual') {
+        const convId = await openDirectMut({ userIdA: convexUserId as any, userIdB: id as any });
+        navigate(`/messages/${convId}`);
+      } else if (status === 'pending_to_me') {
+        navigate('/messages', { state: { tab: 'requests' } });
+      } else if (status === 'request') {
+        setRequestModal(true);
+      } else if (status === 'pending_from_me') {
+        navigate('/messages', { state: { tab: 'requests' } });
+      }
+    } catch (e: any) {
+      showToast('Error', e.message || 'Could not start a chat.');
+    } finally {
+      setIsMessaging(false);
+    }
+  };
+
+  const submitRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!convexUserId || !id || !requestText.trim()) return;
+    try {
+      const res = await sendDirectMut({
+        fromUserId: convexUserId as any,
+        toUserId: id as any,
+        message: requestText.trim(),
+      });
+      setRequestModal(false);
+      setRequestText('');
+      if (res.type === 'direct') {
+        showToast('Message sent', '');
+        navigate(`/messages/${res.conversationId}`);
+      } else {
+        showToast('Request sent', 'They will be notified.');
+      }
+    } catch (e: any) {
+      showToast('Error', e.message || 'Could not send request.');
+    }
   };
 
   const tabbed = useMemo(() => {
@@ -187,6 +242,23 @@ export default function UserProfile() {
                 <Flag className="w-4 h-4" /> Report
               </Link>
             )}
+            {!isSelf && convexUserId && directStatus && (directStatus as any).status !== 'blocked' && (
+              <button
+                onClick={handleMessage}
+                disabled={isMessaging || (directStatus as any).status === 'pending_from_me'}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95 disabled:opacity-50"
+              >
+                {isMessaging ? (
+                  '…'
+                ) : (directStatus as any).status === 'pending_from_me' ? (
+                  <><MessageCircle className="w-4 h-4" /> Pending</>
+                ) : (directStatus as any).status === 'mutual' ? (
+                  <><MessageCircle className="w-4 h-4" /> Message</>
+                ) : (
+                  <><MessageCircle className="w-4 h-4" /> Message</>
+                )}
+              </button>
+            )}
             {!isSelf && convexUserId && (
               <button
                 onClick={handleBlock}
@@ -255,6 +327,39 @@ export default function UserProfile() {
           </Link>
         )}
       </div>
+
+      {/* Message request modal */}
+      {requestModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-black text-zinc-900">Message {target?.name || 'user'}</h3>
+              <button onClick={() => setRequestModal(false)} className="p-2 -mr-2 rounded-full hover:bg-zinc-100 transition-colors">
+                <X className="w-5 h-5 text-zinc-600" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500 font-medium mb-3 leading-relaxed">
+              You don't follow each other yet, so this will be sent as a <span className="font-bold text-zinc-700">message request</span>. They can accept it to start chatting.
+            </p>
+            <form onSubmit={submitRequest} className="space-y-3">
+              <textarea
+                value={requestText}
+                onChange={(e) => setRequestText(e.target.value)}
+                placeholder="Send a short message..."
+                rows={3}
+                className="w-full resize-none rounded-2xl border border-zinc-200 p-3 text-sm focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!requestText.trim()}
+                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+              >
+                <Send className="w-4 h-4" /> Send Request
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

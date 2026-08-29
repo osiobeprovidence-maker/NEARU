@@ -566,6 +566,19 @@ export const toggleRsvp = mutation({
 
     if (existing) {
       await ctx.db.delete(existing._id);
+      // Phase 3: notify the creator that a participant left.
+      try {
+        const user: any = await ctx.db.get(args.userId);
+        await ctx.runMutation(api.notifications.create, {
+          userId: rally.creatorId,
+          type: "rally_participant_left",
+          title: "Participant left",
+          body: `${user?.name || "Someone"} left "${rally.title}".`,
+          rallyId: args.rallyId,
+        });
+      } catch {
+        // best-effort
+      }
       return { rsvpd: false };
     } else {
       // Enforce capacity atomically on the server
@@ -583,6 +596,19 @@ export const toggleRsvp = mutation({
         rallyId: args.rallyId,
         createdAt: Date.now(),
       });
+      // Phase 3: notify the creator that a participant joined.
+      try {
+        const user: any = await ctx.db.get(args.userId);
+        await ctx.runMutation(api.notifications.create, {
+          userId: rally.creatorId,
+          type: "rally_participant_joined",
+          title: "New participant",
+          body: `${user?.name || "Someone"} joined "${rally.title}".`,
+          rallyId: args.rallyId,
+        });
+      } catch {
+        // best-effort
+      }
       return { rsvpd: true };
     }
   },

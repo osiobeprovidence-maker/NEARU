@@ -12,6 +12,7 @@ import type * as ads from "../ads.js";
 import type * as chatRequests from "../chatRequests.js";
 import type * as follows from "../follows.js";
 import type * as messages from "../messages.js";
+import type * as messagingHelpers from "../messagingHelpers.js";
 import type * as notifications from "../notifications.js";
 import type * as rallies from "../rallies.js";
 import type * as users from "../users.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   chatRequests: typeof chatRequests;
   follows: typeof follows;
   messages: typeof messages;
+  messagingHelpers: typeof messagingHelpers;
   notifications: typeof notifications;
   rallies: typeof rallies;
   users: typeof users;

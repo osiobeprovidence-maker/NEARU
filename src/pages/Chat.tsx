@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, MapPin, MoreVertical, BadgeCheck, Star, Image as ImageIcon, AlertCircle, Smile, Paperclip, Camera, Mic, Play } from 'lucide-react';
+import { ArrowLeft, Send, MapPin, MoreVertical, BadgeCheck, Star, Image as ImageIcon, AlertCircle, Smile, Paperclip, Camera, Mic, Play, Users, Check, CheckCheck } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +20,7 @@ export default function Chat() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sendMessage = useMutation(api.messages.send);
+  const markRead = useMutation(api.messages.markRead);
 
   const conversation = useQuery(
     api.messages.getConversation,
@@ -32,12 +33,20 @@ export default function Chat() {
   );
 
   const otherUser = conversation?.otherParticipant;
+  const isRally = conversation?.type === 'rally';
 
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Mark conversation as read whenever we open it / receive new messages.
+  useEffect(() => {
+    if (id && convexUserId && conversation) {
+      markRead({ conversationId: id as any, userId: convexUserId as any }).catch(() => {});
+    }
+  }, [id, convexUserId, conversation?._id, messages?.length]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -89,13 +98,23 @@ export default function Chat() {
     }));
   };
 
-  if (!conversation || !otherUser) {
+  if (!conversation) {
     return (
       <div className="flex flex-col h-[calc(100vh-80px)] md:h-screen w-full bg-white items-center justify-center">
         <div className="text-zinc-400 text-sm">Loading conversation...</div>
       </div>
     );
   }
+
+  const headerTitle = isRally ? (conversation.rallyTitle || 'RALLY chat') : otherUser?.name || 'Chat';
+  const headerSubtitle = isRally
+    ? `${conversation.participantIds?.length ?? 0} participants`
+    : (conversation.rallyTitle || 'Direct message');
+
+  // Determine whether a sent message has been read: any OTHER participant has
+  // read the message (readByIds includes someone other than the sender).
+  const isMessageRead = (msg: any) =>
+    (msg.readByIds ?? []).some((r: any) => r !== msg.senderId && r !== convexUserId);
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] md:h-screen w-full bg-white relative">
@@ -116,24 +135,30 @@ export default function Chat() {
             <ArrowLeft className="w-5 h-5 text-zinc-900" />
           </button>
           <div className="flex items-center gap-3">
-            <Avatar
-              src={otherUser.avatar}
-              name={otherUser.name}
-              size="md"
-            />
+            {isRally ? (
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <Users className="w-5 h-5 text-indigo-600" />
+              </div>
+            ) : (
+              <Avatar
+                src={otherUser?.avatar}
+                name={otherUser?.name || 'User'}
+                size="md"
+              />
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
-                <h2 className="font-bold text-zinc-900 leading-tight truncate">{otherUser.name}</h2>
-                {otherUser.isNINVerified && (
+                <h2 className="font-bold text-zinc-900 leading-tight truncate">{headerTitle}</h2>
+                {!isRally && otherUser?.isNINVerified && (
                   <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 )}
-                {otherUser.badges?.map((badge: string) => (
+                {!isRally && otherUser?.badges?.map((badge: string) => (
                   <div title={badge} key={badge} className="flex items-center justify-center w-4 h-4 bg-amber-100 rounded-full text-amber-600 shrink-0">
                     <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                   </div>
                 ))}
               </div>
-              <p className="text-xs font-semibold text-zinc-500">{conversation.rallyTitle}</p>
+              <p className="text-xs font-semibold text-zinc-500">{headerSubtitle}</p>
             </div>
           </div>
         </div>
@@ -146,7 +171,7 @@ export default function Chat() {
             <MoreVertical className="w-5 h-5 text-zinc-900" />
           </button>
           
-          {isMenuOpen && (
+          {isMenuOpen && !isRally && otherUser && (
             <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-zinc-100 overflow-hidden z-50">
               <button 
                 onClick={() => navigate(`/review/${otherUser._id}`)}
@@ -178,6 +203,7 @@ export default function Chat() {
         ) : (
           messages.map(msg => {
             const isMe = msg.senderId === convexUserId;
+            const read = isMessageRead(msg);
             return (
               <div key={msg._id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div 
@@ -189,8 +215,15 @@ export default function Chat() {
                 >
                   {msg.text && <div>{msg.text}</div>}
                   
-                  <div className={`text-[10px] mt-1 text-right ${isMe ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div className={`text-[10px] mt-1 text-right flex items-center justify-end gap-1 ${isMe ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {isMe && (
+                      read ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-sky-400" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5 text-zinc-400" />
+                      )
+                    )}
                   </div>
                 </div>
               </div>

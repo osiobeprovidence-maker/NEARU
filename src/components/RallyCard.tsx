@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Clock,
@@ -40,6 +40,8 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   const [localRsvpd, setLocalRsvpd] = useState(rally.isRsvpd ?? false);
   const [localRsvpCount, setLocalRsvpCount] = useState(rally.rsvpsCount ?? 0);
 
+  const navigate = useNavigate();
+
   const [imgError, setImgError] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -57,6 +59,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   const addCommentMut   = useMutation(api.rallies.addComment);
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
   const deleteRallyMut  = useMutation(api.rallies.deleteRally);
+  const openRallyChatMut = useMutation(api.messages.getOrOpenRallyChat);
 
   const comments = useQuery(
     api.rallies.getComments,
@@ -224,6 +227,24 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       await navigator.clipboard.writeText(text);
       showToast('Copied!', 'Post details copied to clipboard.');
     } catch {}
+  };
+
+  const handleOpenRallyChat = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!convexUserId) {
+      showToast('Not logged in', 'Please log in to join the chat.');
+      return;
+    }
+    try {
+      const convId = await openRallyChatMut({
+        rallyId: rally.id as any,
+        userId: convexUserId as any,
+      });
+      navigate(`/messages/${convId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'You must be a participant to join the chat.';
+      showToast('Error', msg);
+    }
   };
 
   const handleDeleteConfirmed = async () => {
@@ -553,6 +574,17 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         >
           <Share2 className="w-5 h-5" />
         </button>
+
+        {/* RALLY chat — for participants & the creator */}
+        {!isPost && (isOwner || localRsvpd) && (
+          <button
+            onClick={handleOpenRallyChat}
+            title="Open RALLY chat"
+            className="flex items-center gap-1.5 text-sm font-semibold text-indigo-500 hover:text-indigo-700 transition-colors"
+          >
+            <MessageCircle className="w-5 h-5" />
+          </button>
+        )}
 
         {/* Spacer + action CTA */}
         {defaultActionText && (
