@@ -48,14 +48,33 @@ export function getMuxStatus(uploadId: string) {
 
 /**
  * PUT a File's bytes directly to the Mux upload URL returned by createMuxUpload.
+ * Uses XMLHttpRequest so we can surface real upload progress (fetch lacks it).
+ * @param onProgress 0..1 fraction of bytes uploaded (may be partial on some engines).
  */
-export async function putFileToMux(url: string, file: File) {
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    body: file,
+export async function putFileToMux(
+  url: string,
+  file: File,
+  onProgress?: (fraction: number) => void
+) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1);
+        resolve();
+      } else {
+        reject(new Error(`Upload to Mux failed: ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload to Mux failed: network error"));
+    xhr.onabort = () => reject(new Error("Upload to Mux aborted"));
+    xhr.send(file);
   });
-  if (!res.ok) throw new Error(`Upload to Mux failed: ${res.status}`);
 }
 
 /**

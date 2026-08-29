@@ -77,6 +77,7 @@ export default function CreateRallyModal({
   const [muxUploadId, setMuxUploadId] = useState<string>('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // 0..1 for the upload progress bar
   const [uploadError, setUploadError] = useState<string>('');
   const [isProcessingVideo, setIsProcessingVideo] = useState(false); // Mux transcoding
   // Hashtags
@@ -171,6 +172,7 @@ export default function CreateRallyModal({
     setMediaStorageId('');
     setMuxUploadId('');
     setUploadError('');
+    setUploadProgress(0);
     uploadedRef.current = false;
 
     // 2. Upload in background
@@ -179,7 +181,9 @@ export default function CreateRallyModal({
       if (isVideo) {
         // Mux direct upload: browser PUTs raw bytes straight to Mux.
         const { uploadId, url } = await createMuxUpload();
-        await putFileToMux(url, file);
+        setUploadProgress(0);
+        await putFileToMux(url, file, (fraction) => setUploadProgress(fraction));
+        setUploadProgress(1);
         setMuxUploadId(uploadId);
         uploadedRef.current = true;
       } else {
@@ -216,6 +220,7 @@ export default function CreateRallyModal({
     setMuxUploadId('');
     setMediaType(null);
     setUploadError('');
+    setUploadProgress(0);
     uploadedRef.current = false;
   };
 
@@ -547,10 +552,27 @@ export default function CreateRallyModal({
                         {/* Upload status overlay */}
                         {isUploading && (
                           <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2">
-                            <Loader2 className="w-7 h-7 text-white animate-spin" />
-                            <span className="text-white text-xs font-bold">
-                              Uploading…
-                            </span>
+                            {mediaType === 'video' && uploadProgress > 0 ? (
+                              <div className="w-3/4 max-w-[220px]">
+                                <div className="flex justify-between text-white text-[10px] font-bold mb-1">
+                                  <span>Uploading video…</span>
+                                  <span>{Math.round(uploadProgress * 100)}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-white/25 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-white rounded-full transition-all duration-150"
+                                    style={{ width: `${Math.round(uploadProgress * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <Loader2 className="w-7 h-7 text-white animate-spin" />
+                                <span className="text-white text-xs font-bold">
+                                  Uploading…
+                                </span>
+                              </>
+                            )}
                           </div>
                         )}
                         {uploadError && !isUploading && (

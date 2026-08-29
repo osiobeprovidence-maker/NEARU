@@ -541,7 +541,14 @@ export const listByCity = query({
 export const get = query({
   args: { rallyId: v.id("rallies") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.rallyId);
+    const rally = await ctx.db.get(args.rallyId);
+    if (!rally) return null;
+    // Resolve media URLs (images from storage, Mux videos from playback id) so
+    // the RallyDetail page can actually render media — previously only the feed
+    // card (via list queries) resolved these, leaving video posts blank here.
+    const mediaCache: Record<string, string | undefined> = {};
+    const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+    return { ...rally, mediaUrl };
   },
 });
 
