@@ -6,8 +6,7 @@ import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
 import { haversineDistance, formatDistance } from '../lib/geo';
 import { Rally } from '../types';
-import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+import PostCard from '../components/PostCard';
 import AdCard from '../components/AdCard';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -86,7 +85,7 @@ export default function Home() {
         window.dispatchEvent(new CustomEvent('show-toast', {
           detail: {
             title: 'Notifications enabled!',
-            subtitle: 'You\'ll get alerted when someone rallies near you.'
+            subtitle: 'You\'ll get alerted when something new is posted near you.'
           }
         }));
       }
@@ -110,8 +109,8 @@ export default function Home() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Join me on RALLY',
-          text: `Join me on RALLY — see what people in ${shareCity} are asking, helping with, and doing together!`,
+          title: 'Join me on Lalao',
+          text: `Join me on Lalao — see what people in ${shareCity} are sharing, doing, and helping with!`,
           url: window.location.origin,
         });
         return;
@@ -131,7 +130,7 @@ export default function Home() {
     window.dispatchEvent(new CustomEvent('show-toast', {
       detail: {
         title: 'Invite Link Copied!',
-        subtitle: `Share it with people around ${shareCity} to get RALLYS started.`
+        subtitle: `Share it with people around ${shareCity} to keep the community going.`
       }
     }));
   };
@@ -175,6 +174,8 @@ export default function Home() {
           isNINVerified: r.creator.isNINVerified,
           isPhoneVerified: false,
           badges: r.creator.badges,
+          accountType: r.creator.accountType,
+          organizationName: r.creator.organizationName,
         } : {
           id: 'unknown',
           name: 'Unknown',
@@ -200,6 +201,10 @@ export default function Home() {
         rsvpsCount: r.rsvpsCount,
         isLiked: r.isLiked,
         isRsvpd: r.isRsvpd,
+        eventTag: r.eventTag,
+        interests: r.interests,
+        rallyLinkId: r.rallyLinkId,
+        linkedEvent: r.linkedEvent,
       }));
     }
     return [];
@@ -304,7 +309,7 @@ export default function Home() {
                 <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
                   <MessageCircleQuestion className="w-5 h-5 text-indigo-600" />
                 </div>
-                <h3 className="text-base font-black text-zinc-900 tracking-tight">What's your RALLY?</h3>
+                <h3 className="text-base font-black text-zinc-900 tracking-tight">What's your Lalao?</h3>
               </div>
               <button
                 onClick={handleDismissExplainer}
@@ -314,11 +319,11 @@ export default function Home() {
               </button>
             </div>
             <p className="text-xs text-zinc-500 leading-relaxed mb-4">
-              Ask for help, offer help, or invite people nearby to join you. Post what you need and connect with people around you.
+              Lalao is where your neighborhood shares, asks and hangs out. Post something, or turn it into a RALLY so people nearby can join in.
             </p>
             <div className="space-y-2.5">
               <div className="flex items-start gap-2.5">
-                <div className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-rose-200 shrink-0 mt-0.5">ASK</div>
+                <div className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-zinc-200 shrink-0 mt-0.5">POST</div>
                 <p className="text-xs text-zinc-600 leading-relaxed">"Anyone know a good plumber around here?"</p>
               </div>
               <div className="flex items-start gap-2.5">
@@ -337,7 +342,7 @@ export default function Home() {
       <div className="px-0 md:px-6 pb-24 md:pb-6">
         <div className="px-6 md:px-0">
           <div className="flex items-end justify-between mb-1">
-            <h3 className="text-xl md:text-2xl font-bold text-zinc-900 tracking-tight">Around You</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-zinc-900 tracking-tight">Home</h3>
             {hasLocation && (
               <button
                 onClick={openLocationModal}
@@ -350,10 +355,10 @@ export default function Home() {
           </div>
           <p className="text-xs sm:text-sm text-zinc-500 mb-4">
             {hasLocation
-              ? 'See what people nearby are asking, offering and looking for.'
+              ? 'See what people near you are posting and doing.'
               : isLocating
                 ? 'Finding your location...'
-                : 'Enable location to see nearby RALLYS.'}
+                : 'Enable location to see posts and rallies near you.'}
           </p>
 
           {showFilters && (
@@ -393,7 +398,7 @@ export default function Home() {
                 Location access is off
               </h3>
               <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
-                Turn on location permission in your browser settings to see RALLYS near you.
+                Turn on location permission in your browser settings to see posts and rallies near you.
               </p>
               <button
                 onClick={requestLocation}
@@ -411,7 +416,7 @@ export default function Home() {
                 We need your location
               </h3>
               <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-2 leading-relaxed">
-                RALLY uses your location to show people and activities near you.
+                Lalao uses your location to show people and things happening near you.
               </p>
               {error && (
                 <p className="text-xs text-rose-500 font-medium mb-4">{error.message}</p>
@@ -433,9 +438,9 @@ export default function Home() {
             </div>
           ) : !feedIsLoaded || isLoading ? (
             <>
-              <RallyCardSkeleton />
-              <RallyCardSkeleton />
-              <RallyCardSkeleton />
+              <PostSkeleton />
+              <PostSkeleton />
+              <PostSkeleton />
             </>
           ) : !hasRealPosts ? (
             <div className="p-8 sm:p-10 text-center">
@@ -443,10 +448,10 @@ export default function Home() {
                 <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
-                Nothing nearby? Be the first to RALLY!
+                Nothing here yet — be the first to post
               </h3>
               <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
-                Start the conversation. Ask for something, offer help, or invite people nearby to join you.
+                Share what's on your mind, ask for help, or rally people nearby to do something together.
               </p>
 
               <button
@@ -454,7 +459,7 @@ export default function Home() {
                 onClick={openCreateModal}
                 className="px-8 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all"
               >
-                Create a RALLY
+                Start posting
               </button>
             </div>
           ) : nearbyRallies.length > 0 ? (
@@ -462,9 +467,9 @@ export default function Home() {
               {nearbyRallies.flatMap((rally, index) => {
                 const items: React.ReactNode[] = [];
                 items.push(
-                  <RallyCard
+                  <PostCard
                     key={rally.id}
-                    rally={{
+                    post={{
                       ...rally,
                       distance: rally.computedDistance ?? rally.distance,
                       locationLabel: rally.computedDistance != null
@@ -499,10 +504,10 @@ export default function Home() {
                 <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
-                Nothing nearby? Be the first to RALLY!
+                Nothing here yet — be the first to post
               </h3>
               <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
-                Start the conversation. Ask for something, offer help, or invite people nearby to join you.
+                Share what's on your mind, ask for help, or rally people nearby to do something together.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
@@ -511,7 +516,7 @@ export default function Home() {
                   onClick={openCreateModal}
                   className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all"
                 >
-                  Create a RALLY
+                  Start posting
                 </button>
                 <button
                   type="button"
@@ -533,7 +538,7 @@ export default function Home() {
             </div>
             <div className="flex-1">
               <h4 className="font-bold text-zinc-900 text-sm">Grow your community</h4>
-              <p className="text-xs text-zinc-500 mt-0.5">Invite friends to RALLY and make things happen together.</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Invite friends to Lalao and keep up with what's happening near you.</p>
             </div>
             <button
               onClick={handleInvite}
@@ -543,6 +548,30 @@ export default function Home() {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PostSkeleton() {
+  return (
+    <div className="bg-white px-5 py-4 border-b border-zinc-100 animate-pulse">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-11 h-11 rounded-full bg-zinc-200 flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 w-40 bg-zinc-200 rounded" />
+          <div className="h-2.5 w-24 bg-zinc-100 rounded" />
+        </div>
+      </div>
+      <div className="space-y-2 mb-4">
+        <div className="h-3 w-full bg-zinc-200 rounded" />
+        <div className="h-3 w-3/4 bg-zinc-200 rounded" />
+      </div>
+      <div className="h-56 w-full bg-zinc-100 rounded-2xl mb-4" />
+      <div className="flex items-center gap-5">
+        <div className="h-4 w-12 bg-zinc-200 rounded" />
+        <div className="h-4 w-12 bg-zinc-200 rounded" />
+        <div className="h-4 w-12 bg-zinc-200 rounded" />
       </div>
     </div>
   );
