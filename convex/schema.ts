@@ -39,6 +39,23 @@ export default defineSchema({
     organizationName: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
+    // Organization / business page profile: an industry tag shown on the page,
+    // a longer "About" description, the official website, and external social
+    // profile links. Social platforms are free-form strings so unknown ones can
+    // still be rendered with a generic link icon.
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    website: v.optional(v.string()),
+    socialLinks: v.optional(
+      v.array(
+        v.object({
+          platform: v.string(),
+          url: v.string(),
+        })
+      )
+    ),
+    // Cover photo for the professional page header (Convex storage id or URL).
+    coverImage: v.optional(v.string()),
     // Phase 2: whether this user is okay with their interest tags shown on
     // their public profile. Defaults to true. Interests always remain usable
     // for recommendations regardless of this flag.

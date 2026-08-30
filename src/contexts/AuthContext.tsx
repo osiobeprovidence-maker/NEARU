@@ -159,6 +159,11 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
     accountType: cu.accountType || 'personal',
     isPro: cu.isPro ?? false,
     organizationName: cu.organizationName,
+    coverImage: cu.coverImage,
+    description: cu.description,
+    website: cu.website,
+    category: cu.category,
+    socialLinks: cu.socialLinks,
     showInterests: cu.showInterests,
     stats: cu.rallies != null ? {
       rallies: cu.rallies ?? 0,

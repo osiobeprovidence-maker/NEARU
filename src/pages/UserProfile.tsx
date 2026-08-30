@@ -5,7 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import Avatar from '../components/Avatar';
-import { BadgeCheck, MapPin, UserPlus, UserCheck, Flag, Ban, ChevronRight, MessageCircle, X, Send } from 'lucide-react';
+import OrgSocialLinks from '../components/OrgSocialLinks';
+import { BadgeCheck, MapPin, Globe, UserPlus, UserCheck, Flag, Ban, ChevronRight, MessageCircle, X, Send } from 'lucide-react';
 import { cn } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
@@ -44,11 +45,24 @@ export default function UserProfile() {
   const sendDirectMut = useMutation(api.chatRequests.sendDirect);
 
   const [isFollowBusy, setIsFollowBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'media'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'events' | 'media'>('posts');
 
+  const isOrgBiz =
+    !!target && (target.accountType === 'organization' || target.accountType === 'business');
   const isPrivate = target?.privacySettings?.profileVisibility === 'private';
   const isLocked = !!target && isPrivate && !isSelf && !isFollowing;
   const showInterests = target?.showInterests !== false && !isLocked;
+
+  const coverUrl =
+    target?.coverImage && /^(https?:|blob:|data:)/.test(target.coverImage)
+      ? target.coverImage
+      : null;
+  const websiteUrl =
+    target?.website && /^(https?:|blob:|data:)/.test(target.website)
+      ? target.website
+      : target?.website
+        ? `https://${target.website}`
+        : null;
 
   const showToast = (title: string, subtitle: string) =>
     window.dispatchEvent(new CustomEvent('show-toast', { detail: { title, subtitle } }));
@@ -122,11 +136,12 @@ export default function UserProfile() {
   };
 
   const tabbed = useMemo(() => {
-    if (!content) return { posts: [], rallies: [], media: [] };
-    const out = { posts: [] as any[], rallies: [] as any[], media: [] as any[] };
+    if (!content) return { posts: [], rallies: [], events: [], media: [] };
+    const out = { posts: [] as any[], rallies: [] as any[], events: [] as any[], media: [] as any[] };
     for (const c of content) {
-      out.rallies.push(c);
-      if (c.type === 'POST') out.posts.push(c);
+      if (c.type === 'EVENT') out.events.push(c);
+      else if (c.type === 'POST') out.posts.push(c);
+      else out.rallies.push(c);
       if (c.mediaUrl) out.media.push(c);
     }
     return out;
@@ -177,50 +192,97 @@ export default function UserProfile() {
     isRsvpd: r.isRsvpd,
   });
 
-  const activeList = activeTab === 'posts' ? tabbed.posts : activeTab === 'media' ? tabbed.media : tabbed.rallies;
+  const activeList =
+    activeTab === 'posts'
+      ? tabbed.posts
+      : activeTab === 'events'
+        ? tabbed.events
+        : activeTab === 'media'
+          ? tabbed.media
+          : tabbed.rallies;
 
   return (
     <PageShell title={target?.name ? `${target.name}'s profile` : 'Profile'}>
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 divide-y divide-zinc-100 overflow-hidden max-w-2xl mx-auto">
         {/* Identity */}
-        <div className="p-6 sm:p-8 text-center">
-          <Avatar src={target?.avatar} name={target?.name || 'User'} size="xl" className="mx-auto mb-3 shadow-sm border-2 border-white ring-1 ring-zinc-200" />
-
-          <div className="flex items-center justify-center gap-1.5 mb-0.5">
-            <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-              {target?.organizationName || target?.name || 'Loading…'}
-            </h2>
-            {target?.isNINVerified && <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />}
-            {(target?.accountType === 'organization' || target?.accountType === 'business') && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200">
-                {target?.accountType === 'business' ? 'Business' : 'Organization'}
-              </span>
+        <div>
+          {/* Cover */}
+          <div className="relative h-32 sm:h-44 overflow-hidden bg-gradient-to-br from-violet-600 via-indigo-600 to-sky-500">
+            {coverUrl && (
+              <img
+                src={coverUrl}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+              />
             )}
           </div>
-          <p className="text-xs font-bold text-zinc-400 mb-2.5">{target ? `@${target.username}` : ''}</p>
 
-          {!isLocked && (
-            <>
-              <p className="text-sm text-zinc-700 font-medium max-w-sm mx-auto leading-relaxed mb-3">
-                {target?.bio ? `"${target.bio}"` : 'Nothing here yet.'}
-              </p>
-              <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4">
-                <div className="flex items-center justify-center gap-1 text-zinc-600">
-                  <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>{target?.location || 'Location not set'}</span>
+          <div className="px-6 pb-6 sm:pb-7 text-center">
+            <Avatar
+              src={target?.avatar}
+              name={target?.name || 'User'}
+              size="xl"
+              className="mx-auto -mt-10 sm:-mt-12 mb-3 shadow-md ring-4 ring-white"
+            />
+
+            <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap px-2">
+              <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+                {target?.organizationName || target?.name || 'Loading…'}
+              </h2>
+              {target?.isNINVerified && <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />}
+              {isOrgBiz && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
+                  {target?.accountType === 'business' ? 'Business' : 'Organization'}
+                </span>
+              )}
+              {isOrgBiz && target?.category && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
+                  {target.category}
+                </span>
+              )}
+            </div>
+            <p className="text-xs font-bold text-zinc-400 mb-2.5">{target ? `@${target.username}` : ''}</p>
+
+            {!isLocked && (
+              <>
+                <p className="text-sm text-zinc-700 font-medium max-w-sm mx-auto leading-relaxed mb-3">
+                  {target?.description || target?.bio
+                    ? target?.description || target?.bio
+                    : isOrgBiz
+                      ? 'Follow this page to stay updated on posts and events.'
+                      : 'Nothing here yet.'}
+                </p>
+                <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4">
+                  {target?.location && (
+                    <div className="flex items-center justify-center gap-1 text-zinc-600">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>{target.location}</span>
+                    </div>
+                  )}
+                  {websiteUrl && (
+                    <a
+                      href={websiteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-indigo-600 hover:underline font-semibold"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="break-all">{target?.website}</span>
+                    </a>
+                  )}
+                  {showInterests && target?.interests && target.interests.length > 0 && (
+                    <p className="text-zinc-400 px-4 line-clamp-2">{target.interests.join(' · ')}</p>
+                  )}
                 </div>
-                {showInterests && target?.interests && target.interests.length > 0 && (
-                  <p className="text-zinc-400 px-4 line-clamp-2">{target.interests.join(' · ')}</p>
-                )}
-              </div>
-            </>
-          )}
+                {isOrgBiz && <OrgSocialLinks links={target?.socialLinks || []} className="mb-4" />}
+              </>
+            )}
 
-          {isLocked && (
-            <p className="text-sm text-zinc-500 font-medium max-w-xs mx-auto mb-4">
-              This account is private. Follow to see more.
-            </p>
-          )}
+            {isLocked && (
+              <p className="text-sm text-zinc-500 font-medium max-w-xs mx-auto mb-4">
+                This account is private. Follow to see more.
+              </p>
+            )}
 
           <div className="flex items-center justify-center gap-2">
             {!isSelf && convexUserId && (
@@ -277,6 +339,7 @@ export default function UserProfile() {
               </button>
             )}
           </div>
+          </div>
         </div>
 
         {/* Stats */}
@@ -292,7 +355,7 @@ export default function UserProfile() {
         {!isLocked && (
           <>
             <div className="flex border-b border-zinc-100">
-              {(['posts', 'rallies', 'media'] as const).map((tab) => (
+              {(isOrgBiz ? (['posts', 'rallies', 'events', 'media'] as const) : (['posts', 'rallies', 'media'] as const)).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}

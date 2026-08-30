@@ -64,6 +64,11 @@ export interface User {
   accountType?: 'personal' | 'organization' | 'business';
   isPro?: boolean;
   organizationName?: string;
+  coverImage?: string;
+  description?: string;
+  website?: string;
+  category?: string;
+  socialLinks?: { platform: string; url: string }[];
   showInterests?: boolean;
   stats?: {
     rallies: number;

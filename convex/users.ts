@@ -24,6 +24,12 @@ export const get = query({
         if (url) user.avatar = url;
       } catch {}
     }
+    if (user.coverImage && !user.coverImage.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.coverImage);
+        if (url) user.coverImage = url;
+      } catch {}
+    }
     return user;
   },
 });
@@ -53,6 +59,12 @@ export const getByEmail = query({
         if (url) user.avatar = url;
       } catch {}
     }
+    if (user.coverImage && !user.coverImage.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.coverImage);
+        if (url) user.coverImage = url;
+      } catch {}
+    }
     return user;
   },
 });
@@ -69,6 +81,12 @@ export const getByIds = query({
             try {
               const url = await ctx.storage.getUrl(user.avatar);
               if (url) user.avatar = url;
+            } catch {}
+          }
+          if (user.coverImage && !user.coverImage.startsWith("http")) {
+            try {
+              const url = await ctx.storage.getUrl(user.coverImage);
+              if (url) user.coverImage = url;
             } catch {}
           }
           results[id] = user;
@@ -238,8 +256,21 @@ export const update = mutation({
     userId: v.id("users"),
     name: v.optional(v.string()),
     username: v.optional(v.string()),
+    organizationName: v.optional(v.string()),
     avatar: v.optional(v.string()),
+    coverImage: v.optional(v.string()),
     bio: v.optional(v.string()),
+    description: v.optional(v.string()),
+    website: v.optional(v.string()),
+    category: v.optional(v.string()),
+    socialLinks: v.optional(
+      v.array(
+        v.object({
+          platform: v.string(),
+          url: v.string(),
+        })
+      )
+    ),
     phone: v.optional(v.string()),
     gender: v.optional(v.string()),
     birthday: v.optional(v.string()),
@@ -258,6 +289,13 @@ export const update = mutation({
     );
     if (Object.keys(filtered).length === 0) return;
     await ctx.db.patch(userId, filtered);
+  },
+});
+
+export const generateCoverUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
