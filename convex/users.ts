@@ -3,6 +3,16 @@ import { v } from "convex/values";
 
 const SUPER_ADMIN_EMAIL = "riderezzy@gmail.com";
 
+// Never send auth secrets (password hash, TOTP secret) to the browser, from
+// any query that returns a user document. These are only written server-side.
+function redact(user: any) {
+  if (!user) return user;
+  const { passwordHash, totpSecret, ...safe } = user;
+  void passwordHash;
+  void totpSecret;
+  return safe;
+}
+
 export const isAdmin = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -30,7 +40,7 @@ export const get = query({
         if (url) user.coverImage = url;
       } catch {}
     }
-    return user;
+    return redact(user);
   },
 });
 
@@ -41,7 +51,7 @@ export const getByUsername = query({
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
       .unique();
-    return user;
+    return redact(user);
   },
 });
 
@@ -65,7 +75,7 @@ export const getByEmail = query({
         if (url) user.coverImage = url;
       } catch {}
     }
-    return user;
+    return redact(user);
   },
 });
 
@@ -89,7 +99,7 @@ export const getByIds = query({
               if (url) user.coverImage = url;
             } catch {}
           }
-          results[id] = user;
+          results[id] = redact(user);
         }
       }
     }
@@ -228,6 +238,8 @@ export const create = mutation({
       rating: 0,
       accountType: "personal",
       isPro: false,
+      createdAt: Date.now(),
+      moderationStatus: "ACTIVE",
       role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
     });
     return userId;
@@ -447,6 +459,8 @@ export const getOrCreateByEmail = mutation({
       rating: 0,
       accountType: "personal",
       isPro: false,
+      createdAt: Date.now(),
+      moderationStatus: "ACTIVE",
       role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
     });
     return userId;

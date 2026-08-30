@@ -1,20 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
   Users, 
   Zap, 
-  MapPin, 
-  Calendar, 
-  Download, 
-  ArrowUpRight, 
   Flame, 
-  PieChart as PieIcon, 
+  Download, 
   ShieldCheck, 
   Clock,
-  Sparkles,
-  Layers,
-  Filter
+  AlertCircle
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -35,45 +29,90 @@ import { useAdmin } from '../../contexts/AdminContext';
 import { AdminStatsCard } from '../../components/admin/AdminStatsCard';
 import { cn } from '../../lib/utils';
 
-const userRetentionData = [
-  { name: 'Day 1', retention: 78, benchmark: 65 },
-  { name: 'Day 3', retention: 64, benchmark: 50 },
-  { name: 'Day 7', retention: 52, benchmark: 38 },
-  { name: 'Day 14', retention: 44, benchmark: 29 },
-  { name: 'Day 30', retention: 39, benchmark: 22 },
-];
-
-const categoryDistribution = [
-  { name: 'HELP (Auto & Errands)', value: 42, color: '#10B981' },
-  { name: 'JOIN (Sports, Carpool, Events)', value: 34, color: '#4F46E5' },
-  { name: 'ASK (Advice, Mentorship, Recs)', value: 16, color: '#F43F5E' },
-  { name: 'PAID Services & Exchange', value: 8, color: '#F59E0B' },
-];
-
-const locationMetrics = [
-  { rank: 1, city: 'Lagos', neighborhood: 'Lekki Phase 1 / Victoria Island', rallies: 1842, growth: '+18%', activeUsers: 6420 },
-  { rank: 2, city: 'Abuja', neighborhood: 'Maitama / Wuse 2', rallies: 934, growth: '+12%', activeUsers: 3100 },
-  { rank: 3, city: 'Port Harcourt', neighborhood: 'GRA Phase 2 / Peter Odili', rallies: 621, growth: '+9%', activeUsers: 1850 },
-  { rank: 4, city: 'Ibadan', neighborhood: 'Bodija / Jericho', rallies: 342, growth: '+14%', activeUsers: 980 },
-  { rank: 5, city: 'Enugu', neighborhood: 'Independence Layout', rallies: 198, growth: '+21%', activeUsers: 620 },
-];
-
-const dailyRallyVolume = [
-  { day: 'Mon', HELP: 140, JOIN: 110, ASK: 60, PAID: 25 },
-  { day: 'Tue', HELP: 165, JOIN: 125, ASK: 70, PAID: 30 },
-  { day: 'Wed', HELP: 180, JOIN: 140, ASK: 85, PAID: 35 },
-  { day: 'Thu', HELP: 210, JOIN: 160, ASK: 95, PAID: 40 },
-  { day: 'Fri', HELP: 260, JOIN: 220, ASK: 110, PAID: 55 },
-  { day: 'Sat', HELP: 340, JOIN: 310, ASK: 140, PAID: 75 },
-  { day: 'Sun', HELP: 290, JOIN: 280, ASK: 120, PAID: 60 },
-];
+const PIE_COLORS = ['#10B981', '#4F46E5', '#F43F5E', '#F59E0B', '#8B5CF6', '#14B8A6', '#F97316', '#6366F1', '#EF4444', '#0EA5E9'];
 
 export default function AdminAnalytics() {
-  const { metrics, showToast } = useAdmin();
+  const { metrics, analytics, loading, showToast } = useAdmin();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
 
+  const series = useMemo(
+    () =>
+      analytics || {
+        usersOverTime: [],
+        ralliesOverTime: [],
+        verifiedOverTime: [],
+        rallyTypes: [],
+        ralliesByCity: [],
+        accountsByCity: [],
+        retentionSupported: false,
+      },
+    [analytics]
+  );
+
+  const growthChartData = useMemo(() => {
+    const base = series.usersOverTime.map((u, i) => ({
+      name: u.label,
+      users: u.count,
+      rallies: series.ralliesOverTime[i]?.count ?? 0,
+      verified: series.verifiedOverTime[i]?.count ?? 0,
+    }));
+    return timeRange === '7d' ? base.slice(-7) : base;
+  }, [series, timeRange]);
+
+  const rallyVolumeData = useMemo(() => {
+    const base = series.ralliesOverTime.map((r) => ({ name: r.label, count: r.count }));
+    return timeRange === '7d' ? base.slice(-7) : base;
+  }, [series, timeRange]);
+
+  const pieTotal = series.rallyTypes.reduce((sum, t) => sum + t.count, 0);
+  const pieData = series.rallyTypes.map((t, i) => ({
+    name: t.name,
+    value: t.count,
+    color: PIE_COLORS[i % PIE_COLORS.length],
+    pct: pieTotal > 0 ? Math.round((t.count / pieTotal) * 100) : 0,
+  }));
+
+  const topCities = series.ralliesByCity.slice(0, 6);
+  const topAccountCities = series.accountsByCity.slice(0, 6);
+
+  const verifAdoption =
+    metrics.totalUsers > 0 ? ((metrics.verifiedProfiles / metrics.totalUsers) * 100).toFixed(1) : '0';
+
   const handleExportReport = () => {
-    showToast('Platform Analytics report exported to CSV successfully.', 'success');
+    try {
+      const rows: Record<string, string | number>[] = [];
+      for (const p of series.rallyTypes) {
+        rows.push({ Category: p.name, 'Total Posts': p.count });
+      }
+      for (const c of series.ralliesByCity) {
+        rows.push({ City: c.city, 'Active RALLYS': c.count });
+      }
+      for (let i = 0; i < series.usersOverTime.length; i++) {
+        rows.push({
+          Period: series.usersOverTime[i]?.label ?? '',
+          'New Users': series.usersOverTime[i]?.count ?? 0,
+          'RALLYS Created': series.ralliesOverTime[i]?.count ?? 0,
+          'New Verified': series.verifiedOverTime[i]?.count ?? 0,
+        });
+      }
+      const keys = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
+      const csv = [
+        keys.join(','),
+        ...rows.map((r) => keys.map((k) => `"${String(r[k] ?? '')}"`).join(',')),
+      ].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `platform-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Platform Analytics report exported to CSV.', 'success');
+    } catch {
+      showToast('Could not export the analytics report.', 'danger');
+    }
   };
 
   return (
@@ -83,7 +122,7 @@ export default function AdminAnalytics() {
         <div>
           <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">Analytics & Intelligence</h2>
           <p className="text-zinc-500 font-medium text-xs sm:text-sm mt-1">
-            Deep insights into user cohort retention, neighborhood density, and category performance.
+            Live platform growth, category performance, and geographic density.
           </p>
         </div>
 
@@ -118,85 +157,101 @@ export default function AdminAnalytics() {
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <AdminStatsCard
-          label="AVG TIME TO FIRST RESPONSE"
-          value="4.2 mins"
-          change="-32% faster"
-          trend="up"
-          icon={Clock}
-          color="text-emerald-600"
-          bg="bg-emerald-50"
-          subtitle="Speed of neighborhood connections"
-        />
-
-        <AdminStatsCard
-          label="DAY 30 RETENTION"
-          value="39.2%"
-          change="+6.8% vs benchmark"
-          trend="up"
-          icon={TrendingUp}
+          label="TOTAL USERS"
+          value={metrics.totalUsers.toLocaleString()}
+          icon={Users}
           color="text-indigo-600"
           bg="bg-indigo-50"
-          subtitle="Cohort stickiness"
+          subtitle={`${metrics.newUsersToday} new today`}
         />
 
         <AdminStatsCard
-          label="RALLY COMPLETION RATE"
-          value="87.4%"
-          change="+4.1%"
-          trend="up"
-          icon={ShieldCheck}
+          label="TOTAL RALLYS"
+          value={metrics.totalRallies.toLocaleString()}
+          icon={Zap}
           color="text-amber-600"
           bg="bg-amber-50"
-          subtitle="Posts successfully fulfilled"
+          subtitle={`${metrics.activeRallies} currently active`}
         />
 
         <AdminStatsCard
           label="NIN VERIFICATION ADOPTION"
-          value="66.4%"
-          change="+18.2%"
-          trend="up"
-          icon={Users}
-          color="text-indigo-600"
-          bg="bg-indigo-50"
-          subtitle="Of all active platform users"
+          value={`${verifAdoption}%`}
+          icon={ShieldCheck}
+          color="text-emerald-600"
+          bg="bg-emerald-50"
+          subtitle={`${metrics.verifiedProfiles.toLocaleString()} verified accounts`}
+        />
+
+        <AdminStatsCard
+          label="OPEN SAFETY REPORTS"
+          value={metrics.pendingReports.toLocaleString()}
+          icon={BarChart3}
+          color="text-rose-600"
+          bg="bg-rose-50"
+          subtitle={`${metrics.resolvedReports.toLocaleString()} resolved so far`}
         />
       </div>
 
-      {/* Retention Curve & Category Breakdown Grid */}
+      {/* Growth Trend & Category Breakdown Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Retention Curve */}
+        {/* Growth Trend */}
         <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-black text-zinc-900">Cohort Retention Curve</h3>
-              <p className="text-xs text-zinc-500 font-medium mt-0.5">LALOA users retention vs social benchmark</p>
+              <h3 className="text-lg font-black text-zinc-900">Growth Trend</h3>
+              <p className="text-xs text-zinc-500 font-medium mt-0.5">New users, RALLYS, and verified profiles per period</p>
             </div>
-            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-              Top 5% Quartile
-            </span>
           </div>
 
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={userRetentionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F4F4F5" />
-                <XAxis dataKey="name" stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} unit="%" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#18181B',
-                    borderRadius: '1rem',
-                    border: 'none',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="retention" name="LALOA User Retention %" fill="#4F46E5" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="benchmark" name="Industry Benchmark %" fill="#E4E4E7" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading && growthChartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <Clock className="w-5 h-5 mr-2 animate-spin" />
+                Loading analytics...
+              </div>
+            ) : growthChartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                No activity recorded yet.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={growthChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="gRallies" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="gVerified" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F4F4F5" />
+                  <XAxis dataKey="name" stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#18181B',
+                      borderRadius: '1rem',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                  <Area type="monotone" dataKey="users" name="New Users" stroke="#4F46E5" strokeWidth={2.5} fill="url(#gUsers)" />
+                  <Area type="monotone" dataKey="rallies" name="RALLYS Created" stroke="#10B981" strokeWidth={2.5} fill="url(#gRallies)" />
+                  <Area type="monotone" dataKey="verified" name="New Verified" stroke="#F59E0B" strokeWidth={2.5} fill="url(#gVerified)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -206,78 +261,96 @@ export default function AdminAnalytics() {
             <h3 className="text-lg font-black text-zinc-900">Category Distribution</h3>
             <p className="text-xs text-zinc-500 font-medium mt-0.5">Share of live RALLY types</p>
 
-            <div className="h-52 w-full mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryDistribution}
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {categoryDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="space-y-2 mt-4">
-              {categoryDistribution.map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-xs font-bold">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-zinc-700 truncate">{item.name}</span>
-                  </div>
-                  <span className="text-zinc-900">{item.value}%</span>
+            {pieData.length > 0 ? (
+              <>
+                <div className="h-52 w-full mt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        innerRadius={55}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="value"
+                        nameKey="name"
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`${value} posts`, '']} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-2 mt-4">
+                  {pieData.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs font-bold">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-zinc-700 truncate">{item.name}</span>
+                      </div>
+                      <span className="text-zinc-900">{item.pct}% · {item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-52 flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                No RALLYS recorded yet.
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* RALLY Creation Stacked Bar Chart & Top Neighborhood Rankings */}
+      {/* RALLY Volume Bar Chart & Geographic Rankings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Daily Volume by Type */}
+        {/* Rally Volume by Period */}
         <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-black text-zinc-900">Daily RALLY Creation by Category</h3>
-              <p className="text-xs text-zinc-500 font-medium mt-0.5">Categorical post velocity during the week</p>
+              <h3 className="text-lg font-black text-zinc-900">RALLY Creation Volume</h3>
+              <p className="text-xs text-zinc-500 font-medium mt-0.5">Posts created per period</p>
             </div>
           </div>
 
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyRallyVolume} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F4F4F5" />
-                <XAxis dataKey="day" stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#18181B',
-                    borderRadius: '1rem',
-                    border: 'none',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="HELP" stackId="a" fill="#10B981" />
-                <Bar dataKey="JOIN" stackId="a" fill="#4F46E5" />
-                <Bar dataKey="ASK" stackId="a" fill="#F43F5E" />
-                <Bar dataKey="PAID" stackId="a" fill="#F59E0B" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading && rallyVolumeData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <Clock className="w-5 h-5 mr-2 animate-spin" />
+                Loading analytics...
+              </div>
+            ) : rallyVolumeData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                No RALLYS recorded yet.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={rallyVolumeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F4F4F5" />
+                  <XAxis dataKey="name" stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#18181B',
+                      borderRadius: '1rem',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                  />
+                  <Bar dataKey="count" name="RALLYS Created" fill="#4F46E5" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* Top Active Neighborhoods Ranking */}
+        {/* Geographic Rankings */}
         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs">
           <div className="flex items-center gap-2 mb-4">
             <Flame className="w-5 h-5 text-amber-500" />
@@ -285,26 +358,52 @@ export default function AdminAnalytics() {
           </div>
           <p className="text-xs text-zinc-500 font-medium mb-6">Top performing city hubs</p>
 
-          <div className="space-y-3">
-            {locationMetrics.map((loc) => (
-              <div key={loc.city} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between">
-                <div>
+          {loading && topCities.length === 0 ? (
+            <div className="py-10 text-center text-zinc-400 text-xs font-medium">
+              <Clock className="w-6 h-6 text-zinc-300 mx-auto mb-2 animate-spin" />
+              Loading locations...
+            </div>
+          ) : topCities.length > 0 ? (
+            <div className="space-y-3">
+              <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">By RALLY Count</div>
+              {topCities.map((loc, idx) => (
+                <div key={`r-${loc.city}`} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-4 h-4 rounded-full bg-zinc-900 text-white text-[9px] font-black flex items-center justify-center">
-                      {loc.rank}
+                      {idx + 1}
                     </span>
                     <h4 className="text-xs font-black text-zinc-900">{loc.city}</h4>
                   </div>
-                  <p className="text-[10px] text-zinc-500 font-medium mt-0.5 truncate max-w-[150px]">{loc.neighborhood}</p>
+                  <div className="text-right">
+                    <span className="text-xs font-black text-zinc-900 block">{loc.count}</span>
+                    <span className="text-[10px] font-bold text-zinc-400">RALLYS</span>
+                  </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-zinc-400 text-xs font-medium">
+              <AlertCircle className="w-6 h-6 text-zinc-300 mx-auto mb-2" />
+              No location data yet.
+            </div>
+          )}
 
-                <div className="text-right">
-                  <span className="text-xs font-black text-zinc-900 block">{loc.rallies} RALLYS</span>
-                  <span className="text-[10px] font-black text-emerald-600">{loc.growth}</span>
+          {topAccountCities.length > 0 && (
+            <div className="space-y-3 mt-5 pt-5 border-t border-zinc-100">
+              <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">By Account Count</div>
+              {topAccountCities.map((loc, idx) => (
+                <div key={`a-${loc.city}`} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] font-black flex items-center justify-center">
+                      {idx + 1}
+                    </span>
+                    <h4 className="text-xs font-black text-zinc-900">{loc.city}</h4>
+                  </div>
+                  <span className="text-xs font-black text-zinc-900">{loc.count}</span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

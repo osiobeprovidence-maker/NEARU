@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireAdmin } from "./adminHelpers";
 
 // Verification ledger + state machine.
 //
@@ -291,9 +292,18 @@ export const getByPaymentReference = query({
 });
 
 // Admin: list all verification transactions.
+// Server-gated: requires the VERIFICATION_SERVER_SECRET (only held by the
+// serverless backend) AND a caller that resolves to a real admin. Browsers
+// hold neither, so the raw ledger can never be pulled directly.
 export const listAll = query({
-  args: { limit: v.optional(v.number()) },
+  args: {
+    limit: v.optional(v.number()),
+    requestingAdminId: v.id("users"),
+    serverSecret: v.string(),
+  },
   handler: async (ctx, args) => {
+    assertServerSecret(args.serverSecret);
+    await requireAdmin(ctx, args.requestingAdminId);
     return await ctx.db
       .query("verifications")
       .order("desc")
@@ -302,9 +312,15 @@ export const listAll = query({
 });
 
 // Admin: aggregate financial reporting numbers.
+// Server-gated the same way as listAll.
 export const adminReport = query({
-  args: {},
+  args: {
+    requestingAdminId: v.id("users"),
+    serverSecret: v.string(),
+  },
   handler: async (ctx, args) => {
+    assertServerSecret(args.serverSecret);
+    await requireAdmin(ctx, args.requestingAdminId);
     const all = await ctx.db.query("verifications").collect();
     const paid = all.filter(
       (t) => t.paymentStatus === "PAYMENT_SUCCESS"

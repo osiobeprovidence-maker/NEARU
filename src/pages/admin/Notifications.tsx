@@ -25,13 +25,12 @@ import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
 
 export default function AdminNotifications() {
-  const { notifications, sendBroadcast } = useAdmin();
+  const { notifications, sendBroadcast, audienceCounts } = useAdmin();
 
   // Form State for Composing Broadcast
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
-  const [audience, setAudience] = useState<'ALL' | 'VERIFIED' | 'PLUS' | 'LOCATION'>('ALL');
-  const [locationCity, setLocationCity] = useState('Lagos');
+  const [audience, setAudience] = useState<'ALL' | 'VERIFIED' | 'PLUS'>('ALL');
   const [type, setType] = useState<'SYSTEM' | 'MARKETING' | 'SAFETY' | 'UPDATE'>('SYSTEM');
   const [channels, setChannels] = useState({ inApp: true, push: true, email: false });
   const [isScheduled, setIsScheduled] = useState(false);
@@ -47,7 +46,7 @@ export default function AdminNotifications() {
     sendBroadcast({
       title,
       message,
-      audience: audience === 'LOCATION' ? `Location: ${locationCity}` : audience,
+      audience,
       type,
     });
 
@@ -105,15 +104,19 @@ export default function AdminNotifications() {
       header: 'Open / Read Rate',
       sortable: true,
       render: (n) => (
-        <div className="flex items-center gap-2">
-          <div className="w-16 h-2 bg-zinc-100 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-indigo-600 rounded-full" 
-              style={{ width: `${n.openRate}%` }} 
-            />
+        n.openRate > 0 ? (
+          <div className="flex items-center gap-2">
+            <div className="w-16 h-2 bg-zinc-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-indigo-600 rounded-full" 
+                style={{ width: `${n.openRate}%` }} 
+              />
+            </div>
+            <span className="text-xs font-black text-zinc-800">{n.openRate}%</span>
           </div>
-          <span className="text-xs font-black text-zinc-800">{n.openRate}%</span>
-        </div>
+        ) : (
+          <span className="text-xs text-zinc-400 font-medium">—</span>
+        )
       ),
     },
     {
@@ -216,46 +219,33 @@ export default function AdminNotifications() {
                   onChange={(e) => setAudience(e.target.value as any)}
                   className="w-full p-3 bg-white border border-zinc-200 rounded-2xl text-xs sm:text-sm font-bold"
                 >
-                  <option value="ALL">All Registered Users (12,482)</option>
-                  <option value="VERIFIED">NIN Verified Users Only (8,291)</option>
-                  <option value="PLUS">RALLY+ Subscribers Only (1,420)</option>
-                  <option value="LOCATION">Target by Geographic City</option>
+                  <option value="ALL">
+                    All Registered Users ({audienceCounts?.all?.toLocaleString() ?? '…'})
+                  </option>
+                  <option value="VERIFIED">
+                    NIN Verified Users Only ({audienceCounts?.verified?.toLocaleString() ?? '…'})
+                  </option>
+                  <option value="PLUS">
+                    RALLY+ Subscribers Only ({audienceCounts?.plus?.toLocaleString() ?? '…'})
+                  </option>
                 </select>
               </div>
 
-              {audience === 'LOCATION' ? (
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-                    Target City
-                  </label>
-                  <select
-                    value={locationCity}
-                    onChange={(e) => setLocationCity(e.target.value)}
-                    className="w-full p-3 bg-white border border-zinc-200 rounded-2xl text-xs sm:text-sm font-bold"
-                  >
-                    <option value="Lagos">Lagos Neighborhoods</option>
-                    <option value="Abuja">Abuja Federal Capital</option>
-                    <option value="Port Harcourt">Port Harcourt</option>
-                    <option value="Ibadan">Ibadan</option>
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-                    Notification Category
-                  </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as any)}
-                    className="w-full p-3 bg-white border border-zinc-200 rounded-2xl text-xs sm:text-sm font-bold"
-                  >
-                    <option value="SYSTEM">System Announcement</option>
-                    <option value="SAFETY">Safety Alert (Urgent)</option>
-                    <option value="UPDATE">Product & Feature Update</option>
-                    <option value="MARKETING">Community Spotlight</option>
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
+                  Notification Category
+                </label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full p-3 bg-white border border-zinc-200 rounded-2xl text-xs sm:text-sm font-bold"
+                >
+                  <option value="SYSTEM">System Announcement</option>
+                  <option value="SAFETY">Safety Alert (Urgent)</option>
+                  <option value="UPDATE">Product & Feature Update</option>
+                  <option value="MARKETING">Community Spotlight</option>
+                </select>
+              </div>
             </div>
 
             {/* Delivery Channels */}
@@ -381,12 +371,14 @@ export default function AdminNotifications() {
                 <p className="text-xl font-black text-zinc-900 mt-0.5">{selectedNotification.sentCount.toLocaleString()}</p>
               </div>
               <div className="p-3.5 bg-white border border-zinc-200 rounded-2xl">
-                <span className="text-[10px] text-zinc-400 font-bold uppercase">Delivered</span>
-                <p className="text-xl font-black text-emerald-600 mt-0.5">99.4%</p>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase">Recipients</span>
+                <p className="text-xl font-black text-zinc-900 mt-0.5">{selectedNotification.sentCount.toLocaleString()}</p>
               </div>
               <div className="p-3.5 bg-white border border-zinc-200 rounded-2xl">
                 <span className="text-[10px] text-zinc-400 font-bold uppercase">Open Rate</span>
-                <p className="text-xl font-black text-indigo-600 mt-0.5">{selectedNotification.openRate}%</p>
+                <p className="text-xl font-black text-indigo-600 mt-0.5">
+                  {selectedNotification.openRate > 0 ? `${selectedNotification.openRate}%` : '—'}
+                </p>
               </div>
             </div>
 

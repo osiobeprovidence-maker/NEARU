@@ -97,7 +97,7 @@ function AdminLayoutContent() {
       r.title.toLowerCase().includes(q) || 
       r.description.toLowerCase().includes(q) || 
       r.creator.name.toLowerCase().includes(q) ||
-      r.city.toLowerCase().includes(q)
+      (r.city || '').toLowerCase().includes(q)
     ).slice(0, 4);
 
     const matchedReports = reports.filter(r => 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
   Shield, 
@@ -24,7 +24,7 @@ import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
 
 export default function AdminSettings() {
-  const { systemSettings, updateSettings, auditLogs, users, showToast } = useAdmin();
+  const { systemSettings, updateSettings, auditLogs, users, showToast, metrics } = useAdmin();
   const [activeTab, setActiveTab] = useState<'general' | 'moderation' | 'location' | 'verification' | 'team' | 'audit'>('general');
 
   // Local form state
@@ -33,10 +33,23 @@ export default function AdminSettings() {
   const [newAdminRole, setNewAdminRole] = useState<'moderator' | 'admin' | 'support'>('moderator');
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  // Keep the form in sync with backend-persisted settings once they load.
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      platformName: systemSettings.platformName,
+      defaultRadiusKm: systemSettings.defaultRadiusKm,
+      supportedCities: systemSettings.supportedCities,
+    }));
+  }, [systemSettings.platformName, systemSettings.defaultRadiusKm, systemSettings.supportedCities]);
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings(formData);
-    showToast('Platform settings saved successfully.', 'success');
+    updateSettings({
+      platformName: formData.platformName,
+      defaultRadiusKm: formData.defaultRadiusKm,
+      supportedCities: formData.supportedCities,
+    });
   };
 
   const adminTeamMembers = users.filter(u => u.role !== 'user');
@@ -64,7 +77,7 @@ export default function AdminSettings() {
       sortable: true,
       render: (a) => (
         <span className="text-xs font-black uppercase px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-800">
-          {a.action}
+          {(a.action || '').replace(/_/g, ' ')}
         </span>
       ),
     },
@@ -72,7 +85,19 @@ export default function AdminSettings() {
       key: 'target',
       header: 'Target Entity',
       render: (a) => (
-        <span className="text-xs text-zinc-700 font-medium">{a.target}</span>
+        <span className="text-xs text-zinc-700 font-medium">
+          {[a.targetType, a.targetId].filter(Boolean).join(' · ') || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'result',
+      header: 'Result',
+      sortable: true,
+      render: (a) => (
+        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+          {a.result || 'SUCCESS'}
+        </span>
       ),
     },
     {
@@ -155,10 +180,12 @@ export default function AdminSettings() {
               </label>
               <input
                 type="email"
+                disabled
                 value={formData.supportEmail}
-                onChange={(e) => setFormData({ ...formData, supportEmail: e.target.value })}
-                className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="chronicled-when-applied"
+                className="w-full p-3 bg-zinc-100 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium opacity-60 cursor-not-allowed"
               />
+              <p className="text-[10px] text-zinc-400 font-medium mt-1">Managed by the platform backend — not editable here.</p>
             </div>
 
             <div>
@@ -179,10 +206,12 @@ export default function AdminSettings() {
               </label>
               <input
                 type="number"
-                value={formData.maxRalliesPerUser}
-                onChange={(e) => setFormData({ ...formData, maxRalliesPerUser: Number(e.target.value) })}
-                className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                disabled
+                value={formData.maxRalliesPerUser || ''}
+                placeholder="Enforced by app logic"
+                className="w-full p-3 bg-zinc-100 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium opacity-60 cursor-not-allowed"
               />
+              <p className="text-[10px] text-zinc-400 font-medium mt-1">Managed by the platform backend — not editable here.</p>
             </div>
           </div>
         </div>
@@ -191,70 +220,46 @@ export default function AdminSettings() {
       {activeTab === 'moderation' && (
         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs space-y-6">
           <h3 className="text-lg font-black text-zinc-900">Safety & Content Moderation Policies</h3>
+          <p className="text-xs text-zinc-500 font-medium">These automatic policies are enforced server-side by the LALOA backend.</p>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-200">
               <div>
-                <h4 className="text-xs font-black text-zinc-900">Profanity & Toxic Speech Filter</h4>
-                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Automatically mask forbidden words and aggressive slang in post titles & chat.</p>
+                <h4 className="text-xs font-black text-zinc-900">Auto-approve new RALLYS</h4>
+                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">New posts go live immediately or require admin review.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, profanityFilterEnabled: !formData.profanityFilterEnabled })}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                  formData.profanityFilterEnabled ? "bg-emerald-600 text-white" : "bg-zinc-200 text-zinc-700"
-                )}
-              >
-                {formData.profanityFilterEnabled ? 'Enabled' : 'Disabled'}
-              </button>
+              <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md">BACKEND-MANAGED</span>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-200">
               <div>
-                <h4 className="text-xs font-black text-zinc-900">AI Scam & Spam Auto-Flagging</h4>
-                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Flag suspicious off-platform payment links and bot phrases automatically.</p>
+                <h4 className="text-xs font-black text-zinc-900">Require email verification</h4>
+                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Accounts must confirm their email before posting.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, aiAutoFlagEnabled: !formData.aiAutoFlagEnabled })}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                  formData.aiAutoFlagEnabled ? "bg-indigo-600 text-white" : "bg-zinc-200 text-zinc-700"
-                )}
-              >
-                {formData.aiAutoFlagEnabled ? 'Active' : 'Disabled'}
-              </button>
+              <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md">BACKEND-MANAGED</span>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-200">
               <div>
-                <h4 className="text-xs font-black text-zinc-900">Mandatory NIN Verification for Paid RALLYS</h4>
-                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Users must verify their NIN before they can post monetary transactions.</p>
+                <h4 className="text-xs font-black text-zinc-900">Auto-verify phone numbers</h4>
+                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Phone verification outcomes feed into reputation scoring.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, requireNINForPaidRallies: !formData.requireNINForPaidRallies })}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                  formData.requireNINForPaidRallies ? "bg-emerald-600 text-white" : "bg-zinc-200 text-zinc-700"
-                )}
-              >
-                {formData.requireNINForPaidRallies ? 'Enforced' : 'Optional'}
-              </button>
+              <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md">BACKEND-MANAGED</span>
             </div>
 
-            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-200">
-              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-                Automatic Post Hide Threshold (Reports Count)
-              </label>
-              <p className="text-[11px] text-zinc-500 font-medium mb-3">Posts will be automatically hidden from public feed once they reach this number of unique reports.</p>
-              <input
-                type="number"
-                value={formData.autoHideReportsThreshold}
-                onChange={(e) => setFormData({ ...formData, autoHideReportsThreshold: Number(e.target.value) })}
-                className="w-32 p-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-bold focus:outline-none"
-              />
+            <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-200">
+              <div>
+                <h4 className="text-xs font-black text-zinc-900">Maintenance mode</h4>
+                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Global read-only lockdown during deploys.</p>
+              </div>
+              <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md">BACKEND-MANAGED</span>
+            </div>
+
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200">
+              <p className="text-[11px] text-emerald-800 font-medium leading-relaxed">
+                Moderation flags, report thresholds and scam filters are handled by the moderation pipeline
+                (reports, rally FLAG/HIDE/REMOVE and user ban/suspend actions from this CRM).
+              </p>
             </div>
           </div>
         </div>
@@ -287,11 +292,26 @@ export default function AdminSettings() {
             <div className="flex items-center gap-3">
               <ShieldCheck className="w-6 h-6 text-emerald-600" />
               <div>
-                <h4 className="text-xs font-black text-emerald-900">NIMC Identity Gateway Status</h4>
-                <p className="text-[11px] text-emerald-700 font-medium">Latency: 142ms · 99.9% Uptime SLA</p>
+                <h4 className="text-xs font-black text-emerald-900">NIMC Identity Gateway</h4>
+                <p className="text-[11px] text-emerald-700 font-medium">Verification runs through the provider — the CRM never overwrites outcomes.</p>
               </div>
             </div>
-            <span className="text-xs font-black text-emerald-800 bg-white px-3 py-1 rounded-xl shadow-2xs">CONNECTED</span>
+            <span className="text-xs font-black text-emerald-800 bg-white px-3 py-1 rounded-xl shadow-2xs">ACTIVE</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+              <span className="text-[10px] text-zinc-400 uppercase font-bold">Total Submissions</span>
+              <p className="text-2xl font-black text-zinc-900 mt-1">{metrics?.totalVerifications ?? 0}</p>
+            </div>
+            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+              <span className="text-[10px] text-zinc-400 uppercase font-bold">Pending Review</span>
+              <p className="text-2xl font-black text-amber-900 mt-1">{metrics?.pendingVerifications ?? 0}</p>
+            </div>
+            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+              <span className="text-[10px] text-zinc-400 uppercase font-bold">Verified Today</span>
+              <p className="text-2xl font-black text-emerald-900 mt-1">{metrics?.todayApprovedVerifications ?? 0}</p>
+            </div>
           </div>
         </div>
       )}
@@ -343,7 +363,7 @@ export default function AdminSettings() {
             columns={auditColumns}
             keyExtractor={(a) => a.id}
             searchPlaceholder="Search admin name, action, or target entity..."
-            searchFields={['adminName', 'action', 'target', 'details']}
+            searchFields={['adminName', 'action', 'targetType', 'targetId', 'details']}
             exportFileName="admin-audit-log"
           />
         </div>
@@ -394,7 +414,7 @@ export default function AdminSettings() {
             </button>
             <button
               onClick={() => {
-                showToast(`Invitation sent to ${newAdminEmail}`, 'success');
+                showToast('Team invites are provisioned through the auth backend — not sent from the CRM.', 'warning');
                 setShowInviteModal(false);
                 setNewAdminEmail('');
               }}

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Users, 
   Zap, 
@@ -9,18 +9,12 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Clock,
-  MoreVertical,
   CheckCircle2,
-  AlertCircle,
   BadgeCheck,
   ChevronRight,
   Send,
-  UserPlus,
-  Filter,
-  Eye,
-  Check,
-  ShieldAlert,
-  Flame
+  Flame,
+  AlertCircle
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -35,48 +29,64 @@ import { useAdmin } from '../../contexts/AdminContext';
 import { AdminStatsCard } from '../../components/admin/AdminStatsCard';
 import { cn } from '../../lib/utils';
 
-const growthData7Days = [
-  { name: 'Mon', activeUsers: 8420, ralliesCreated: 310, connections: 185 },
-  { name: 'Tue', activeUsers: 9120, ralliesCreated: 380, connections: 240 },
-  { name: 'Wed', activeUsers: 9850, ralliesCreated: 420, connections: 290 },
-  { name: 'Thu', activeUsers: 10400, ralliesCreated: 490, connections: 340 },
-  { name: 'Fri', activeUsers: 11650, ralliesCreated: 620, connections: 460 },
-  { name: 'Sat', activeUsers: 12482, ralliesCreated: 780, connections: 590 },
-  { name: 'Sun', activeUsers: 12100, ralliesCreated: 710, connections: 520 },
-];
-
-const growthData30Days = [
-  { name: 'Week 1', activeUsers: 7200, ralliesCreated: 1450, connections: 890 },
-  { name: 'Week 2', activeUsers: 8900, ralliesCreated: 1820, connections: 1140 },
-  { name: 'Week 3', activeUsers: 10600, ralliesCreated: 2190, connections: 1490 },
-  { name: 'Week 4', activeUsers: 12482, ralliesCreated: 2680, connections: 1980 },
-];
-
-const growthData90Days = [
-  { name: 'Month 1', activeUsers: 4500, ralliesCreated: 3200, connections: 2100 },
-  { name: 'Month 2', activeUsers: 8400, ralliesCreated: 6100, connections: 4400 },
-  { name: 'Month 3', activeUsers: 12482, ralliesCreated: 9840, connections: 7320 },
-];
-
-const buzzingLocations = [
-  { city: 'Lagos', activeRallies: '1,842', growth: '+18%', trendingRank: 1, topCategory: 'HELP (Auto & Errands)' },
-  { city: 'Abuja', activeRallies: '934', growth: '+12%', trendingRank: 2, topCategory: 'JOIN (Sports & Carpool)' },
-  { city: 'Port Harcourt', activeRallies: '621', growth: '+9%', trendingRank: 3, topCategory: 'JOIN (Fitness & Meetups)' },
-  { city: 'Ibadan', activeRallies: '342', growth: '+14%', trendingRank: 4, topCategory: 'ASK (Mentorship)' },
-];
+type MetricKey = 'activeUsers' | 'ralliesCreated' | 'connections';
 
 export default function AdminDashboard() {
-  const { metrics, reports, resolveReport, dismissReport } = useAdmin();
+  const { metrics, reports, resolveReport, analytics, loading } = useAdmin();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('7d');
-  const [activeMetric, setActiveMetric] = useState<'activeUsers' | 'ralliesCreated' | 'connections'>('activeUsers');
-  const navigate = useNavigate();
+  const [activeMetric, setActiveMetric] = useState<MetricKey>('activeUsers');
 
-  const chartData = timeRange === '7d' ? growthData7Days : timeRange === '30d' ? growthData30Days : growthData90Days;
+  const seriesFor = (key: MetricKey) =>
+    key === 'activeUsers'
+      ? analytics?.usersOverTime || []
+      : key === 'ralliesCreated'
+      ? analytics?.ralliesOverTime || []
+      : analytics?.verifiedOverTime || [];
 
-  // Filter high priority pending reports
+  const chartData = useMemo(() => {
+    const series = seriesFor(activeMetric);
+    const slice = timeRange === '7d' ? series.slice(-7) : series;
+    return slice.map((p) => ({ name: p.label, value: p.count }));
+  }, [analytics, activeMetric, timeRange]);
+
+  const growthPct = useMemo(() => {
+    if (chartData.length < 2) return null;
+    const first = chartData[0].value;
+    const last = chartData[chartData.length - 1].value;
+    if (first === 0) return null;
+    return ((last - first) / first) * 100;
+  }, [chartData]);
+
+  const totalSeriesValue = chartData.reduce((sum, p) => sum + p.value, 0);
+
+  const growthLabel =
+    growthPct == null
+      ? null
+      : `${growthPct >= 0 ? '+' : ''}${growthPct.toFixed(1)}% vs start`;
+
+  const topLocations = (analytics?.ralliesByCity || []).slice(0, 6);
+
+  // Filter pending reports for the priority queue
   const priorityReports = reports
     .filter(r => r.status === 'PENDING' || r.status === 'UNDER_REVIEW')
     .slice(0, 4);
+
+  const formatShort = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  };
+
+  const snapshot = [
+    { label: 'New Users Today', value: metrics.newUsersToday },
+    { label: 'New RALLYS Today', value: metrics.newRalliesToday },
+    { label: 'Verified Today', value: metrics.todayApprovedVerifications },
+    { label: 'Total RALLYS', value: metrics.totalRallies },
+    { label: 'Total Posts', value: metrics.totalPosts },
+    { label: 'Active Ads', value: metrics.activeAds },
+    { label: 'Organizations', value: metrics.organizations },
+    { label: 'Businesses', value: metrics.businesses },
+  ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -106,46 +116,40 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 4 Core Statistics Cards matching reference image */}
+      {/* 4 Core Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <AdminStatsCard
           label="TOTAL USERS"
           value={metrics.totalUsers.toLocaleString()}
-          change="+14.2%"
-          trend="up"
           icon={Users}
           color="text-indigo-600"
           bg="bg-indigo-50"
-          subtitle="Platform registered members"
+          subtitle={`${metrics.newUsersToday} new today`}
         />
 
         <AdminStatsCard
           label="ACTIVE RALLYS"
           value={metrics.activeRallies.toLocaleString()}
-          change="+8.1%"
-          trend="up"
           icon={Zap}
           color="text-amber-600"
           bg="bg-amber-50"
-          subtitle="Currently live nearby posts"
+          subtitle={`${metrics.newRalliesToday} created today`}
         />
 
         <AdminStatsCard
           label="VERIFIED PROFILES"
           value={metrics.verifiedProfiles.toLocaleString()}
-          change="+22.4%"
-          trend="up"
           icon={ShieldCheck}
           color="text-emerald-600"
           bg="bg-emerald-50"
-          subtitle="NIN verified accounts"
+          subtitle={`${metrics.todayApprovedVerifications} verified today`}
         />
 
         <AdminStatsCard
           label="REPORTS PENDING"
           value={metrics.pendingReports.toLocaleString()}
-          change="-5.3%"
-          trend="down"
+          change={metrics.pendingReports > 0 ? `${metrics.pendingReports} to triage` : 'All clear'}
+          trend={metrics.pendingReports > 0 ? 'down' : 'up'}
           isUrgent={metrics.pendingReports > 0}
           icon={Flag}
           color="text-rose-600"
@@ -163,44 +167,34 @@ export default function AdminDashboard() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">Platform Growth</h3>
-                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 font-black text-[10px] rounded-full border border-emerald-100">
-                    +18.4% WoW
-                  </span>
+                  {growthLabel && (
+                    <span className={cn(
+                      "px-2 py-0.5 font-black text-[10px] rounded-full border",
+                      growthPct! >= 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-rose-50 text-rose-600 border-rose-100"
+                    )}>
+                      {growthLabel}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-zinc-500 font-medium mt-0.5">
-                  Activity trends and user engagement trajectories.
+                  {analytics ? `${totalSeriesValue} events across ${chartData.length} period${chartData.length === 1 ? '' : 's'}` : 'Loading activity metrics...'}
                 </p>
               </div>
 
               {/* Time Range Selector */}
               <div className="flex items-center bg-zinc-100 p-1 rounded-2xl self-start">
-                <button
-                  onClick={() => setTimeRange('7d')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
-                    timeRange === '7d' ? "bg-white text-zinc-900 shadow-2xs font-black" : "text-zinc-500 hover:text-zinc-900"
-                  )}
-                >
-                  Last 7 days
-                </button>
-                <button
-                  onClick={() => setTimeRange('30d')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
-                    timeRange === '30d' ? "bg-white text-zinc-900 shadow-2xs font-black" : "text-zinc-500 hover:text-zinc-900"
-                  )}
-                >
-                  Last 30 days
-                </button>
-                <button
-                  onClick={() => setTimeRange('90d')}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
-                    timeRange === '90d' ? "bg-white text-zinc-900 shadow-2xs font-black" : "text-zinc-500 hover:text-zinc-900"
-                  )}
-                >
-                  Last 90 days
-                </button>
+                {(['7d', '30d', '90d'] as const).map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => setTimeRange(range)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
+                      timeRange === range ? "bg-white text-zinc-900 shadow-2xs font-black" : "text-zinc-500 hover:text-zinc-900"
+                    )}
+                  >
+                    Last {range}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -216,7 +210,7 @@ export default function AdminDashboard() {
                 )}
               >
                 <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                <span>Active Users</span>
+                <span>New Users</span>
               </button>
               <button
                 onClick={() => setActiveMetric('ralliesCreated')}
@@ -240,54 +234,67 @@ export default function AdminDashboard() {
                 )}
               >
                 <span className="w-2 h-2 rounded-full bg-amber-600" />
-                <span>Connections</span>
+                <span>Verified Today</span>
               </button>
             </div>
           </div>
 
           {/* Chart Canvas */}
           <div className="h-72 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="indigoGrowth" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="emeraldGrowth" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="amberGrowth" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F4F4F5" />
-                <XAxis dataKey="name" stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#18181B',
-                    borderRadius: '1rem',
-                    border: 'none',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.15)'
-                  }}
-                  itemStyle={{ color: '#fff' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey={activeMetric} 
-                  stroke={activeMetric === 'activeUsers' ? '#4F46E5' : activeMetric === 'ralliesCreated' ? '#10B981' : '#F59E0B'} 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill={activeMetric === 'activeUsers' ? 'url(#indigoGrowth)' : activeMetric === 'ralliesCreated' ? 'url(#emeraldGrowth)' : 'url(#amberGrowth)'} 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {loading && chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <Clock className="w-5 h-5 mr-2 animate-spin" />
+                Loading analytics...
+              </div>
+            ) : chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-zinc-400 text-xs font-medium">
+                <AlertCircle className="w-5 h-5 mr-2" />
+                No activity recorded for this period yet.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="indigoGrowth" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="emeraldGrowth" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="amberGrowth" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F4F4F5" />
+                  <XAxis dataKey="name" stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#18181B',
+                      borderRadius: '1rem',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.15)'
+                    }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="value" 
+                    name={activeMetric === 'activeUsers' ? 'New Users' : activeMetric === 'ralliesCreated' ? 'RALLYS Created' : 'Verified Today'}
+                    stroke={activeMetric === 'activeUsers' ? '#4F46E5' : activeMetric === 'ralliesCreated' ? '#10B981' : '#F59E0B'} 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill={activeMetric === 'activeUsers' ? 'url(#indigoGrowth)' : activeMetric === 'ralliesCreated' ? 'url(#emeraldGrowth)' : 'url(#amberGrowth)'} 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -309,7 +316,12 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-3">
-              {priorityReports.length > 0 ? (
+              {loading && reports.length === 0 ? (
+                <div className="py-12 text-center text-zinc-400 text-xs font-medium">
+                  <Clock className="w-8 h-8 text-zinc-300 mx-auto mb-2 animate-spin" />
+                  Loading reports...
+                </div>
+              ) : priorityReports.length > 0 ? (
                 priorityReports.map((report) => (
                   <div 
                     key={report.id}
@@ -322,9 +334,9 @@ export default function AdminDashboard() {
                           ? "bg-rose-100 text-rose-700 border border-rose-200" 
                           : "bg-amber-100 text-amber-800 border border-amber-200"
                       )}>
-                        {report.priority}
+                        {report.priority || 'MEDIUM'}
                       </span>
-                      <span className="text-[10px] font-bold text-zinc-400">{report.createdAt}</span>
+                      <span className="text-[10px] font-bold text-zinc-400">{formatShort(report.createdAt)}</span>
                     </div>
 
                     <div>
@@ -345,12 +357,12 @@ export default function AdminDashboard() {
                         >
                           Resolve
                         </button>
-                        <button
-                          onClick={() => navigate('/admin/reports')}
+                        <Link
+                          to="/admin/reports"
                           className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-[10px] font-bold transition-colors shadow-2xs"
                         >
                           Investigate
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -376,7 +388,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Buzzing Locations & Quick Actions Grid */}
+      {/* Buzzing Locations & Today's Pulse Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Buzzing Locations Ranking */}
         <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs">
@@ -399,81 +411,66 @@ export default function AdminDashboard() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {buzzingLocations.map((loc) => (
-              <div
-                key={loc.city}
-                className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-zinc-200 transition-all flex items-center justify-between"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[10px] font-black">
-                      #{loc.trendingRank}
-                    </span>
-                    <h4 className="text-sm font-black text-zinc-900">{loc.city}</h4>
+          {loading && topLocations.length === 0 ? (
+            <div className="py-12 text-center text-zinc-400 text-xs font-medium">
+              <Clock className="w-8 h-8 text-zinc-300 mx-auto mb-2 animate-spin" />
+              Loading locations...
+            </div>
+          ) : topLocations.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {topLocations.map((loc, idx) => (
+                <div
+                  key={loc.city}
+                  className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-zinc-200 transition-all flex items-center justify-between"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-[10px] font-black">
+                        #{idx + 1}
+                      </span>
+                      <h4 className="text-sm font-black text-zinc-900">{loc.city}</h4>
+                    </div>
+                    <p className="text-xs text-zinc-500 font-medium mt-1">
+                      <strong className="text-zinc-900">{loc.count.toLocaleString()}</strong> active RALLYS
+                    </p>
                   </div>
-                  <p className="text-xs text-zinc-500 font-medium mt-1">
-                    <strong className="text-zinc-900">{loc.activeRallies}</strong> active RALLYS
-                  </p>
-                  <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">{loc.topCategory}</p>
-                </div>
 
-                <div className="text-right">
-                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-black rounded-full">
-                    {loc.growth}
+                  <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-black rounded-full">
+                    {loc.count.toLocaleString()} posts
                   </span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-zinc-400 text-xs font-medium">
+              <AlertCircle className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+              No rally activity recorded yet.
+            </div>
+          )}
         </div>
 
-        {/* System Health & Operations Status */}
+        {/* Today's Pulse - real platform snapshot */}
         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">System Status</h3>
-            <p className="text-xs text-zinc-500 font-medium mb-4">Core platform infrastructure</p>
+            <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">Platform Snapshot</h3>
+            <p className="text-xs text-zinc-500 font-medium mb-4">Current record counts across LALOA</p>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 border border-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-bold text-zinc-800">Discovery Engine</span>
+              {snapshot.map((row) => (
+                <div key={row.label} className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 border border-zinc-100">
+                  <span className="text-xs font-bold text-zinc-800">{row.label}</span>
+                  <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                    {row.value.toLocaleString()}
+                  </span>
                 </div>
-                <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                  100% HEALTHY
-                </span>
-              </div>
+              ))}
+            </div>
 
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 border border-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-bold text-zinc-800">NIN Verification API</span>
-                </div>
-                <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                  99.8% ONLINE
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 border border-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-bold text-zinc-800">Direct Chat & WebSockets</span>
-                </div>
-                <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                  OPERATIONAL
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 border border-zinc-100">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-bold text-zinc-800">Spam Filter AI Model</span>
-                </div>
-                <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                  ACTIVE
-                </span>
-              </div>
+            <div className="mt-5 p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
+              <TrendingUp className="w-5 h-5 text-emerald-600 shrink-0" />
+              <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">
+                Overall activity is derived live from the LALOA database — no cached or simulated figures.
+              </p>
             </div>
           </div>
 

@@ -4,6 +4,7 @@
 
 import { requireSuperAdmin } from "../_lib/auth.js";
 import { callConvexQuery } from "../_lib/convexClient.js";
+import { serverSecret } from "../_lib/config.js";
 import { ok, sendError } from "../_lib/errors.js";
 
 function maskNin(ninHash) {
@@ -39,9 +40,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    await requireSuperAdmin(req);
+    const { convexUser } = await requireSuperAdmin(req);
     const limit = Number(req.query.limit) || 200;
-    const list = await callConvexQuery("verifications:listAll", { limit });
+    const list = await callConvexQuery("verifications:listAll", {
+      limit,
+      requestingAdminId: convexUser._id,
+      serverSecret: serverSecret(),
+    });
     const sanitized = (list || []).map(sanitize);
     return ok(res, { verifications: sanitized });
   } catch (err) {

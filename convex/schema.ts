@@ -11,6 +11,14 @@ export default defineSchema({
     nin: v.optional(v.string()),
     gender: v.optional(v.string()),
     birthday: v.optional(v.string()),
+    createdAt: v.optional(v.number()),
+    moderationStatus: v.optional(
+      v.union(
+        v.literal("ACTIVE"),
+        v.literal("SUSPENDED"),
+        v.literal("BANNED")
+      )
+    ),
     interests: v.optional(v.array(v.string())),
     isNINVerified: v.boolean(),
     isPhoneVerified: v.boolean(),
@@ -159,6 +167,19 @@ export default defineSchema({
       v.literal("LIVE"),
       v.literal("COMPLETED"),
       v.literal("CANCELLED")
+    ),
+    // Admin moderation lifecycle, independent of the public `status`.
+    // PENDING = awaiting review, APPROVED = cleared, HIDDEN/FLAGGED/REMOVED =
+    // moderation actions taken by staff. HIDDEN and REMOVED also flip status so
+    // the item drops out of public feeds.
+    moderationStatus: v.optional(
+      v.union(
+        v.literal("PENDING"),
+        v.literal("APPROVED"),
+        v.literal("HIDDEN"),
+        v.literal("FLAGGED"),
+        v.literal("REMOVED")
+      )
     ),
     createdAt: v.number(),
     // Event hub: a unique, human-identifiable event tag (e.g. "#RydersCup")
@@ -457,4 +478,81 @@ export default defineSchema({
     .index("by_rater", ["raterId"])
     .index("by_rated_user", ["ratedUserId"])
     .index("by_rater_rated", ["raterId", "ratedUserId"]),
+
+  // User reports / flags raised from the app or surfaced to the admin CRM.
+  reports: defineTable({
+    reporterId: v.id("users"),
+    targetType: v.union(
+      v.literal("user"),
+      v.literal("rally"),
+      v.literal("organization")
+    ),
+    targetId: v.string(),
+    reason: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("UNDER_REVIEW"),
+      v.literal("RESOLVED"),
+      v.literal("DISMISSED"),
+      v.literal("ESCALATED")
+    ),
+    assigneeId: v.optional(v.id("users")),
+    notes: v.optional(
+      v.array(
+        v.object({
+          adminId: v.id("users"),
+          text: v.string(),
+          createdAt: v.number(),
+        })
+      )
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_target", ["targetType", "targetId"])
+    .index("by_reporter", ["reporterId"]),
+
+  // Admin action trail. Every moderation/settings action writes a row here.
+  auditLogs: defineTable({
+    adminId: v.id("users"),
+    adminName: v.optional(v.string()),
+    action: v.string(),
+    targetType: v.optional(v.string()),
+    targetId: v.optional(v.string()),
+    details: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_created", ["createdAt"]),
+
+  // Single-document admin system configuration. Read/updated by the System
+  // Settings page; write gated to admins via the serverless layer.
+  systemSettings: defineTable({
+    platformName: v.string(),
+    defaultRadiusKm: v.number(),
+    supportedCities: v.array(v.string()),
+    autoApproveRallies: v.boolean(),
+    requireEmailVerification: v.boolean(),
+    autoVerifyPhone: v.boolean(),
+    maintenanceMode: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"),
+  }),
+
+  // Admin broadcast log: one row per send, with the fan-out count.
+  broadcastBatches: defineTable({
+    adminId: v.id("users"),
+    title: v.string(),
+    body: v.string(),
+    type: v.optional(v.string()),
+    audience: v.union(
+      v.literal("ALL"),
+      v.literal("VERIFIED"),
+      v.literal("PLUS"),
+      v.literal("SPECIFIC")
+    ),
+    targetUserIds: v.optional(v.array(v.id("users"))),
+    recipientCount: v.number(),
+    createdAt: v.number(),
+  }).index("by_created", ["createdAt"]),
 });

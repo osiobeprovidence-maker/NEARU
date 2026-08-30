@@ -1,6 +1,37 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  getAdminStats,
+  getAdminAnalytics,
+  getAdminUsers,
+  getUserDetail,
+  setUserStatus,
+  setUserRole,
+  getAdminRallies,
+  setRallyModeration,
+  getAdminReports,
+  actOnReport,
+  getAuditLogs,
+  getSettings,
+  updateSettings as updateSettingsApi,
+  getAudienceCounts,
+  sendBroadcast as sendBroadcastApi,
+  listBroadcasts,
+  type AdminStats,
+  type AdminAnalytics,
+  type SystemSettings as BackendSettings,
+  type AdminUserCard,
+  type AdminUserDetail,
+  type AdminRally as BackendRally,
+  type AdminReport as BackendReport,
+  type AdminBroadcast,
+} from '../lib/adminClient';
 import { User, Rally } from '../types';
-import { mockUsers, mockRallies } from '../data/mock';
+
+// ---------------------------------------------------------------------------
+// Public interfaces (kept identical to the previous implementation so existing
+// admin pages keep compiling). All values are now hydrated from the real
+// LALOA backend via the serverless admin API.
+// ---------------------------------------------------------------------------
 
 export interface AdminUser extends User {
   email: string;
@@ -16,6 +47,7 @@ export interface AdminUser extends User {
   reportsReceivedCount: number;
   reportsSubmittedCount: number;
   trustScore: number;
+  moderationStatus?: string;
 }
 
 export interface AdminRally extends Rally {
@@ -44,6 +76,7 @@ export interface AdminReport {
   assignedAdmin?: string;
   evidenceText?: string;
   adminNotes?: string[];
+  target?: BackendReport['target'];
 }
 
 export interface AdminVerification {
@@ -124,6 +157,13 @@ interface AdminContextType {
   auditLogs: AdminAuditEntry[];
   toasts: AdminToast[];
   systemSettings: SystemSettings;
+  loading: boolean;
+  error: string;
+  analytics: AdminAnalytics | null;
+  audienceCounts: { all: number; verified: number; plus: number } | null;
+  userDetails: Record<string, AdminUserDetail>;
+  loadUserDetail: (userId: string) => Promise<void>;
+  refresh: () => Promise<void>;
   updateSettings: (newSettings: Partial<SystemSettings>) => void;
   showToast: (toastOrTitle: string | Omit<AdminToast, 'id'>, type?: AdminToast['type']) => void;
   dismissToast: (id: string) => void;
@@ -143,7 +183,7 @@ interface AdminContextType {
   resolveReport: (reportId: string, resolutionNote?: string) => void;
   escalateReport: (reportId: string) => void;
   dismissReport: (reportId: string) => void;
-  assignReport: (reportId: string, adminName: string) => void;
+  assignReport: (reportId: string, adminRef: string) => void;
   addReportNote: (reportId: string, note: string) => void;
   // Verification Actions
   approveVerification: (verificationId: string) => void;
@@ -171,1087 +211,655 @@ interface AdminContextType {
     pendingReports: number;
     pendingVerifications: number;
     todayApprovedVerifications: number;
+    [key: string]: number | string | undefined;
   };
 }
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
+// ---------------------------------------------------------------------------
+// Normalization helpers: backend cards -> page-facing shapes
+// ---------------------------------------------------------------------------
+
+const ROLE_MAP: Record<string, AdminUser['role']> = {
+  super_admin: 'super_admin',
+  admin: 'admin',
+  moderator: 'moderator',
+  user: 'user',
+};
+
+function infoDisplay(value: number | null | undefined, unknownText = '—'): string {
+  return value == null || Number.isNaN(value) ? unknownText : String(value);
+}
+
+function userCardToAdminUser(u: AdminUserCard): AdminUser {
+  const createdAt = u.createdAt ? new Date(u.createdAt).toISOString() : '';
+  const { name, username, avatar } = u;
+  return {
+    id: u._id,
+    name,
+    username,
+    avatar,
+    email: u.email || '',
+    phone: u.phone || '',
+    role: ROLE_MAP[u.role] || 'user',
+    status: (u.moderationStatus || 'ACTIVE').toLowerCase() as AdminUser['status'],
+    joinedAt: createdAt,
+    lastActive: '',
+    isPlus: u.isPro,
+    totalSpentOrShared: 0,
+    ralliesCreatedCount: 0,
+    ralliesJoinedCount: 0,
+    reportsReceivedCount: 0,
+    reportsSubmittedCount: 0,
+    trustScore: Math.min(
+      100,
+      Math.round(
+        (u.isNINVerified ? 25 : 0) +
+          (u.isPhoneVerified ? 10 : 0) +
+          (u.isEmailVerified ? 10 : 0) +
+          (u.isPro ? 10 : 0)
+      )
+    ),
+    moderationStatus: u.moderationStatus || 'ACTIVE',
+    isNINVerified: u.isNINVerified,
+    isPhoneVerified: u.isPhoneVerified,
+    location: u.location || '',
+    bio: u.bio || '',
+    badges: u.badges || [],
+    isPro: u.isPro,
+    accountType: u.accountType,
+    organizationName: u.organizationName || undefined,
+    stats: {
+      rallies: 0,
+      completed: 0,
+      rating: 0,
+    },
+  };
+}
+
+function backendRallyToAdminRally(r: BackendRally): AdminRally {
+  const moderation: AdminRally['moderationStatus'] =
+    (r.moderationStatus as AdminRally['moderationStatus']) ??
+    (r.status === 'CANCELLED' ? 'HIDDEN' : 'APPROVED');
+  const creatorUser: User = {
+    id: r.creator?._id || '',
+    name: r.creator?.name || 'Unknown',
+    username: r.creator?.username || '',
+    avatar: r.creator?.avatar || '',
+    isNINVerified: r.creator?.isNINVerified ?? false,
+    isPhoneVerified: r.creator?.isPhoneVerified ?? false,
+  };
+  return {
+    id: r._id,
+    type: r.type as Rally['type'],
+    title: r.title,
+    description: r.description,
+    distance: 0,
+    time: '',
+    peopleNeeded: 0,
+    peopleInterested: r.participantCount || 0,
+    isPaid: r.isPaid || r.pricing === 'paid',
+    price: r.price,
+    pricing: r.pricing as Rally['pricing'],
+    creator: creatorUser,
+    status: r.status as Rally['status'],
+    createdAt: new Date(r.createdAt).toISOString(),
+    city: r.city || undefined,
+    locationLabel: r.locationLabel || undefined,
+    category: r.category as Rally['category'],
+    hashtags: r.hashtags,
+    eventDate: r.eventDate || undefined,
+    interests: r.interest ? [r.interest] : undefined,
+    moderationStatus: moderation,
+    reportsCount: r.reportsCount,
+  };
+}
+
+function backendReportToAdminReport(rr: BackendReport): AdminReport {
+  const isRally = rr.targetType === 'rally';
+  const targetName = isRally ? rr.target?.title : rr.target?.name;
+  const targetId = isRally ? rr.target?._id : rr.target?._id;
+  return {
+    id: rr.id,
+    type: rr.reason,
+    reportedUserId: targetId || '',
+    reportedUserName: targetName || 'Unknown',
+    reportedUserAvatar: rr.target?.avatar || '',
+    reporterId: rr.reporterId,
+    reporterName: rr.reporter?.name || 'Unknown',
+    reporterAvatar: rr.reporter?.avatar || '',
+    rallyId: isRally ? rr.target?._id : undefined,
+    rallyTitle: isRally ? rr.target?.title : undefined,
+    description: rr.description || rr.reason,
+    priority: 'MEDIUM',
+    status: rr.status as AdminReport['status'],
+    createdAt: new Date(rr.createdAt).toISOString(),
+    assignedAdmin: rr.assigneeId || undefined,
+    evidenceText: '',
+    adminNotes: rr.notes?.map((n) => `${n.text}`) || [],
+    target: rr.target,
+  };
+}
+
+function backendBroadcastToNotification(b: AdminBroadcast): AdminNotification {
+  return {
+    id: b.id,
+    title: b.title,
+    message: b.body,
+    audience: b.audience,
+    type: (b.type as AdminNotification['type']) || 'SYSTEM',
+    sentAt: new Date(b.createdAt).toLocaleString('en-GB'),
+    sentBy: '',
+    sentCount: b.recipientCount,
+    openRate: 0,
+    status: 'SENT',
+    readCount: 0,
+    isReadByAdmin: false,
+  };
+}
+
+function backendAuditToEntry(e: {
+  id: string;
+  adminName: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  details: string | null;
+  createdAt: number;
+}): AdminAuditEntry {
+  return {
+    id: e.id,
+    adminName: e.adminName,
+    adminRole: 'admin',
+    action: e.action,
+    targetType: (e.targetType || '').toUpperCase() as AdminAuditEntry['targetType'],
+    targetId: e.targetId || '',
+    targetName: e.details || '',
+    timestamp: new Date(e.createdAt).toLocaleString('en-GB'),
+    ipAddress: '',
+    result: 'SUCCESS',
+    details: e.details || '',
+  };
+}
+
 export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initial Mock Users
-  const [users, setUsers] = useState<AdminUser[]>([
-    {
-      id: 'alex',
-      name: 'Alex Johnson',
-      username: '@alexj',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop',
-      email: 'alex.johnson@example.com',
-      phone: '+234 812 345 6789',
-      nin: '23491823491',
-      gender: 'Male',
-      location: 'Lagos',
-      isNINVerified: true,
-      isPhoneVerified: true,
-      role: 'super_admin',
-      status: 'active',
-      isPlus: true,
-      joinedAt: '2025-01-14',
-      lastActive: 'Just now',
-      badges: ['Super Admin', 'Verified Neighbor', 'Community Hero'],
-      bio: 'RALLY core team & neighborhood community organizer in Lagos.',
-      totalSpentOrShared: 145000,
-      ralliesCreatedCount: 18,
-      ralliesJoinedCount: 34,
-      reportsReceivedCount: 0,
-      reportsSubmittedCount: 3,
-      trustScore: 99,
-    },
-    {
-      id: 'david',
-      name: 'David O.',
-      username: '@davido_real',
-      avatar: 'https://i.pravatar.cc/150?u=david',
-      email: 'david.o@gmail.com',
-      phone: '+234 803 111 2233',
-      nin: '11223344556',
-      gender: 'Male',
-      location: 'Lagos',
-      isNINVerified: true,
-      isPhoneVerified: true,
-      role: 'user',
-      status: 'active',
-      isPlus: false,
-      joinedAt: '2025-02-01',
-      lastActive: '12 mins ago',
-      badges: ['Active Host'],
-      bio: 'Tech enthusiast, music lover, and casual football player in Lekki Phase 1.',
-      totalSpentOrShared: 32000,
-      ralliesCreatedCount: 7,
-      ralliesJoinedCount: 12,
-      reportsReceivedCount: 1,
-      reportsSubmittedCount: 0,
-      trustScore: 92,
-    },
-    {
-      id: 'sarah',
-      name: 'Sarah M.',
-      username: '@sarahm_ib',
-      avatar: 'https://i.pravatar.cc/150?u=sarah',
-      email: 'sarah.m@outlook.com',
-      phone: '+234 901 888 7766',
-      nin: '99887766554',
-      gender: 'Female',
-      location: 'Abuja',
-      isNINVerified: true,
-      isPhoneVerified: true,
-      role: 'moderator',
-      status: 'active',
-      isPlus: true,
-      joinedAt: '2025-01-20',
-      lastActive: '1 hour ago',
-      badges: ['Moderator', 'Verified Neighbor'],
-      bio: 'Interior designer & community volunteer based in Maitama, Abuja.',
-      totalSpentOrShared: 68000,
-      ralliesCreatedCount: 12,
-      ralliesJoinedCount: 22,
-      reportsReceivedCount: 0,
-      reportsSubmittedCount: 5,
-      trustScore: 98,
-    },
-    {
-      id: 'michael',
-      name: 'Michael B.',
-      username: '@mike_b',
-      avatar: 'https://i.pravatar.cc/150?u=michael',
-      email: 'michael.b@yahoo.com',
-      phone: '+234 705 444 3322',
-      nin: '33445566778',
-      gender: 'Male',
-      location: 'Lagos',
-      isNINVerified: false,
-      isPhoneVerified: true,
-      role: 'user',
-      status: 'suspended',
-      isPlus: false,
-      joinedAt: '2025-02-10',
-      lastActive: '2 days ago',
-      badges: ['Helper'],
-      bio: 'Freelance mover and quick errand assistant.',
-      totalSpentOrShared: 8500,
-      ralliesCreatedCount: 3,
-      ralliesJoinedCount: 4,
-      reportsReceivedCount: 3,
-      reportsSubmittedCount: 1,
-      trustScore: 64,
-    },
-    {
-      id: 'amara',
-      name: 'Amara K.',
-      username: '@amara_k',
-      avatar: 'https://i.pravatar.cc/150?u=amara',
-      email: 'amara.k@gmail.com',
-      phone: '+234 818 999 0011',
-      nin: '55667788990',
-      gender: 'Female',
-      location: 'Port Harcourt',
-      isNINVerified: true,
-      isPhoneVerified: true,
-      role: 'user',
-      status: 'active',
-      isPlus: true,
-      joinedAt: '2025-01-05',
-      lastActive: '5 mins ago',
-      badges: ['Community Hero', 'Top Host'],
-      bio: 'Runner, fitness coach, and organizer of the Port Harcourt 5k weekend running club.',
-      totalSpentOrShared: 92000,
-      ralliesCreatedCount: 21,
-      ralliesJoinedCount: 40,
-      reportsReceivedCount: 0,
-      reportsSubmittedCount: 0,
-      trustScore: 100,
-    },
-    {
-      id: 'fatima',
-      name: 'Fatima B.',
-      username: '@fatima_b',
-      avatar: 'https://i.pravatar.cc/150?u=fatima',
-      email: 'fatima.b@live.com',
-      phone: '+234 809 333 4455',
-      nin: '88776655443',
-      gender: 'Female',
-      location: 'Abuja',
-      isNINVerified: true,
-      isPhoneVerified: true,
-      role: 'user',
-      status: 'active',
-      isPlus: false,
-      joinedAt: '2025-02-14',
-      lastActive: '30 mins ago',
-      badges: ['Verified Neighbor'],
-      bio: 'Law student in Baze University, carpooler for Airport / Gwarinpa routes.',
-      totalSpentOrShared: 24000,
-      ralliesCreatedCount: 5,
-      ralliesJoinedCount: 9,
-      reportsReceivedCount: 0,
-      reportsSubmittedCount: 1,
-      trustScore: 95,
-    },
-    {
-      id: 'tunde',
-      name: 'Tunde Dev',
-      username: '@tunde_dev',
-      avatar: 'https://i.pravatar.cc/150?u=tunde',
-      email: 'tunde.ade@gmail.com',
-      phone: '+234 813 555 7788',
-      nin: '44332211009',
-      gender: 'Male',
-      location: 'Lagos',
-      isNINVerified: true,
-      isPhoneVerified: true,
-      role: 'user',
-      status: 'active',
-      isPlus: false,
-      joinedAt: '2025-01-28',
-      lastActive: '3 hours ago',
-      badges: ['Helper', 'Verified Neighbor'],
-      bio: 'Software engineer & UI mentor offering free design reviews for early founders.',
-      totalSpentOrShared: 15000,
-      ralliesCreatedCount: 4,
-      ralliesJoinedCount: 6,
-      reportsReceivedCount: 0,
-      reportsSubmittedCount: 0,
-      trustScore: 96,
-    },
-    {
-      id: 'emeka_spam',
-      name: 'Emeka Crypto',
-      username: '@crypto_profit24',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-      email: 'fastcash_emeka@mail.ru',
-      phone: '+234 902 000 1199',
-      nin: '00000000000',
-      gender: 'Male',
-      location: 'Lagos',
-      isNINVerified: false,
-      isPhoneVerified: false,
-      role: 'user',
-      status: 'banned',
-      isPlus: false,
-      joinedAt: '2025-02-18',
-      lastActive: '5 days ago',
-      badges: [],
-      bio: 'Guaranteed 200% ROI in 24 hours on Telegram link.',
-      totalSpentOrShared: 0,
-      ralliesCreatedCount: 2,
-      ralliesJoinedCount: 0,
-      reportsReceivedCount: 9,
-      reportsSubmittedCount: 0,
-      trustScore: 12,
-    }
-  ]);
-
-  // Initial Rallies
-  const [rallies, setRallies] = useState<AdminRally[]>([
-    {
-      ...mockRallies[0],
-      moderationStatus: 'APPROVED',
-      reportsCount: 0,
-      reviewedBy: 'Sarah M.',
-    },
-    {
-      ...mockRallies[1],
-      moderationStatus: 'APPROVED',
-      reportsCount: 1,
-      flagReason: 'User reported high pricing inquiry',
-      reviewedBy: 'Alex Johnson',
-    },
-    {
-      ...mockRallies[2],
-      moderationStatus: 'APPROVED',
-      reportsCount: 0,
-    },
-    {
-      ...mockRallies[3],
-      moderationStatus: 'APPROVED',
-      reportsCount: 0,
-    },
-    {
-      ...mockRallies[4],
-      moderationStatus: 'APPROVED',
-      reportsCount: 0,
-    },
-    {
-      ...mockRallies[5],
-      moderationStatus: 'APPROVED',
-      reportsCount: 0,
-    },
-    {
-      ...mockRallies[6],
-      moderationStatus: 'APPROVED',
-      reportsCount: 0,
-    },
-    {
-      id: 'rally-flagged-1',
-      type: 'ASK',
-      title: 'BUY CRYPTO SIGNALS NOW',
-      description: 'Join private WhatsApp group for 10x daily crypto gains. DM now for bank account details.',
-      distance: 3.5,
-      city: 'Lagos',
-      locationLabel: 'Lagos · Suspicious',
-      time: 'Immediate',
-      peopleNeeded: 50,
-      peopleInterested: 0,
-      isPaid: true,
-      price: 15000,
-      creator: {
-        id: 'emeka_spam',
-        name: 'Emeka Crypto',
-        username: '@crypto_profit24',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-        isNINVerified: false,
-        isPhoneVerified: false,
-        badges: [],
-      },
-      status: 'ACTIVE',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      moderationStatus: 'FLAGGED',
-      reportsCount: 7,
-      flagReason: 'Suspected financial scam / telegram referral',
-      moderatorNotes: 'Flagged automatically by spam keyword filter.',
-    },
-    {
-      id: 'rally-pending-1',
-      type: 'HELP',
-      title: 'EMERGENCY CAR BATTERY JUMP',
-      description: 'Stuck near Lekki Toll Gate with a dead battery. Anyone nearby with jumper cables?',
-      distance: 0.8,
-      city: 'Lagos',
-      locationLabel: 'Lagos · 0.8 km',
-      time: 'Right now',
-      peopleNeeded: 1,
-      peopleInterested: 2,
-      isPaid: true,
-      price: 5000,
-      creator: mockUsers.david,
-      status: 'ACTIVE',
-      createdAt: new Date(Date.now() - 900000).toISOString(),
-      moderationStatus: 'PENDING',
-      reportsCount: 0,
-    }
-  ]);
-
-  // Initial Reports
-  const [reports, setReports] = useState<AdminReport[]>([
-    {
-      id: 'REP-1092',
-      type: 'Scam/Fraud',
-      reportedUserId: 'emeka_spam',
-      reportedUserName: 'Emeka Crypto',
-      reportedUserAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-      reporterId: 'david',
-      reporterName: 'David O.',
-      reporterAvatar: 'https://i.pravatar.cc/150?u=david',
-      rallyId: 'rally-flagged-1',
-      rallyTitle: 'BUY CRYPTO SIGNALS NOW',
-      description: 'User is DMing people asking them to transfer money to a private OPay account for crypto signals.',
-      priority: 'URGENT',
-      status: 'PENDING',
-      createdAt: '15 mins ago',
-      assignedAdmin: 'Alex Johnson',
-      evidenceText: 'Screenshot of DM asking for N15,000 transfer to an unverified bank account.',
-      adminNotes: ['High confidence scam. User account has been flagged.']
-    },
-    {
-      id: 'REP-1088',
-      type: 'Suspicious Activity',
-      reportedUserId: 'michael',
-      reportedUserName: 'Michael B.',
-      reportedUserAvatar: 'https://i.pravatar.cc/150?u=michael',
-      reporterId: 'sarah',
-      reporterName: 'Sarah M.',
-      reporterAvatar: 'https://i.pravatar.cc/150?u=sarah',
-      description: 'Accepted to help move boxes but never showed up and stopped responding after accepting.',
-      priority: 'HIGH',
-      status: 'UNDER_REVIEW',
-      createdAt: '2 hours ago',
-      assignedAdmin: 'Sarah M.',
-      evidenceText: 'Chat history showing confirmed arrival time at 3:00 PM followed by 3 unanswered calls.',
-      adminNotes: ['Second no-show complaint filed this week.']
-    },
-    {
-      id: 'REP-1074',
-      type: 'Spam/Bots',
-      reportedUserId: 'emeka_spam',
-      reportedUserName: 'Emeka Crypto',
-      reportedUserAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-      reporterId: 'amara',
-      reporterName: 'Amara K.',
-      reporterAvatar: 'https://i.pravatar.cc/150?u=amara',
-      description: 'Spamming the comment feed with telegram bot links.',
-      priority: 'HIGH',
-      status: 'PENDING',
-      createdAt: '4 hours ago',
-      assignedAdmin: 'Alex Johnson',
-      evidenceText: 'Repeated identical link messages posted across 4 different RALLYS.',
-    },
-    {
-      id: 'REP-1050',
-      type: 'Harassment',
-      reportedUserId: 'michael',
-      reportedUserName: 'Michael B.',
-      reportedUserAvatar: 'https://i.pravatar.cc/150?u=michael',
-      reporterId: 'fatima',
-      reporterName: 'Fatima B.',
-      reporterAvatar: 'https://i.pravatar.cc/150?u=fatima',
-      description: 'Sent inappropriate persistent private messages after a carpool ended.',
-      priority: 'URGENT',
-      status: 'ESCALATED',
-      createdAt: 'Yesterday · 6:30 PM',
-      assignedAdmin: 'Alex Johnson',
-      evidenceText: 'Direct message logs submitted by user.',
-      adminNotes: ['Escalated to Trust & Safety. User temporarily suspended pending review.']
-    },
-    {
-      id: 'REP-0994',
-      type: 'Safety Concern',
-      reportedUserId: 'tunde',
-      reportedUserName: 'Tunde Dev',
-      reportedUserAvatar: 'https://i.pravatar.cc/150?u=tunde',
-      reporterId: 'david',
-      reporterName: 'David O.',
-      reporterAvatar: 'https://i.pravatar.cc/150?u=david',
-      description: 'Clarified location details. False alarm on meetup address.',
-      priority: 'LOW',
-      status: 'RESOLVED',
-      createdAt: '3 days ago',
-      assignedAdmin: 'Sarah M.',
-      adminNotes: ['Spoke with both parties. Resolved amicably.']
-    }
-  ]);
-
-  // Initial Verification Requests
-  const [verifications, setVerifications] = useState<AdminVerification[]>([
-    {
-      id: 'VER-401',
-      userId: 'michael',
-      userName: 'Michael B.',
-      userHandle: '@mike_b',
-      userAvatar: 'https://i.pravatar.cc/150?u=michael',
-      ninNumber: '33445566778',
-      documentPhotoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=400&fit=crop',
-      selfiePhotoUrl: 'https://i.pravatar.cc/150?u=michael',
-      submittedAt: 'Today · 10:15 AM',
-      status: 'PENDING',
-      confidenceScore: 94.2,
-      assignedAdmin: 'Sarah M.',
-    },
-    {
-      id: 'VER-399',
-      userId: 'sarah',
-      userName: 'Sarah M.',
-      userHandle: '@sarahm_ib',
-      userAvatar: 'https://i.pravatar.cc/150?u=sarah',
-      ninNumber: '99887766554',
-      documentPhotoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=400&fit=crop',
-      selfiePhotoUrl: 'https://i.pravatar.cc/150?u=sarah',
-      submittedAt: 'Today · 8:30 AM',
-      status: 'APPROVED',
-      confidenceScore: 99.1,
-      assignedAdmin: 'Alex Johnson',
-    },
-    {
-      id: 'VER-382',
-      userId: 'emeka_spam',
-      userName: 'Emeka Crypto',
-      userHandle: '@crypto_profit24',
-      userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-      ninNumber: '00000000000',
-      documentPhotoUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=400&fit=crop',
-      selfiePhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-      submittedAt: 'Yesterday · 4:00 PM',
-      status: 'REJECTED',
-      confidenceScore: 23.0,
-      assignedAdmin: 'Alex Johnson',
-      notes: 'Fake identity card with mismatched DOB and fraudulent NIN.',
-      rejectionReason: 'Fake document / NIN mismatch',
-    }
-  ]);
-
-  // Initial Notifications
-  const [notifications, setNotifications] = useState<AdminNotification[]>([
-    {
-      id: 'NOTIF-1',
-      title: 'Weekend Safety Advisory in Lekki & VI',
-      message: 'Always verify meetups in well-lit public spots and check for the NIN Verified badge.',
-      audience: 'Location: Lagos',
-      targetLocation: 'Lagos',
-      type: 'SAFETY',
-      sentAt: '2 hours ago',
-      sentBy: 'Alex Johnson',
-      sentCount: 1420,
-      openRate: 68.4,
-      status: 'DELIVERED',
-      readCount: 1420,
-      isReadByAdmin: true,
-    },
-    {
-      id: 'NOTIF-2',
-      title: 'Welcome to RALLY+ Early Access',
-      message: 'Unlock infinite search radius, verified host priority, and zero transaction fees.',
-      audience: 'PLUS',
-      type: 'COMMUNITY',
-      sentAt: '1 day ago',
-      sentBy: 'Sarah M.',
-      sentCount: 890,
-      openRate: 81.2,
-      status: 'DELIVERED',
-      readCount: 720,
-      isReadByAdmin: true,
-    },
-    {
-      id: 'NOTIF-3',
-      title: 'Platform Maintenance Notice',
-      message: 'Scheduled 10-minute database optimization tonight at 3:00 AM WAT.',
-      audience: 'ALL',
-      type: 'SYSTEM',
-      sentAt: '2 days ago',
-      sentBy: 'Alex Johnson',
-      sentCount: 12482,
-      openRate: 49.6,
-      status: 'DELIVERED',
-      readCount: 6200,
-      isReadByAdmin: false,
-    }
-  ]);
-
-  // Initial Audit Logs
-  const [auditLogs, setAuditLogs] = useState<AdminAuditEntry[]>([
-    {
-      id: 'AUD-8801',
-      adminName: 'Alex Johnson',
-      adminRole: 'Super Admin',
-      action: 'Banned Fraudulent User',
-      targetType: 'USER',
-      targetId: 'emeka_spam',
-      targetName: 'Emeka Crypto (@crypto_profit24)',
-      timestamp: 'Today · 12:45 PM',
-      ipAddress: '102.89.23.11 (Lagos, NG)',
-      result: 'SUCCESS',
-      details: 'Permanently banned user following 9 confirmed spam and scam reports.',
-    },
-    {
-      id: 'AUD-8800',
-      adminName: 'Alex Johnson',
-      adminRole: 'Super Admin',
-      action: 'Approved NIN Identity Verification',
-      targetType: 'VERIFICATION',
-      targetId: 'VER-399',
-      targetName: 'Sarah M. (@sarahm_ib)',
-      timestamp: 'Today · 8:35 AM',
-      ipAddress: '102.89.23.11 (Lagos, NG)',
-      result: 'SUCCESS',
-      details: 'Verified national ID match score 99.1%. Activated Verified Neighbor badge.',
-    },
-    {
-      id: 'AUD-8799',
-      adminName: 'Sarah M.',
-      adminRole: 'Moderator',
-      action: 'Flagged RALLY Post',
-      targetType: 'RALLY',
-      targetId: 'rally-flagged-1',
-      targetName: 'BUY CRYPTO SIGNALS NOW',
-      timestamp: 'Today · 7:15 AM',
-      ipAddress: '197.210.64.92 (Abuja, NG)',
-      result: 'WARNING',
-      details: 'Flagged post for financial spam keyword triggers.',
-    },
-    {
-      id: 'AUD-8798',
-      adminName: 'Alex Johnson',
-      adminRole: 'Super Admin',
-      action: 'Updated System Radius Settings',
-      targetType: 'SETTINGS',
-      targetId: 'CFG-RADIUS',
-      targetName: 'Discovery Engine',
-      timestamp: 'Yesterday · 4:20 PM',
-      ipAddress: '102.89.23.11 (Lagos, NG)',
-      result: 'SUCCESS',
-      details: 'Expanded default discovery radius from 3.0km to 5.0km for Port Harcourt region.',
-    }
-  ]);
-
-  // System Settings State
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [rallies, setRallies] = useState<AdminRally[]>([]);
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AdminAuditEntry[]>([]);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [audienceCounts, setAudienceCounts] = useState<{ all: number; verified: number; plus: number } | null>(null);
+  const [userDetails, setUserDetails] = useState<Record<string, AdminUserDetail>>({});
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({
     platformName: 'RALLY',
-    supportEmail: 'safety@rallyapp.ng',
+    supportEmail: '',
     defaultRadiusKm: 5,
-    maxRalliesPerUser: 10,
-    profanityFilterEnabled: true,
-    aiAutoFlagEnabled: true,
-    requireNINForPaidRallies: true,
-    autoHideReportsThreshold: 3,
+    maxRalliesPerUser: 0,
+    profanityFilterEnabled: false,
+    aiAutoFlagEnabled: false,
+    requireNINForPaidRallies: false,
+    autoHideReportsThreshold: 0,
     supportedCities: ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Enugu', 'Benin City', 'Kano'],
   });
-
-  const updateSettings = (newSettings: Partial<SystemSettings>) => {
-    setSystemSettings(prev => ({ ...prev, ...newSettings }));
-    logAudit({
-      action: 'Updated System Configuration',
-      targetType: 'SETTINGS',
-      targetId: 'SYS-CFG',
-      targetName: 'System Settings',
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: 'Admin modified core platform and moderation parameters.'
-    });
-  };
-
-  // Toast notifications state
   const [toasts, setToasts] = useState<AdminToast[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [verifications, setVerifications] = useState<AdminVerification[]>([]);
 
-  const showToast = (toastOrTitle: string | Omit<AdminToast, 'id'>, type?: AdminToast['type']) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    if (typeof toastOrTitle === 'string') {
-      setToasts(prev => [...prev, { id, title: toastOrTitle, type: type || 'info' }]);
-    } else {
-      setToasts(prev => [...prev, { ...toastOrTitle, id }]);
-    }
+  const showToast = useCallback((toastOrTitle: string | Omit<AdminToast, 'id'>, type: AdminToast['type'] = 'success') => {
+    const toast: AdminToast =
+      typeof toastOrTitle === 'string'
+        ? { id: `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, title: toastOrTitle, type }
+        : { ...toastOrTitle, id: `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` };
+    setToasts((prev) => [...prev, toast]);
     setTimeout(() => {
-      dismissToast(id);
+      setToasts((prev) => prev.filter((t) => t.id !== toast.id));
     }, 4000);
-  };
+    return toast;
+  }, []);
 
-  const dismissToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
-  // Helper log audit
-  const logAudit = (entry: Omit<AdminAuditEntry, 'id' | 'timestamp' | 'adminName' | 'adminRole'>) => {
-    const newEntry: AdminAuditEntry = {
-      id: `AUD-${Math.floor(1000 + Math.random() * 9000)}`,
-      adminName: 'Alex Johnson',
-      adminRole: 'Super Admin',
-      timestamp: 'Just now',
-      ...entry,
-    };
-    setAuditLogs(prev => [newEntry, ...prev]);
-  };
-
-  // User Actions
-  const verifyUser = (userId: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, isNINVerified: true, badges: Array.from(new Set([...u.badges, 'Verified Neighbor'])) } : u));
-    logAudit({
-      action: 'Manually Verified User NIN',
-      targetType: 'USER',
-      targetId: userId,
-      targetName: users.find(u => u.id === userId)?.name || userId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: 'Admin manually granted NIN verification status.'
-    });
-    showToast({
-      title: 'User Verified',
-      message: `User ${userId} has been verified with NIN badge.`,
-      type: 'success'
-    });
-  };
-
-  const suspendUser = (userId: string, reason: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'suspended' } : u));
-    logAudit({
-      action: 'Suspended User Account',
-      targetType: 'USER',
-      targetId: userId,
-      targetName: users.find(u => u.id === userId)?.name || userId,
-      ipAddress: '102.89.23.11',
-      result: 'WARNING',
-      details: `Suspended account: ${reason}`
-    });
-    showToast({
-      title: 'Account Suspended',
-      message: `User has been suspended. Reason: ${reason}`,
-      type: 'warning'
-    });
-  };
-
-  const banUser = (userId: string, reason: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'banned' } : u));
-    logAudit({
-      action: 'Banned User Account',
-      targetType: 'USER',
-      targetId: userId,
-      targetName: users.find(u => u.id === userId)?.name || userId,
-      ipAddress: '102.89.23.11',
-      result: 'FAILED',
-      details: `Permanently banned account: ${reason}`
-    });
-    showToast({
-      title: 'Account Banned',
-      message: `User has been banned permanently.`,
-      type: 'danger'
-    });
-  };
-
-  const unbanUser = (userId: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u));
-    logAudit({
-      action: 'Restored User Account',
-      targetType: 'USER',
-      targetId: userId,
-      targetName: users.find(u => u.id === userId)?.name || userId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: 'Restored suspended/banned account to active status.'
-    });
-    showToast({
-      title: 'Account Restored',
-      message: `User status set to Active.`,
-      type: 'success'
-    });
-  };
-
-  const updateUserRole = (userId: string, role: AdminUser['role']) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
-    logAudit({
-      action: 'Updated User Role',
-      targetType: 'USER',
-      targetId: userId,
-      targetName: users.find(u => u.id === userId)?.name || userId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: `Changed role to ${role.toUpperCase()}`
-    });
-    showToast({
-      title: 'Role Updated',
-      message: `User role changed to ${role}.`,
-      type: 'success'
-    });
-  };
-
-  const addUser = (newUser: Partial<AdminUser>) => {
-    const id = `user-${Date.now()}`;
-    const userToAdd: AdminUser = {
-      id,
-      name: newUser.name || 'New User',
-      username: newUser.username || `@user_${id.substr(5, 4)}`,
-      avatar: newUser.avatar || 'https://i.pravatar.cc/150',
-      email: newUser.email || 'user@example.com',
-      phone: newUser.phone || '+234 800 000 0000',
-      nin: newUser.nin || '00000000000',
-      gender: newUser.gender || 'Other',
-      location: newUser.location || 'Lagos',
-      isNINVerified: newUser.isNINVerified || false,
-      isPhoneVerified: true,
-      role: newUser.role || 'user',
-      status: newUser.status || 'active',
-      isPlus: newUser.isPlus || false,
-      joinedAt: new Date().toISOString().split('T')[0],
-      lastActive: 'Just now',
-      badges: newUser.isNINVerified ? ['Verified Neighbor'] : [],
-      bio: newUser.bio || 'New member of the RALLY community.',
-      totalSpentOrShared: 0,
-      ralliesCreatedCount: 0,
-      ralliesJoinedCount: 0,
-      reportsReceivedCount: 0,
-      reportsSubmittedCount: 0,
-      trustScore: 80,
-    };
-    setUsers(prev => [userToAdd, ...prev]);
-    logAudit({
-      action: 'Created / Invited User',
-      targetType: 'USER',
-      targetId: id,
-      targetName: userToAdd.name,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: `Created new user profile with role: ${userToAdd.role}`
-    });
-    showToast({
-      title: 'User Added',
-      message: `User ${userToAdd.name} has been added successfully.`,
-      type: 'success'
-    });
-  };
-
-  // Rally Actions
-  const approveRally = (rallyId: string) => {
-    setRallies(prev => prev.map(r => r.id === rallyId ? { ...r, moderationStatus: 'APPROVED' } : r));
-    logAudit({
-      action: 'Approved RALLY Content',
-      targetType: 'RALLY',
-      targetId: rallyId,
-      targetName: rallies.find(r => r.id === rallyId)?.title || rallyId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: 'Reviewed and approved post content.'
-    });
-    showToast({
-      title: 'RALLY Approved',
-      message: 'Post is now publicly visible on the active feed.',
-      type: 'success'
-    });
-  };
-
-  const hideRally = (rallyId: string, reason = 'Temporarily hidden by moderation') => {
-    setRallies(prev => prev.map(r => r.id === rallyId ? { ...r, moderationStatus: 'HIDDEN', flagReason: reason } : r));
-    logAudit({
-      action: 'Hidden RALLY Content',
-      targetType: 'RALLY',
-      targetId: rallyId,
-      targetName: rallies.find(r => r.id === rallyId)?.title || rallyId,
-      ipAddress: '102.89.23.11',
-      result: 'WARNING',
-      details: `Post hidden: ${reason}`
-    });
-    showToast({
-      title: 'RALLY Hidden',
-      message: 'Post has been hidden from public feed.',
-      type: 'warning'
-    });
-  };
-
-  const removeRally = (rallyId: string, reason = 'Violates community guidelines') => {
-    setRallies(prev => prev.map(r => r.id === rallyId ? { ...r, moderationStatus: 'REMOVED', flagReason: reason } : r));
-    logAudit({
-      action: 'Removed RALLY Post',
-      targetType: 'RALLY',
-      targetId: rallyId,
-      targetName: rallies.find(r => r.id === rallyId)?.title || rallyId,
-      ipAddress: '102.89.23.11',
-      result: 'FAILED',
-      details: `Removed post: ${reason}`
-    });
-    showToast({
-      title: 'RALLY Removed',
-      message: 'Post permanently removed from feed.',
-      type: 'danger'
-    });
-  };
-
-  const flagRally = (rallyId: string, reason: string) => {
-    setRallies(prev => prev.map(r => r.id === rallyId ? { ...r, moderationStatus: 'FLAGGED', flagReason: reason } : r));
-    logAudit({
-      action: 'Flagged RALLY Post',
-      targetType: 'RALLY',
-      targetId: rallyId,
-      targetName: rallies.find(r => r.id === rallyId)?.title || rallyId,
-      ipAddress: '102.89.23.11',
-      result: 'WARNING',
-      details: `Flagged for investigation: ${reason}`
-    });
-    showToast({
-      title: 'RALLY Flagged',
-      message: 'Post flagged for admin investigation.',
-      type: 'warning'
-    });
-  };
-
-  // Report Actions
-  const resolveReport = (reportId: string, resolutionNote?: string) => {
-    setReports(prev => prev.map(r => r.id === reportId ? {
-      ...r,
-      status: 'RESOLVED',
-      adminNotes: resolutionNote ? [...(r.adminNotes || []), `Resolved: ${resolutionNote}`] : r.adminNotes
-    } : r));
-    logAudit({
-      action: 'Resolved Safety Report',
-      targetType: 'REPORT',
-      targetId: reportId,
-      targetName: reportId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: resolutionNote || 'Report marked resolved by admin.'
-    });
-    showToast({
-      title: 'Report Resolved',
-      message: `Report ${reportId} marked as resolved.`,
-      type: 'success'
-    });
-  };
-
-  const escalateReport = (reportId: string) => {
-    setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'ESCALATED', priority: 'URGENT' } : r));
-    logAudit({
-      action: 'Escalated Report to Super Admin',
-      targetType: 'REPORT',
-      targetId: reportId,
-      targetName: reportId,
-      ipAddress: '102.89.23.11',
-      result: 'WARNING',
-      details: 'Escalated priority to Urgent for immediate intervention.'
-    });
-    showToast({
-      title: 'Report Escalated',
-      message: `Report ${reportId} escalated to Super Admin queue.`,
-      type: 'warning'
-    });
-  };
-
-  const dismissReport = (reportId: string) => {
-    setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'DISMISSED' } : r));
-    logAudit({
-      action: 'Dismissed Report',
-      targetType: 'REPORT',
-      targetId: reportId,
-      targetName: reportId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: 'Report dismissed as false alarm / duplicate.'
-    });
-    showToast({
-      title: 'Report Dismissed',
-      message: `Report ${reportId} dismissed.`,
-      type: 'info'
-    });
-  };
-
-  const assignReport = (reportId: string, adminName: string) => {
-    setReports(prev => prev.map(r => r.id === reportId ? { ...r, assignedAdmin: adminName, status: 'UNDER_REVIEW' } : r));
-    logAudit({
-      action: 'Assigned Report',
-      targetType: 'REPORT',
-      targetId: reportId,
-      targetName: reportId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: `Assigned investigation to ${adminName}`
-    });
-    showToast({
-      title: 'Report Assigned',
-      message: `Assigned to ${adminName}.`,
-      type: 'info'
-    });
-  };
-
-  const addReportNote = (reportId: string, note: string) => {
-    const timestampedNote = `[${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}] ${note}`;
-    setReports(prev => prev.map(r => r.id === reportId ? {
-      ...r,
-      adminNotes: [...(r.adminNotes || []), timestampedNote]
-    } : r));
-    showToast({
-      title: 'Note Added',
-      message: 'Investigation log updated.',
-      type: 'info'
-    });
-  };
-
-  // Verification Actions
-  const approveVerification = (verificationId: string) => {
-    const req = verifications.find(v => v.id === verificationId);
-    setVerifications(prev => prev.map(v => v.id === verificationId ? { ...v, status: 'APPROVED' } : v));
-    if (req) {
-      setUsers(prev => prev.map(u => u.id === req.userId ? { ...u, isNINVerified: true, badges: Array.from(new Set([...u.badges, 'Verified Neighbor'])) } : u));
+  const refresh = useCallback(async () => {
+    setError('');
+    try {
+      const [statsRes, usersRes, ralliesRes, reportsRes, broadcastsRes, logsRes, settingsRes, countsRes, analyticsRes] =
+        await Promise.allSettled([
+          getAdminStats(),
+          getAdminUsers(),
+          getAdminRallies(),
+          getAdminReports(),
+          listBroadcasts(),
+          getAuditLogs(),
+          getSettings(),
+          getAudienceCounts(),
+          getAdminAnalytics(),
+        ]);
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.stats);
+      if (usersRes.status === 'fulfilled') setUsers(usersRes.value.users.map(userCardToAdminUser));
+      if (ralliesRes.status === 'fulfilled') setRallies(ralliesRes.value.rallies.map(backendRallyToAdminRally));
+      if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.reports.map(backendReportToAdminReport));
+      if (broadcastsRes.status === 'fulfilled')
+        setNotifications(broadcastsRes.value.broadcasts.map(backendBroadcastToNotification));
+      if (logsRes.status === 'fulfilled') setAuditLogs(logsRes.value.logs.map(backendAuditToEntry));
+      if (settingsRes.status === 'fulfilled') {
+        const s = settingsRes.value.settings as BackendSettings;
+        setSystemSettings((prev) => ({
+          ...prev,
+          platformName: s.platformName,
+          defaultRadiusKm: s.defaultRadiusKm,
+          supportedCities: s.supportedCities,
+        }));
+      }
+      if (countsRes.status === 'fulfilled') setAudienceCounts(countsRes.value.counts);
+      if (analyticsRes.status === 'fulfilled') setAnalytics(analyticsRes.value.analytics);
+      const rejected = [statsRes, usersRes, ralliesRes, reportsRes, broadcastsRes, logsRes, settingsRes, countsRes, analyticsRes]
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (rejected.length > 0) {
+        setError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
-    logAudit({
-      action: 'Approved Identity Verification',
-      targetType: 'VERIFICATION',
-      targetId: verificationId,
-      targetName: req?.userName || verificationId,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: `Approved verification request ${verificationId}. Added Verified Neighbor badge.`
-    });
-    showToast({
-      title: 'Verification Approved',
-      message: `NIN Verified badge activated for ${req?.userName || 'user'}.`,
-      type: 'success'
-    });
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const loadUserDetail = useCallback(async (userId: string) => {
+    if (userDetails[userId]) return;
+    try {
+      const res = await getUserDetail(userId);
+      const d = res.user;
+      setUserDetails((prev) => ({ ...prev, [userId]: d }));
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                ralliesCreatedCount: d.ralliesCreated,
+                ralliesJoinedCount: d.ralliesJoined,
+                reportsReceivedCount: d.reportsReceived,
+                totalSpentOrShared: d.totalSpentNaira,
+                stats: { ...u.stats, rallies: d.ralliesCreated, rating: d.rating },
+              }
+            : u
+        )
+      );
+    } catch {
+      // keep whatever we have
+    }
+  }, [userDetails]);
+
+  const metrics: AdminContextType['metrics'] = {
+    totalUsers: stats?.totalUsers ?? 0,
+    activeRallies: stats?.activeRallies ?? 0,
+    verifiedProfiles: stats?.verifiedProfiles ?? 0,
+    pendingReports: stats?.pendingReports ?? 0,
+    pendingVerifications: stats?.pendingVerifications ?? 0,
+    todayApprovedVerifications: stats?.verifiedProfilesToday ?? 0,
+    totalRallies: stats?.totalRallies ?? 0,
+    totalPosts: stats?.totalPosts ?? 0,
+    organizations: stats?.organizations ?? 0,
+    businesses: stats?.businesses ?? 0,
+    totalReports: stats?.totalReports ?? 0,
+    resolvedReports: stats?.resolvedReports ?? 0,
+    totalAds: stats?.totalAds ?? 0,
+    activeAds: stats?.activeAds ?? 0,
+    totalVerifications: stats?.totalVerifications ?? 0,
+    newUsersToday: stats?.newUsersToday ?? 0,
+    newRalliesToday: stats?.newRalliesToday ?? 0,
   };
 
-  const rejectVerification = (verificationId: string, reason: string) => {
-    const req = verifications.find(v => v.id === verificationId);
-    setVerifications(prev => prev.map(v => v.id === verificationId ? { ...v, status: 'REJECTED', notes: reason, rejectionReason: reason } : v));
-    logAudit({
-      action: 'Rejected Identity Verification',
-      targetType: 'VERIFICATION',
-      targetId: verificationId,
-      targetName: req?.userName || verificationId,
-      ipAddress: '102.89.23.11',
-      result: 'FAILED',
-      details: `Rejected verification: ${reason}`
-    });
-    showToast({
-      title: 'Verification Rejected',
-      message: `Request rejected. Reason: ${reason}`,
-      type: 'danger'
-    });
-  };
+  // -------------------------------------------------------------------------
+  // Real actions
+  // -------------------------------------------------------------------------
 
-  const requestResubmission = (verificationId: string, note: string) => {
-    setVerifications(prev => prev.map(v => v.id === verificationId ? { ...v, status: 'INFO_REQUESTED', notes: note } : v));
-    showToast({
-      title: 'More Information Requested',
-      message: 'User notified to upload clearer document photo.',
-      type: 'info'
-    });
-  };
-
-  const requestVerificationInfo = (verificationId: string, note: string) => {
-    requestResubmission(verificationId, note);
-  };
-
-  // Notification Actions
-  const sendBroadcast = (notif: {
-    title: string;
-    message: string;
-    audience: string;
-    type: AdminNotification['type'];
-    targetLocation?: string;
-    targetUserId?: string;
-    sentBy?: string;
-  }) => {
-    const newNotif: AdminNotification = {
-      id: `NOTIF-${Date.now().toString().slice(-4)}`,
-      title: notif.title,
-      message: notif.message,
-      audience: notif.audience,
-      targetLocation: notif.targetLocation,
-      targetUserId: notif.targetUserId,
-      type: notif.type,
-      sentAt: 'Just now',
-      sentBy: notif.sentBy || 'Alex Johnson',
-      sentCount: notif.audience === 'ALL' ? 12482 : notif.audience === 'VERIFIED' ? 8291 : 1420,
-      openRate: 0,
-      status: 'DELIVERED',
-      readCount: 0,
-      isReadByAdmin: true,
-    };
-    setNotifications(prev => [newNotif, ...prev]);
-    logAudit({
-      action: 'Sent Platform Broadcast',
-      targetType: 'NOTIFICATION',
-      targetId: newNotif.id,
-      targetName: newNotif.title,
-      ipAddress: '102.89.23.11',
-      result: 'SUCCESS',
-      details: `Audience: ${notif.audience} ${notif.targetLocation ? `(${notif.targetLocation})` : ''}`
-    });
-    showToast({
-      title: 'Broadcast Dispatched',
-      message: `Notification sent to target audience (${notif.audience}).`,
-      type: 'success'
-    });
-  };
-
-  const markNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isReadByAdmin: true } : n));
-  };
-
-  const markAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isReadByAdmin: true })));
-    showToast({
-      title: 'All Read',
-      message: 'Marked all admin alerts as read.',
-      type: 'info'
-    });
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-    showToast({
-      title: 'Notification Deleted',
-      message: 'Alert removed from system history.',
-      type: 'info'
-    });
-  };
-
-  // Metrics calculation
-  const metrics = {
-    totalUsers: users.length + 12474,
-    activeRallies: rallies.filter(r => r.moderationStatus === 'APPROVED').length + 1835,
-    verifiedProfiles: users.filter(u => u.isNINVerified).length + 8284,
-    pendingReports: reports.filter(r => r.status === 'PENDING' || r.status === 'UNDER_REVIEW').length + 10,
-    pendingVerifications: verifications.filter(v => v.status === 'PENDING').length + 6,
-    todayApprovedVerifications: 14,
-  };
-
-  return (
-    <AdminContext.Provider value={{
-      users,
-      rallies,
-      reports,
-      verifications,
-      notifications,
-      auditLogs,
-      toasts,
-      systemSettings,
-      updateSettings,
-      showToast,
-      dismissToast,
-      verifyUser,
-      suspendUser,
-      banUser,
-      unbanUser,
-      updateUserRole,
-      addUser,
-      approveRally,
-      hideRally,
-      removeRally,
-      flagRally,
-      resolveReport,
-      escalateReport,
-      dismissReport,
-      assignReport,
-      addReportNote,
-      approveVerification,
-      rejectVerification,
-      requestResubmission,
-      requestVerificationInfo,
-      sendBroadcast,
-      markNotificationRead,
-      markAllNotificationsRead,
-      deleteNotification,
-      metrics,
-    }}>
-      {children}
-    </AdminContext.Provider>
+  const updateSettings = useCallback(
+    async (newSettings: Partial<SystemSettings>) => {
+      const allowedFields: (keyof BackendSettings)[] = [
+        'platformName',
+        'defaultRadiusKm',
+        'supportedCities',
+        'autoApproveRallies',
+        'requireEmailVerification',
+        'autoVerifyPhone',
+        'maintenanceMode',
+      ];
+      const payload: Partial<BackendSettings> = {};
+      const backendToSocial: Record<string, keyof BackendSettings> = {};
+      for (const f of allowedFields) {
+        if (newSettings[f as keyof SystemSettings] !== undefined) {
+          payload[f] = newSettings[f as keyof SystemSettings] as never;
+          backendToSocial[f] = f;
+        }
+      }
+      try {
+        await updateSettingsApi(payload);
+        setSystemSettings((prev) => ({ ...prev, ...newSettings }));
+        showToast('Settings saved.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to save settings.', 'danger');
+      }
+    },
+    [refresh, showToast]
   );
+
+  const verifyUser = useCallback(
+    (userId: string) => {
+      void userId;
+      showToast('Verification cannot be granted manually — users must pass the real NIN check.', 'warning');
+    },
+    [showToast]
+  );
+
+  const suspendUser = useCallback(
+    async (userId: string, reason: string) => {
+      try {
+        await setUserStatus(userId, 'suspend', reason);
+        showToast('User suspended.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to suspend user.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const banUser = useCallback(
+    async (userId: string, reason: string) => {
+      try {
+        await setUserStatus(userId, 'ban', reason);
+        showToast('User banned.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to ban user.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const unbanUser = useCallback(
+    async (userId: string) => {
+      try {
+        await setUserStatus(userId, 'activate');
+        showToast('User restored.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to restore user.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const updateUserRole = useCallback(
+    async (userId: string, role: AdminUser['role']) => {
+      const realRole = role === 'verification_agent' || role === 'analyst' || role === 'support' ? 'moderator' : role;
+      if (realRole === 'super_admin') {
+        showToast('Super admin role cannot be changed via the CRM.', 'warning');
+        return;
+      }
+      try {
+        await setUserRole(userId, realRole as 'admin' | 'moderator' | 'user');
+        showToast('Role updated.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to update role.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const addUser = useCallback(
+    (user: Partial<AdminUser>) => {
+      void user;
+      showToast('Manual user creation is not supported — users register through the app.', 'warning');
+    },
+    [showToast]
+  );
+
+  const approveRally = useCallback(
+    async (rallyId: string) => {
+      try {
+        await setRallyModeration(rallyId, 'APPROVE');
+        showToast('RALLY approved.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const hideRally = useCallback(
+    async (rallyId: string, reason?: string) => {
+      try {
+        await setRallyModeration(rallyId, 'HIDE', reason);
+        showToast('RALLY hidden from feeds.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const removeRally = useCallback(
+    async (rallyId: string, reason?: string) => {
+      try {
+        await setRallyModeration(rallyId, 'REMOVE', reason);
+        showToast('RALLY removed.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const flagRally = useCallback(
+    async (rallyId: string, reason: string) => {
+      try {
+        await setRallyModeration(rallyId, 'FLAG', reason);
+        showToast('RALLY flagged for review.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const resolveReport = useCallback(
+    async (reportId: string, resolutionNote?: string) => {
+      try {
+        await actOnReport(reportId, 'resolve', { note: resolutionNote });
+        showToast('Report resolved.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const escalateReport = useCallback(
+    async (reportId: string) => {
+      try {
+        await actOnReport(reportId, 'escalate');
+        showToast('Report escalated.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const dismissReport = useCallback(
+    async (reportId: string) => {
+      try {
+        await actOnReport(reportId, 'dismiss');
+        showToast('Report dismissed.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const assignReport = useCallback(
+    async (reportId: string, adminRef: string) => {
+      const assigneeId = adminRef.startsWith('users:') ? adminRef : adminRef;
+      try {
+        await actOnReport(reportId, 'assign', { assigneeId });
+        showToast('Report assigned.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const addReportNote = useCallback(
+    async (reportId: string, note: string) => {
+      try {
+        await actOnReport(reportId, 'note', { note });
+        showToast('Note added.', 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Action failed.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  // NIN verification actions are intentionally inert: real verification runs
+  // through the provider + serverless backend, never through admin approval.
+  const approveVerification = useCallback(
+    (verificationId: string) => {
+      void verificationId;
+      showToast('Verifications cannot be approved manually.', 'warning');
+    },
+    [showToast]
+  );
+  const rejectVerification = useCallback(
+    (verificationId: string, rejectReason?: string) => {
+      void verificationId;
+      void rejectReason;
+      showToast('Verifications cannot be changed manually.', 'warning');
+    },
+    [showToast]
+  );
+  const requestResubmission = useCallback(
+    (verificationId: string, note?: string) => {
+      void verificationId;
+      void note;
+      showToast('Verifications cannot be changed manually.', 'warning');
+    },
+    [showToast]
+  );
+  const requestVerificationInfo = requestResubmission;
+
+  const sendBroadcast = useCallback(
+    async (notification: {
+      title: string;
+      message: string;
+      audience: string;
+      type: AdminNotification['type'];
+      targetLocation?: string;
+      targetUserId?: string;
+      sentBy?: string;
+    }) => {
+      const audience = notification.targetUserId ? 'SPECIFIC' : notification.audience === 'LOCATION' ? 'ALL' : notification.audience;
+      try {
+        const res = await sendBroadcastApi({
+          title: notification.title,
+          body: notification.message,
+          type: notification.type || 'SYSTEM',
+          audience: (audience as 'ALL' | 'VERIFIED' | 'PLUS' | 'SPECIFIC') || 'ALL',
+          targetUserIds: notification.targetUserId ? [notification.targetUserId] : undefined,
+        });
+        showToast(`Broadcast sent to ${res.recipientCount} user${res.recipientCount === 1 ? '' : 's'}.`, 'success');
+        refresh();
+      } catch (err) {
+        showToast((err as Error).message || 'Failed to send broadcast.', 'danger');
+      }
+    },
+    [refresh, showToast]
+  );
+
+  const markNotificationRead = useCallback((id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isReadByAdmin: true } : n)));
+  }, []);
+
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isReadByAdmin: true })));
+  }, []);
+
+  const deleteNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const value: AdminContextType = {
+    users,
+    rallies,
+    reports,
+    verifications,
+    notifications,
+    auditLogs,
+    toasts,
+    systemSettings,
+    loading,
+    error,
+    analytics,
+    audienceCounts,
+    userDetails,
+    loadUserDetail,
+    refresh,
+    updateSettings,
+    showToast,
+    dismissToast,
+    verifyUser,
+    suspendUser,
+    banUser,
+    unbanUser,
+    updateUserRole,
+    addUser,
+    approveRally,
+    hideRally,
+    removeRally,
+    flagRally,
+    resolveReport,
+    escalateReport,
+    dismissReport,
+    assignReport,
+    addReportNote,
+    approveVerification,
+    rejectVerification,
+    requestResubmission,
+    requestVerificationInfo,
+    sendBroadcast,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification,
+    metrics,
+  };
+
+  return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 };
 
-export const useAdmin = () => {
-  const context = useContext(AdminContext);
-  if (!context) {
-    throw new Error('useAdmin must be used within an AdminProvider');
-  }
-  return context;
-};
+export function useAdmin() {
+  const ctx = useContext(AdminContext);
+  if (!ctx) throw new Error('useAdmin must be used within AdminProvider');
+  return ctx;
+}

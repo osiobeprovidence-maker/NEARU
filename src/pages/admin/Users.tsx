@@ -49,7 +49,10 @@ export default function AdminUsers() {
     updateUserRole, 
     addUser, 
     sendBroadcast,
-    showToast 
+    showToast,
+    loading,
+    userDetails,
+    loadUserDetail
   } = useAdmin();
 
   // Active filters
@@ -88,11 +91,16 @@ export default function AdminUsers() {
       if (statusFilter !== 'ALL' && u.status !== statusFilter.toLowerCase()) return false;
       if (verificationFilter === 'VERIFIED' && !u.isNINVerified) return false;
       if (verificationFilter === 'UNVERIFIED' && u.isNINVerified) return false;
-      if (locationFilter !== 'ALL' && u.location !== locationFilter) return false;
+      if (locationFilter !== 'ALL' && !(u.location || '').toLowerCase().includes(locationFilter.toLowerCase())) return false;
       if (roleFilter !== 'ALL' && u.role !== roleFilter.toLowerCase()) return false;
       return true;
     });
   }, [users, statusFilter, verificationFilter, locationFilter, roleFilter]);
+
+  const openUserProfile = (u: AdminUser) => {
+    setSelectedUser(u);
+    loadUserDetail(u.id);
+  };
 
   // Handle Ban confirmation
   const handleConfirmBan = () => {
@@ -280,7 +288,7 @@ export default function AdminUsers() {
       render: (u) => (
         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => setSelectedUser(u)}
+            onClick={() => openUserProfile(u)}
             className="p-1.5 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
             title="View Full Profile"
           >
@@ -351,7 +359,9 @@ export default function AdminUsers() {
         searchPlaceholder="Search by name, username, email, phone, or location..."
         searchFields={['name', 'username', 'email', 'phone', 'location']}
         exportFileName="rally-users"
-        onRowClick={(u) => setSelectedUser(u)}
+        onRowClick={(u) => openUserProfile(u)}
+        emptyTitle="No users found"
+        emptySubtitle="No registered accounts match the current search or filter criteria."
         filters={[
           {
             id: 'status',
@@ -428,10 +438,19 @@ export default function AdminUsers() {
           isOpen={Boolean(selectedUser)}
           onClose={() => setSelectedUser(null)}
           title={`User Profile: ${selectedUser.name}`}
-          subtitle={`Account ID: ${selectedUser.id} · Joined ${selectedUser.joinedAt}`}
+          subtitle={`Account ID: ${selectedUser.id} · Joined ${selectedUser.joinedAt ? new Date(selectedUser.joinedAt).toLocaleDateString() : '—'}`}
           maxWidth="3xl"
         >
-          <div className="space-y-6">
+          {(function () {
+            const detail = userDetails[selectedUser.id];
+            const createdCount = detail?.ralliesCreated ?? selectedUser.ralliesCreatedCount;
+            const joinedCount = detail?.ralliesJoined ?? selectedUser.ralliesJoinedCount;
+            const reportsReceived = detail?.reportsReceived ?? selectedUser.reportsReceivedCount;
+            const totalSpent = detail?.totalSpentNaira ?? selectedUser.totalSpentOrShared;
+            const joinedDate = selectedUser.joinedAt ? new Date(selectedUser.joinedAt).toLocaleDateString() : '—';
+
+            return (
+              <div className="space-y-6">
             {/* Top User Header Card */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-zinc-50 rounded-3xl border border-zinc-200">
               <div className="flex items-center gap-4">
@@ -482,21 +501,21 @@ export default function AdminUsers() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3.5 rounded-2xl bg-white border border-zinc-200 text-center">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase">RALLYS Created</span>
-                <p className="text-xl font-black text-zinc-900 mt-0.5">{selectedUser.ralliesCreatedCount}</p>
+                <p className="text-xl font-black text-zinc-900 mt-0.5">{createdCount}</p>
               </div>
               <div className="p-3.5 rounded-2xl bg-white border border-zinc-200 text-center">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase">RALLYS Joined</span>
-                <p className="text-xl font-black text-zinc-900 mt-0.5">{selectedUser.ralliesJoinedCount}</p>
+                <p className="text-xl font-black text-zinc-900 mt-0.5">{joinedCount}</p>
               </div>
               <div className="p-3.5 rounded-2xl bg-white border border-zinc-200 text-center">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase">Reports Received</span>
-                <p className={cn("text-xl font-black mt-0.5", selectedUser.reportsReceivedCount > 0 ? "text-rose-600" : "text-zinc-900")}>
-                  {selectedUser.reportsReceivedCount}
+                <p className={cn("text-xl font-black mt-0.5", reportsReceived > 0 ? "text-rose-600" : "text-zinc-900")}>
+                  {reportsReceived}
                 </p>
               </div>
               <div className="p-3.5 rounded-2xl bg-white border border-zinc-200 text-center">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase">Total Activity</span>
-                <p className="text-xl font-black text-zinc-900 mt-0.5">₦{selectedUser.totalSpentOrShared.toLocaleString()}</p>
+                <p className="text-xl font-black text-zinc-900 mt-0.5">₦{totalSpent.toLocaleString()}</p>
               </div>
             </div>
 
@@ -536,22 +555,28 @@ export default function AdminUsers() {
                   </div>
                   <div>
                     <h4 className="font-bold text-zinc-400 uppercase text-[10px] tracking-wider">Community Badges</h4>
-                    <div className="flex flex-wrap gap-2 mt-1.5">
-                      {selectedUser.badges?.map((badge) => (
-                        <span key={badge} className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl font-bold">
-                          {badge}
-                        </span>
-                      ))}
-                    </div>
+                    {selectedUser.badges && selectedUser.badges.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {selectedUser.badges.map((badge) => (
+                          <span key={badge} className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl font-bold">
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-zinc-400 font-medium mt-1">No badges earned yet.</p>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
                       <span className="text-[10px] font-bold text-zinc-400">NIN Number (Masked)</span>
-                      <p className="font-mono font-bold text-zinc-800 mt-0.5">•••••••{selectedUser.nin?.slice(-4) || '3491'}</p>
+                      <p className="font-mono font-bold text-zinc-800 mt-0.5">
+                        {selectedUser.nin ? `•••••••${selectedUser.nin.slice(-4)}` : 'Not provided'}
+                      </p>
                     </div>
                     <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
                       <span className="text-[10px] font-bold text-zinc-400">Last Active Session</span>
-                      <p className="font-bold text-zinc-800 mt-0.5">{selectedUser.lastActive}</p>
+                      <p className="font-bold text-zinc-800 mt-0.5">{selectedUser.lastActive || '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -561,17 +586,27 @@ export default function AdminUsers() {
                 <div className="space-y-2 text-xs">
                   <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
                     <div>
-                      <p className="font-bold text-zinc-900">Signed in via Mobile iOS App</p>
-                      <p className="text-[11px] text-zinc-500">Lekki Phase 1, Lagos · IP: 102.89.23.11</p>
+                      <p className="font-bold text-zinc-900">Account lifecycle</p>
+                      <p className="text-[11px] text-zinc-500">Registered {joinedDate} · Role: {selectedUser.role} · Status: {selectedUser.status}</p>
                     </div>
-                    <span className="text-zinc-400 font-medium">10 mins ago</span>
                   </div>
                   <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
                     <div>
-                      <p className="font-bold text-zinc-900">Responded to "Emergency Car Jump" RALLY</p>
-                      <p className="text-[11px] text-zinc-500">Connected with David O.</p>
+                      <p className="font-bold text-zinc-900">Account type</p>
+                      <p className="text-[11px] text-zinc-500">{selectedUser.accountType || 'personal'}{selectedUser.organizationName ? ` · ${selectedUser.organizationName}` : ''}</p>
                     </div>
-                    <span className="text-zinc-400 font-medium">Yesterday</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-zinc-900">Relationships</p>
+                      <p className="text-[11px] text-zinc-500">{detail?.followersCount ?? 0} followers · {detail?.followingCount ?? 0} following</p>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-zinc-900">Ratings</p>
+                      <p className="text-[11px] text-zinc-500">{detail ? `${(detail.rating ?? 0).toFixed(1)} avg from ${detail.ratingsCount ?? 0} ratings` : 'Loading extended profile…'}</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -580,14 +615,29 @@ export default function AdminUsers() {
                 <div className="space-y-2 text-xs">
                   <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-md">HELP</span>
-                        <p className="font-bold text-zinc-900">Neighborhood Tool Share & Lawn Mower</p>
-                      </div>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">3 interested neighbors · Lagos</p>
+                      <p className="font-bold text-zinc-900">RALLYS Created</p>
+                      <p className="text-[11px] text-zinc-500">Posts this member has published on the platform</p>
                     </div>
-                    <span className="text-emerald-600 font-bold">Active</span>
+                    <span className="text-base font-black text-zinc-900">{createdCount}</span>
                   </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-zinc-900">RALLYS Joined</p>
+                      <p className="text-[11px] text-zinc-500">Participations in neighbors' posts</p>
+                    </div>
+                    <span className="text-base font-black text-zinc-900">{joinedCount}</span>
+                  </div>
+                  {detail && (
+                    <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-zinc-900">RALLY+ Status</p>
+                        <p className="text-[11px] text-zinc-500">{selectedUser.isPlus ? 'Active premium subscriber' : 'Standard member'}</p>
+                      </div>
+                      <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-md", selectedUser.isPlus ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-600")}>
+                        {selectedUser.isPlus ? 'RALLY+' : 'FREE'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -600,14 +650,14 @@ export default function AdminUsers() {
 
               {userProfileTab === 'reports' && (
                 <div className="text-xs">
-                  {selectedUser.reportsReceivedCount > 0 ? (
+                  {reportsReceived > 0 ? (
                     <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-black text-rose-700 uppercase tracking-wider text-[10px]">Flagged Report</span>
-                        <span className="text-rose-500 font-bold">3 days ago</span>
+                        <span className="font-black text-rose-700 uppercase tracking-wider text-[10px]">Flagged Reports</span>
+                        <span className="text-rose-500 font-bold">{reportsReceived} shown in queue</span>
                       </div>
-                      <p className="font-bold text-zinc-900">Reported for spamming external referral links</p>
-                      <p className="text-zinc-600 text-[11px]">Reporter: Sarah M.</p>
+                      <p className="font-bold text-zinc-900">This account has safety reports filed against it.</p>
+                      <p className="text-zinc-600 text-[11px]">Open the Safety Reports module to investigate each case.</p>
                     </div>
                   ) : (
                     <div className="p-6 text-center text-zinc-400 bg-zinc-50 rounded-2xl border border-zinc-100">
@@ -633,25 +683,33 @@ export default function AdminUsers() {
                     </span>
                   </div>
 
-                  {!selectedUser.isNINVerified && (
-                    <button
-                      onClick={() => {
-                        verifyUser(selectedUser.id);
-                        setSelectedUser(prev => prev ? { ...prev, isNINVerified: true } : null);
-                      }}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition-colors"
-                    >
-                      Manually Grant NIN Verification Badge
-                    </button>
-                  )}
+                  <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-100 text-[11px] text-indigo-800 font-medium leading-relaxed">
+                    Verification is granted by the automated NIMC check through the verification provider — it cannot be granted manually from the CRM.
+                  </div>
                 </div>
               )}
 
               {userProfileTab === 'history' && (
                 <div className="space-y-2 text-xs">
-                  <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
-                    <p className="font-bold text-zinc-900">Account Created</p>
-                    <p className="text-zinc-500 text-[11px]">{selectedUser.joinedAt} via Organic Invitation</p>
+                  <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-zinc-900">Account Created</p>
+                      <p className="text-zinc-500 text-[11px]">{joinedDate}</p>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-zinc-900">Moderation Status</p>
+                      <p className="text-zinc-500 text-[11px]">Current standing on the platform</p>
+                    </div>
+                    <span className={cn(
+                      "text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider",
+                      selectedUser.status === 'active' ? "bg-emerald-50 text-emerald-700" :
+                      selectedUser.status === 'suspended' ? "bg-amber-50 text-amber-700" :
+                      "bg-rose-50 text-rose-700"
+                    )}>
+                      {selectedUser.status}
+                    </span>
                   </div>
                 </div>
               )}
@@ -720,7 +778,9 @@ export default function AdminUsers() {
                 )}
               </div>
             </div>
-          </div>
+              </div>
+            );
+          })()}
         </AdminModal>
       )}
 

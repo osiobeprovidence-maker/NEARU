@@ -37,8 +37,20 @@ export default function AdminReports() {
     assignReport, 
     addReportNote,
     suspendUser,
-    banUser 
+    banUser,
+    users,
+    loading 
   } = useAdmin();
+
+  const adminOptions = useMemo(
+    () => users.filter((u) => u.role !== 'user'),
+    [users]
+  );
+  const adminNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of adminOptions) map[a.id] = a.name;
+    return map;
+  }, [adminOptions]);
 
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
@@ -194,7 +206,7 @@ export default function AdminReports() {
       header: 'Assigned',
       render: (r) => (
         <span className="text-xs text-zinc-600 font-medium">
-          {r.assignedAdmin || 'Unassigned'}
+          {r.assignedAdmin && adminNameById[r.assignedAdmin] ? adminNameById[r.assignedAdmin] : 'Unassigned'}
         </span>
       ),
     },
@@ -258,6 +270,8 @@ export default function AdminReports() {
         searchFields={['id', 'type', 'reportedUserName', 'reporterName', 'description']}
         exportFileName="safety-reports"
         onRowClick={(r) => setSelectedReport(r)}
+        emptyTitle={loading ? "Loading reports..." : "No reports found"}
+        emptySubtitle={loading ? "Fetching live safety reports." : "No safety reports match the current filters."}
         filters={[
           {
             id: 'status',
@@ -344,12 +358,17 @@ export default function AdminReports() {
 
               <div className="flex items-center gap-2">
                 <select
-                  value={selectedReport.assignedAdmin || 'Unassigned'}
-                  onChange={(e) => assignReport(selectedReport.id, e.target.value)}
+                  value={selectedReport.assignedAdmin && adminNameById[selectedReport.assignedAdmin] ? selectedReport.assignedAdmin : ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) assignReport(selectedReport.id, v);
+                  }}
                   className="bg-white border border-zinc-200 text-xs font-bold rounded-xl px-3 py-1.5 focus:outline-none"
                 >
-                  <option value="Alex Johnson">Assign: Alex Johnson</option>
-                  <option value="Sarah M.">Assign: Sarah M.</option>
+                  <option value="">Unassigned</option>
+                  {adminOptions.map((a) => (
+                    <option key={a.id} value={a.id}>Assign: {a.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -443,12 +462,14 @@ export default function AdminReports() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setModalType('banReported')}
-                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors"
-                >
-                  Ban Reported User
-                </button>
+                {!selectedReport.rallyId && (
+                  <button
+                    onClick={() => setModalType('banReported')}
+                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Ban Reported User
+                  </button>
+                )}
                 <button
                   onClick={() => setModalType('resolve')}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"

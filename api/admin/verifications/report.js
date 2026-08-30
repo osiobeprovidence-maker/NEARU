@@ -4,6 +4,7 @@
 
 import { requireSuperAdmin } from "../../_lib/auth.js";
 import { callConvexQuery } from "../../_lib/convexClient.js";
+import { serverSecret } from "../../_lib/config.js";
 import { ok, sendError } from "../../_lib/errors.js";
 
 export default async function handler(req, res) {
@@ -12,8 +13,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    await requireSuperAdmin(req);
-    const report = await callConvexQuery("verifications:adminReport", {});
+    const { convexUser } = await requireSuperAdmin(req);
+    const report = await callConvexQuery("verifications:adminReport", {
+      requestingAdminId: convexUser._id,
+      serverSecret: serverSecret(),
+    });
     return ok(res, {
       report: {
         totalTransactions: report.totalTransactions,

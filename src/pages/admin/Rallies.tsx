@@ -40,7 +40,8 @@ export default function AdminRallies() {
     hideRally, 
     removeRally, 
     flagRally,
-    sendBroadcast 
+    sendBroadcast,
+    loading 
   } = useAdmin();
 
   const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'FLAGGED' | 'REPORTED' | 'REMOVED' | 'APPROVED'>('ALL');
@@ -291,7 +292,10 @@ export default function AdminRallies() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl w-full sm:w-fit overflow-x-auto custom-scrollbar">
+      <div className={cn(
+        "flex items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl w-full sm:w-fit overflow-x-auto custom-scrollbar",
+        loading && "pointer-events-none opacity-60"
+      )}>
         {[
           { id: 'ALL', label: 'All Posts' },
           { id: 'PENDING', label: 'Pending Review' },
@@ -324,6 +328,8 @@ export default function AdminRallies() {
         searchFields={['title', 'description', 'city']}
         exportFileName="rally-moderation"
         onRowClick={(r) => setSelectedRally(r)}
+        emptyTitle={loading ? "Loading RALLYS..." : "No RALLYS found"}
+        emptySubtitle={loading ? "Fetching live posts from the platform." : "No posts match the current moderation filter."}
         filters={[
           {
             id: 'category',
