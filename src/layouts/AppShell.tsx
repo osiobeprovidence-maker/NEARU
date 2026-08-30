@@ -25,6 +25,8 @@ import {
   Store
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation as useLocationContext } from '../contexts/LocationContext';
 import CreateRallyModal from '../components/CreateRallyModal';
@@ -32,11 +34,12 @@ import CreateContentSheet from '../components/CreateContentSheet';
 import LocationFilterModal from '../components/LocationFilterModal';
 import LocationDebug from '../components/LocationDebug';
 import NotificationListener from '../components/NotificationListener';
+import NotificationPanel from '../components/NotificationPanel';
 
 export default function AppShell() {
   const navigate = useNavigate();
   const routeLocation = useRouteLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, convexUserId } = useAuth();
   const { 
     city, 
     radius, 
@@ -56,6 +59,16 @@ export default function AppShell() {
   const [createInitialType, setCreateInitialType] = useState<'POST' | 'EVENT' | undefined>(undefined);
   const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState<{ title: string, subtitle: string } | null>(null);
+  const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
+
+  const unreadCount = useQuery(
+    api.notifications.unreadCount,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
+
+  useEffect(() => {
+    setIsNotifPanelOpen(false);
+  }, [routeLocation.pathname]);
 
   const isLocationHidden = 
     routeLocation.pathname !== '/';
@@ -212,6 +225,7 @@ export default function AppShell() {
 
       <LocationDebug />
       <NotificationListener />
+      <NotificationPanel open={isNotifPanelOpen} onClose={() => setIsNotifPanelOpen(false)} />
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-white border-r border-zinc-200 overflow-y-auto">
@@ -387,13 +401,19 @@ export default function AppShell() {
                routeLocation.pathname === '/help') ? (
             <div className="w-6 shrink-0" />
           ) : (
-            <NavLink 
-              to="/notifications" 
-              className={({isActive}) => cn("p-2 rounded-full transition-colors shrink-0", isActive ? "text-indigo-600 bg-indigo-50" : "text-zinc-600 hover:bg-zinc-100")}
+            <button
+              onClick={() => setIsNotifPanelOpen((v) => !v)}
+              className={cn("relative p-2 rounded-full transition-colors shrink-0", isNotifPanelOpen ? "text-indigo-600 bg-indigo-50" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900")}
               title="Notifications"
+              aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-            </NavLink>
+              {!!unreadCount && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
           )}
         </header>
       )}

@@ -392,7 +392,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
 
       {/* ── 2. POST CONTENT (rendered exactly once) ───────────────────── */}
       {content && (
-        <p className="mt-2.5 text-[15px] leading-relaxed text-zinc-900 whitespace-pre-wrap">
+        <p className="mt-2.5 text-[15px] leading-relaxed text-zinc-900 whitespace-pre-wrap break-words">
           {content}
           {hashtags.map((tag) => (
             <span key={tag} className="text-indigo-600 font-semibold">
@@ -514,7 +514,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
       )}
 
       {/* ── 6. ENGAGEMENT BAR ──────────────────────────────────────────── */}
-      <div className="mt-3 pt-2 flex items-center gap-1">
+      <div className="mt-3 pt-2 flex flex-wrap items-center gap-1">
         <button
           onClick={handleLike}
           className={cn(

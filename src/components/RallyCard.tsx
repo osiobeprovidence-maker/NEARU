@@ -259,7 +259,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white p-5 group hover:bg-zinc-50/50 transition-colors"
+      className="bg-white p-4 sm:p-5 group hover:bg-zinc-50/50 transition-colors"
     >
       {/* Delete confirmation dialog */}
       <AnimatePresence>
@@ -369,7 +369,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         </Link>
 
         {/* Type + price badges */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0 max-w-[55%]">
           <div
             className={cn(
               'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ring-1 ring-inset',
@@ -545,7 +545,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       )}
 
       {/* Engagement row */}
-      <div className="flex items-center gap-4 pt-4 border-t border-zinc-100">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-4 border-t border-zinc-100">
         {/* Like */}
         <button
           onClick={handleLike}

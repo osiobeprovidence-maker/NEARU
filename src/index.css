@@ -67,3 +67,15 @@
     scrollbar-width: none;
   }
 }
+
+/* Deeper-safe-area helpers (unlayered so they win over Tailwind utilities) */
+.safe-area-top {
+  padding-top: max(0.625rem, env(safe-area-inset-top));
+}
+.safe-area-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+/* Anchors fixed UI directly below the mobile top header (53px + notch). */
+.top-header-offset {
+  top: calc(53px + env(safe-area-inset-top));
+}

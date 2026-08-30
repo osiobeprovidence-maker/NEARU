@@ -187,14 +187,14 @@ export default function Explore() {
           />
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar mb-5 sm:mb-6">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar overscroll-x-contain mb-5 sm:mb-6">
           {categories.map((category) => (
             <button 
               key={category}
               type="button"
               onClick={() => setActiveCategory(category)}
               className={cn(
-                "px-4 py-1.5 rounded-full text-sm font-semibold transition-all shrink-0 active:scale-95",
+                "px-4 py-2 rounded-full text-sm font-semibold transition-all shrink-0 whitespace-nowrap touch-manipulation active:scale-95",
                 activeCategory === category
                   ? "bg-zinc-900 text-white shadow-xs shadow-zinc-900/20 font-bold"
                   : "bg-white border border-zinc-200/80 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-300"
@@ -206,14 +206,14 @@ export default function Explore() {
         </div>
 
         {activeCategory !== 'People' && activeCategory !== 'Interests' && (
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-zinc-900 text-sm sm:text-base">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="font-bold text-zinc-900 text-sm sm:text-base min-w-0 truncate">
               {activeCategory} RALLYS {filteredRallies.length > 0 && <span className="text-zinc-400 font-normal text-xs ml-1">({filteredRallies.length})</span>}
             </h3>
             <select 
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent text-xs sm:text-sm font-semibold text-zinc-500 focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs sm:text-sm font-semibold text-zinc-500 focus:outline-none cursor-pointer shrink-0 min-w-0"
             >
               <option value="Nearest">Nearest</option>
               <option value="Newest">Newest</option>
