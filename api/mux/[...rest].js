@@ -19,7 +19,9 @@ export default async function handler(req, res) {
   try {
     const url = new URL(req.url, "http://localhost");
     const segments = url.pathname.split("/").filter(Boolean); // ["api", "mux", ...]
-    const rest = segments.slice(2);
+    const q = url.searchParams;
+    const route = q.get("r") || segments.slice(2).join("/");
+    const rest = route.split("/").filter(Boolean);
     const [head] = rest;
     const method = req.method;
 

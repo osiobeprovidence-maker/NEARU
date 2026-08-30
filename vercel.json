@@ -14,6 +14,16 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/admin/users/:id/detail", "destination": "/api/admin/[...rest]?r=users/:id/detail" },
+    { "source": "/api/admin/users/:id/status", "destination": "/api/admin/[...rest]?r=users/:id/status" },
+    { "source": "/api/admin/users/:id/role", "destination": "/api/admin/[...rest]?r=users/:id/role" },
+    { "source": "/api/admin/rallies/:id/moderation", "destination": "/api/admin/[...rest]?r=rallies/:id/moderation" },
+    { "source": "/api/admin/reports/:id/act", "destination": "/api/admin/[...rest]?r=reports/:id/act" },
+    { "source": "/api/admin/notifications/audience-counts", "destination": "/api/admin/[...rest]?r=notifications/audience-counts" },
+    { "source": "/api/admin/notifications/broadcast", "destination": "/api/admin/[...rest]?r=notifications/broadcast" },
+    { "source": "/api/admin/verifications/report", "destination": "/api/admin/[...rest]?r=verifications/report" },
+    { "source": "/api/verifications/nin/payment", "destination": "/api/verifications/[...rest]?r=nin/payment" },
+    { "source": "/api/verifications/:id/status", "destination": "/api/verifications/[...rest]?r=:id/status" },
     { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
   ]
 }
