@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
   AlertCircle,
-  Heart,
+  HandMetal,
+  HandHeart,
+  Handshake,
   Users,
   MapPin,
   Calendar,
@@ -34,6 +36,8 @@ interface CreateRallyModalProps {
    */
   initialType?: ActivityType;
 }
+
+const RALLY_TYPES: ActivityType[] = ['ASK', 'HELP', 'JOIN'];
 
 // POST type is always free and doesn't need paid/capacity fields
 const POST_ONLY_TYPES: ActivityType[] = ['POST'];
@@ -379,21 +383,21 @@ export default function CreateRallyModal({
       subtitle: 'Host or share a local event.',
     },
     ASK: {
-      icon: AlertCircle,
+      icon: HandMetal,
       color: 'text-rose-600',
       bg: 'bg-rose-100',
       label: 'Ask',
       subtitle: 'I need something.',
     },
     HELP: {
-      icon: Heart,
+      icon: HandHeart,
       color: 'text-emerald-600',
       bg: 'bg-emerald-100',
       label: 'Help',
       subtitle: 'I can help someone.',
     },
     JOIN: {
-      icon: Users,
+      icon: Handshake,
       color: 'text-indigo-600',
       bg: 'bg-indigo-100',
       label: 'Join',
@@ -458,9 +462,7 @@ export default function CreateRallyModal({
                     What do you want to do?
                   </h3>
                   <div className="space-y-3">
-                    {(
-                      ['POST', 'EVENT', 'ASK', 'HELP', 'JOIN'] as ActivityType[]
-                    ).map((t) => {
+                    {RALLY_TYPES.map((t) => {
                       const cfg = typeConfig[t];
                       const Icon = cfg.icon;
                       return (

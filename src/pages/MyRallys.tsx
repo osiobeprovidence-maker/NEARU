@@ -6,16 +6,26 @@ import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import { cn } from '../lib/utils';
-import { Users } from 'lucide-react';
+import { Users, Calendar, Crown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Rally } from '../types';
 
 export default function MyRallys() {
   const navigate = useNavigate();
-  const { convexUserId } = useAuth();
+  const { convexUserId, isPro, user } = useAuth();
   const [activeTab, setActiveTab] = useState('Created');
   // Optimistic local delete — remove card immediately without waiting for re-query
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+
+  const canCreateEvent =
+    isPro &&
+    (user.accountType === 'organization' || user.accountType === 'business');
+
+  const openCreateEvent = () => {
+    window.dispatchEvent(
+      new CustomEvent('open-create-rally', { detail: { type: 'EVENT' } })
+    );
+  };
 
   const myRallies = useQuery(
     api.rallies.listByCreator,
@@ -90,24 +100,36 @@ export default function MyRallys() {
 
   return (
     <PageShell title="My RALLYS">
-      <div className="px-6 md:px-0 flex items-center gap-6 border-b border-zinc-200 mb-6">
-        {tabs.map((tab) => (
+      <div className="px-6 md:px-0 flex items-center justify-between gap-6 border-b border-zinc-200 mb-6">
+        <div className="flex items-center gap-6 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'pb-3 text-sm font-bold transition-colors relative shrink-0',
+                activeTab === tab
+                  ? 'text-zinc-900'
+                  : 'text-zinc-400 hover:text-zinc-600'
+              )}
+            >
+              {tab}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 rounded-t-full" />
+              )}
+            </button>
+          ))}
+        </div>
+        {canCreateEvent && (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              'pb-3 text-sm font-bold transition-colors relative',
-              activeTab === tab
-                ? 'text-zinc-900'
-                : 'text-zinc-400 hover:text-zinc-600'
-            )}
+            onClick={openCreateEvent}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-all active:scale-95 shrink-0"
           >
-            {tab}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 rounded-t-full" />
-            )}
+            <Calendar className="w-3.5 h-3.5" />
+            Create Event
+            <Crown className="w-3 h-3 text-amber-400" />
           </button>
-        ))}
+        )}
       </div>
 
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">

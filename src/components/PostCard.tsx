@@ -13,7 +13,7 @@ import {
   BadgeCheck,
   Users,
   CheckCircle2,
-  Sparkles,
+  HelpingHand,
   X,
   ChevronRight,
 } from 'lucide-react';
@@ -448,7 +448,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
           >
             <div className="px-3.5 py-2.5 space-y-1">
               <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                <HelpingHand className="w-3.5 h-3.5 text-indigo-500" />
                 <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600">
                   Rally
                 </span>

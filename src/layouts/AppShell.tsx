@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Home, 
   Compass, 
-  List, 
+  HelpingHand, 
   MessageSquare, 
   Bell, 
   User, 
@@ -59,9 +59,14 @@ export default function AppShell() {
     routeLocation.pathname !== '/';
 
   useEffect(() => {
-    // "Create a RALLY" buttons (e.g. empty states) open the RALLY modal directly.
-    const handleOpenCreate = () => {
-      setCreateInitialType(undefined);
+    // "Create" / "open-create-rally" buttons (e.g. empty states) open the
+    // creation flow. The event payload may carry a content type to pre-select:
+    //   { type?: 'POST' | 'EVENT' }
+    // Without a type the modal opens on the Rally picker (Ask/Help/Join).
+    const handleOpenCreate = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      const t = detail?.type === 'POST' || detail?.type === 'EVENT' ? detail.type : undefined;
+      setCreateInitialType(t || undefined);
       setIsCreateModalOpen(true);
     };
 
@@ -80,11 +85,10 @@ export default function AppShell() {
     };
   }, []);
 
-  // Called when the user picks "Post", "RALLY" or "Event" in the create sheet.
-  const handleCreateSelect = (choice: 'post' | 'rally' | 'event') => {
+  // Called when the user picks "Post" or "Rally" in the create sheet.
+  const handleCreateSelect = (choice: 'post' | 'rally') => {
     setIsCreateContentOpen(false);
     if (choice === 'post') setCreateInitialType('POST');
-    else if (choice === 'event') setCreateInitialType('EVENT');
     else setCreateInitialType(undefined);
     setIsCreateModalOpen(true);
   };
@@ -106,7 +110,7 @@ export default function AppShell() {
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
     { label: 'Explore', icon: Compass, path: '/explore' },
-    { label: 'My RALLYS', icon: List, path: '/my-rallys' },
+    { label: 'My RALLYS', icon: HelpingHand, path: '/my-rallys' },
     { label: 'Messages', icon: MessageSquare, path: '/messages' },
     { label: 'Notifications', icon: Bell, path: '/notifications' },
   ];

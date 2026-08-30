@@ -4,7 +4,9 @@ import { Link } from 'react-router-dom';
 import {
   MapPin,
   Clock,
-  AlertCircle,
+  HandMetal,
+  HandHeart,
+  Handshake,
   Heart,
   Users,
   CheckCircle2,
@@ -73,19 +75,19 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
 
   const typeConfig = {
     ASK: {
-      icon: AlertCircle,
+      icon: HandMetal,
       color: 'text-rose-600',
       bg: 'bg-rose-100',
       badge: 'bg-rose-50 text-rose-700 ring-rose-200',
     },
     HELP: {
-      icon: Heart,
+      icon: HandHeart,
       color: 'text-emerald-600',
       bg: 'bg-emerald-100',
       badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     },
     JOIN: {
-      icon: Users,
+      icon: Handshake,
       color: 'text-indigo-600',
       bg: 'bg-indigo-100',
       badge: 'bg-indigo-50 text-indigo-700 ring-indigo-200',

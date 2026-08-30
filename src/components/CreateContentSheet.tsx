@@ -10,15 +10,13 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, FileText, Zap, Calendar, Crown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { X, FileText, HelpingHand } from 'lucide-react';
 
 interface CreateContentSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called with 'post', 'rally' or 'event' when the user makes a selection. */
-  onSelect: (type: 'post' | 'rally' | 'event') => void;
+  /** Called with 'post' or 'rally' when the user makes a selection. */
+  onSelect: (type: 'post' | 'rally') => void;
 }
 
 export default function CreateContentSheet({
@@ -26,20 +24,6 @@ export default function CreateContentSheet({
   onClose,
   onSelect,
 }: CreateContentSheetProps) {
-  const { isPro } = useAuth();
-  const navigate = useNavigate();
-
-  const showToast = (title: string, subtitle: string) =>
-    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title, subtitle } }));
-
-  const handleEventClick = () => {
-    if (!isPro) {
-      showToast('LALOA Pro required', 'Upgrade to create and manage events.');
-      navigate('/plus');
-      return;
-    }
-    onSelect('event');
-  };
   return (
     <AnimatePresence>
       {isOpen && (
@@ -84,7 +68,7 @@ export default function CreateContentSheet({
             </div>
 
             <p className="px-6 pb-4 text-sm text-zinc-500">
-              What do you want to share?
+              What do you want to do?
             </p>
 
             {/* Options */}
@@ -102,55 +86,29 @@ export default function CreateContentSheet({
                     Post
                   </p>
                   <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
-                    Share something with the community.
+                    Share a photo, video or thought with your community.
                     Reach people nearby or by shared interest.
                   </p>
                 </div>
               </button>
 
-              {/* RALLY */}
+              {/* Rally */}
               <button
                 onClick={() => onSelect('rally')}
                 className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-zinc-100 hover:border-amber-200 hover:bg-amber-50/40 text-left transition-all active:scale-[0.98] group"
               >
                 <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 group-hover:bg-amber-100 transition-colors">
-                  <Zap className="w-6 h-6 text-amber-500" />
+                  <HelpingHand className="w-6 h-6 text-amber-500" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-black text-zinc-900 text-base tracking-tight">
-                    RALLY
+                    Rally
                   </p>
                   <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
-                    Ask, help, invite, join, or organise
-                    something in your area.
+                    Reach out to people near you — ask for something, offer
+                    help, or invite people to join you.
                   </p>
                 </div>
-              </button>
-
-              {/* Event */}
-              <button
-                onClick={handleEventClick}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-zinc-100 hover:border-violet-200 hover:bg-violet-50/40 text-left transition-all active:scale-[0.98] group"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
-                  <Calendar className="w-6 h-6 text-violet-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-zinc-900 text-base tracking-tight flex items-center gap-1.5">
-                    Event
-                    {!isPro && <Crown className="w-3.5 h-3.5 text-amber-500" />}
-                  </p>
-                  <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
-                    {isPro
-                      ? 'Plan and manage an event your followers can join.'
-                      : 'Plan and manage an event your followers can join.'}
-                  </p>
-                </div>
-                {!isPro && (
-                  <span className="shrink-0 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200">
-                    PRO
-                  </span>
-                )}
               </button>
             </div>
           </motion.div>
