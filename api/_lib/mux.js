@@ -9,7 +9,14 @@ function muxAuthHeader() {
   const id = process.env.MUX_TOKEN_ID;
   const secret = process.env.MUX_TOKEN_SECRET;
   if (!id || !secret) {
-    throw new Error("Mux credentials are not configured");
+    // Distinct 503 so the UI can explain video uploads are unavailable instead
+    // of showing a generic 500. The site owner must set these in Vercel.
+    const err = new Error(
+      "Video uploads are not configured. Set MUX_TOKEN_ID and MUX_TOKEN_SECRET."
+    );
+    err.statusCode = 503;
+    err.code = "MUX_NOT_CONFIGURED";
+    throw err;
   }
   return "Basic " + Buffer.from(`${id}:${secret}`).toString("base64");
 }

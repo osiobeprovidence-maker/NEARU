@@ -51,8 +51,11 @@ export function sendError(res, err) {
   }
 
   // Sanitized message for the client. Full details stay server-side.
+  // A few codes pass their message through so the UI can explain the issue
+  // (e.g. MUX_NOT_CONFIGURED → tell the owner to connect Mux).
+  const PASSTHROUGH_CODES = new Set(["MUX_NOT_CONFIGURED"]);
   let message = err.message || "Something went wrong. Please try again.";
-  if (statusCode >= 500) {
+  if (statusCode >= 500 && !PASSTHROUGH_CODES.has(code)) {
     message = "Something went wrong on our end. Please try again.";
   }
 
