@@ -20,6 +20,10 @@ export default defineSchema({
       )
     ),
     interests: v.optional(v.array(v.string())),
+    // Up to 3 interest tags the user opts to show on their public profile.
+    // Kept separate from the private `interests` list which stays private and
+    // is only ever used for recommendations/personalization.
+    publicInterests: v.optional(v.array(v.string())),
     isNINVerified: v.boolean(),
     isPhoneVerified: v.boolean(),
     isEmailVerified: v.optional(v.boolean()),
@@ -62,7 +66,8 @@ export default defineSchema({
         })
       )
     ),
-    // Cover photo for the professional page header (Convex storage id or URL).
+    // Cover photo for the profile header (Convex storage id or URL).
+    // Available to every account type, not just professional pages.
     coverImage: v.optional(v.string()),
     // Phase 2: whether this user is okay with their interest tags shown on
     // their public profile. Defaults to true. Interests always remain usable

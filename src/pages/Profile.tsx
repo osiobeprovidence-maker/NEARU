@@ -1,19 +1,23 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
 import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag, Crown, Building2, Store, User as UserIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Avatar from '../components/Avatar';
-import { useQuery } from 'convex/react';
+import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { getPublicInterests } from '../lib/utils';
 
 export default function Profile() {
-  const { user, convexUserId, persistProfile, isPro, setAccountType } = useAuth();
+  const { user, convexUserId, persistProfile, isPro, setAccountType, updateUser } = useAuth();
   const navigate = useNavigate();
   const [orgName, setOrgName] = useState(user.organizationName || '');
   const [pendingType, setPendingType] = useState<'organization' | 'business' | null>(null);
   const [orgModalOpen, setOrgModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const coverRef = useRef<CoverBannerHandle>(null);
+  const updateUserMutation = useMutation(api.users.update);
 
   const showToast = (t: string, s: string) =>
     window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: t, subtitle: s } }));
@@ -76,9 +80,26 @@ export default function Profile() {
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
 
-  const defaultInterests = ['Outdoor & Sports', 'Social Hangouts', 'Music & Events'];
-  const interestsList =
-    user.interests && user.interests.length > 0 ? user.interests : defaultInterests;
+  const publicInterests = getPublicInterests(user);
+
+  const handleCoverUploaded = async (storageId: string, blobUrl: string) => {
+    if (!convexUserId) return;
+    try {
+      await updateUserMutation({
+        userId: convexUserId as any,
+        coverImage: storageId,
+      });
+      updateUser({ coverImage: blobUrl });
+      showToast('Cover photo updated', '');
+    } catch {
+      showToast('Error', 'Could not save cover photo.');
+    }
+  };
+
+  const coverUrl =
+    user.coverImage && /^(https?:|blob:|data:)/.test(user.coverImage)
+      ? user.coverImage
+      : null;
 
   // Three distinct stat states: loading (undefined), loaded, or fallback zero
   const posted   = stats?.posted   ?? (stats === undefined ? null : 0);
@@ -90,8 +111,18 @@ export default function Profile() {
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 divide-y divide-zinc-100 overflow-hidden">
 
         {/* 1. Identity */}
-        <div className="p-6 sm:p-8 text-center">
-          <div className="relative inline-block mb-3">
+        <div>
+          {/* Cover */}
+          <CoverBanner
+            ref={coverRef}
+            coverImage={coverUrl}
+            canEdit
+            onCoverUploaded={handleCoverUploaded}
+            onError={(msg) => showToast('Error', msg)}
+          />
+
+          <div className="p-6 sm:p-8 text-center">
+            <div className="relative inline-block mb-3">
             <Avatar
               src={user.avatar}
               name={user.name}
@@ -130,7 +161,20 @@ export default function Profile() {
             {user.gender && user.gender !== 'Prefer not to say' && (
               <p className="text-zinc-400">{user.gender}</p>
             )}
-            <p className="text-zinc-400">{interestsList.join(' · ')}</p>
+            {publicInterests.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                {publicInterests.map((interest) => (
+                  <span
+                    key={interest}
+                    className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold ring-1 ring-inset ring-indigo-100"
+                  >
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-zinc-400">Add interests to personalize your feed.</p>
+            )}
           </div>
 
           <Link
@@ -140,6 +184,7 @@ export default function Profile() {
             <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
             Edit Profile
           </Link>
+        </div>
         </div>
 
         {/* Interests visibility toggle */}

@@ -66,6 +66,9 @@ export default function EditProfile() {
   const [gender, setGender] = useState(user.gender || 'Prefer not to say');
   const [birthday, setBirthday] = useState(user.birthday || '');
   const [interests, setInterests] = useState<string[]>(user.interests || []);
+  const [publicInterests, setPublicInterests] = useState<string[]>(
+    (user.publicInterests || []).slice(0, 3)
+  );
 
   const parseLocation = (loc?: string) => {
     if (!loc) return { state: '', city: '' };
@@ -155,6 +158,7 @@ export default function EditProfile() {
         locationAccuracy: position?.accuracy,
         locationUpdatedAt: position?.capturedAt,
         interests: interests.length > 0 ? interests : undefined,
+        publicInterests: publicInterests.length > 0 ? publicInterests : undefined,
       });
 
       updateUser({
@@ -164,10 +168,11 @@ export default function EditProfile() {
         email,
         phone,
         location: locationString,
-        avatar: avatarToSave || avatar,
+        avatar: avatar || undefined,
         gender,
         birthday,
         interests,
+        publicInterests: publicInterests.length > 0 ? publicInterests : undefined,
       });
 
       setIsSaved(true);
@@ -185,10 +190,11 @@ export default function EditProfile() {
         email,
         phone,
         location: locationString,
-        avatar: avatarToSave || avatar,
+        avatar: avatar || undefined,
         gender,
         birthday,
         interests,
+        publicInterests: publicInterests.length > 0 ? publicInterests : undefined,
       });
     } finally {
       setIsSaving(false);
@@ -198,6 +204,16 @@ export default function EditProfile() {
   const toggleInterest = (interest: string) => {
     setInterests((prev) =>
       prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]
+    );
+  };
+
+  const togglePublicInterest = (interest: string) => {
+    setPublicInterests((prev) =>
+      prev.includes(interest)
+        ? prev.filter((i) => i !== interest)
+        : prev.length < 3
+          ? [...prev, interest]
+          : prev
     );
   };
 
@@ -513,6 +529,52 @@ export default function EditProfile() {
                 Add custom interest
               </button>
             )}
+
+            {/* Public interests (max 3) */}
+            <div className="pt-3 mt-3 border-t border-zinc-100">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-black text-zinc-700 uppercase tracking-wider">
+                  Show on your profile
+                </p>
+                <span className="text-[11px] font-bold text-zinc-400">
+                  {publicInterests.length}/3 public
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-500 font-medium leading-relaxed mt-1 mb-2.5">
+                Up to 3 of your interests appear on your public profile. The rest
+                stay private and are only used for recommendations.
+              </p>
+              {interests.length === 0 ? (
+                <p className="text-xs text-zinc-400 font-medium">
+                  Select interests above first, then tap up to 3 to make them public.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {interests.map((interest) => {
+                    const isPublic = publicInterests.includes(interest);
+                    const atLimit = publicInterests.length >= 3 && !isPublic;
+                    const addedOrder = publicInterests.indexOf(interest);
+                    return (
+                      <button
+                        key={interest}
+                        type="button"
+                        disabled={atLimit}
+                        onClick={() => togglePublicInterest(interest)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-40 ${
+                          isPublic
+                            ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-600'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        {interest}
+                        {isPublic && <span className="text-[9px] font-black text-indigo-200">#{addedOrder + 1}</span>}
+                        {!isPublic && atLimit && <span className="text-zinc-400">private</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Contact & Identity */}

@@ -3,7 +3,7 @@ import {
   BarChart3, 
   TrendingUp, 
   Users, 
-  Zap, 
+  HelpingHand, 
   Flame, 
   Download, 
   ShieldCheck, 
@@ -168,7 +168,7 @@ export default function AdminAnalytics() {
         <AdminStatsCard
           label="TOTAL RALLYS"
           value={metrics.totalRallies.toLocaleString()}
-          icon={Zap}
+          icon={HelpingHand}
           color="text-amber-600"
           bg="bg-amber-50"
           subtitle={`${metrics.activeRallies} currently active`}

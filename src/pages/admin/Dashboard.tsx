@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Users, 
-  Zap, 
+  HelpingHand, 
   Flag, 
   ShieldCheck, 
   TrendingUp, 
@@ -130,7 +130,7 @@ export default function AdminDashboard() {
         <AdminStatsCard
           label="ACTIVE RALLYS"
           value={metrics.activeRallies.toLocaleString()}
-          icon={Zap}
+          icon={HelpingHand}
           color="text-amber-600"
           bg="bg-amber-50"
           subtitle={`${metrics.newRalliesToday} created today`}

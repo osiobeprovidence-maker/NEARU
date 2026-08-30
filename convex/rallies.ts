@@ -617,12 +617,17 @@ export const create = mutation({
       .filter((h) => h.length > 0);
     const uniqueHashtags = [...new Set(normalizedHashtags)];
 
-    // Event Hub / LALOA Pro: creating an EVENT requires Pro (server-side gate).
+    // Event Hub / LALOA Pro: creating an EVENT requires Pro AND an
+    // organization or business account (server-side gate). Personal accounts
+    // cannot host events from the normal create menu.
     if (args.type === "EVENT") {
       const creator = await ctx.db.get(args.creatorId);
-      if (!creator?.isPro) {
+      const isProAccount =
+        creator?.accountType === "organization" ||
+        creator?.accountType === "business";
+      if (!creator?.isPro || !isProAccount) {
         throw new Error(
-          "Creating an Event requires LALOA Pro. Upgrade to create events."
+          "Creating an Event requires a LALOA Pro Organization or Business account."
         );
       }
     }

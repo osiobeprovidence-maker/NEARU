@@ -24,7 +24,12 @@ export const isAdmin = query({
 });
 
 export const get = query({
-  args: { userId: v.id("users") },
+  args: {
+    userId: v.id("users"),
+    // Optional viewer. When provided and not the owner of the profile, the
+    // private interest list is redacted so it is never sent to visitors.
+    viewerId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
@@ -40,6 +45,12 @@ export const get = query({
         if (url) user.coverImage = url;
       } catch {}
     }
+    // Private interests only travel to the owner of the account.
+    if (args.viewerId && args.viewerId.toString() !== args.userId.toString()) {
+      const { interests, ...safe } = redact(user);
+      void interests;
+      return safe;
+    }
     return redact(user);
   },
 });
@@ -51,6 +62,19 @@ export const getByUsername = query({
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
       .unique();
+    if (!user) return null;
+    if (user.avatar && !user.avatar.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.avatar);
+        if (url) user.avatar = url;
+      } catch {}
+    }
+    if (user.coverImage && !user.coverImage.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.coverImage);
+        if (url) user.coverImage = url;
+      } catch {}
+    }
     return redact(user);
   },
 });
@@ -292,6 +316,7 @@ export const update = mutation({
     locationAccuracy: v.optional(v.number()),
     locationUpdatedAt: v.optional(v.number()),
     interests: v.optional(v.array(v.string())),
+    publicInterests: v.optional(v.array(v.string())),
     showInterests: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -299,6 +324,10 @@ export const update = mutation({
     const filtered = Object.fromEntries(
       Object.entries(fields).filter(([, v]) => v !== undefined)
     );
+    // Never let more than 3 interests go public through this mutation.
+    if (filtered.publicInterests) {
+      filtered.publicInterests = (filtered.publicInterests as string[]).slice(0, 3);
+    }
     if (Object.keys(filtered).length === 0) return;
     await ctx.db.patch(userId, filtered);
   },

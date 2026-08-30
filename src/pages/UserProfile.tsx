@@ -1,28 +1,52 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import Avatar from '../components/Avatar';
+import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import OrgSocialLinks from '../components/OrgSocialLinks';
-import { BadgeCheck, MapPin, Globe, UserPlus, UserCheck, Flag, Ban, ChevronRight, MessageCircle, X, Send } from 'lucide-react';
-import { cn } from '../lib/utils';
+import {
+  BadgeCheck,
+  MapPin,
+  Globe,
+  UserPlus,
+  UserCheck,
+  MessageCircle,
+  MoreHorizontal,
+  Flag,
+  Ban,
+  X,
+  Send,
+  Pencil,
+  Camera,
+  Check,
+} from 'lucide-react';
+import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 
 export default function UserProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user: me, convexUserId, blockUser } = useAuth();
+  const { user: me, convexUserId, updateUser, blockUser } = useAuth();
 
   const isSelf = !!convexUserId && convexUserId === id;
 
   const [requestModal, setRequestModal] = useState(false);
   const [requestText, setRequestText] = useState('');
   const [isMessaging, setIsMessaging] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [interestsOpen, setInterestsOpen] = useState(false);
+  const [draftPublic, setDraftPublic] = useState<string[]>([]);
 
-  const target = useQuery(api.users.get, id ? { userId: id as any } : 'skip');
+  const coverRef = useRef<CoverBannerHandle>(null);
+
+  const target = useQuery(
+    api.users.get,
+    id ? { userId: id as any, viewerId: convexUserId as any } : 'skip'
+  );
   const stats = useQuery(api.rallies.getProfileStats, id ? { userId: id as any } : 'skip');
   const followerCount = useQuery(api.follows.getFollowerCount, id ? { userId: id as any } : 'skip');
   const followingCount = useQuery(api.follows.getFollowingCount, id ? { userId: id as any } : 'skip');
@@ -43,16 +67,17 @@ export default function UserProfile() {
   const unfollowMut = useMutation(api.follows.unfollow);
   const openDirectMut = useMutation(api.messages.getOrOpenDirect);
   const sendDirectMut = useMutation(api.chatRequests.sendDirect);
+  const updateUserMutation = useMutation(api.users.update);
 
   const [isFollowBusy, setIsFollowBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'events' | 'media'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'media'>('posts');
 
   const isOrgBiz =
     !!target && (target.accountType === 'organization' || target.accountType === 'business');
   const isPrivate = target?.privacySettings?.profileVisibility === 'private';
   const isLocked = !!target && isPrivate && !isSelf && !isFollowing;
-  const showInterests = target?.showInterests !== false && !isLocked;
 
+  const displayName = target?.organizationName || target?.name || 'Loading…';
   const coverUrl =
     target?.coverImage && /^(https?:|blob:|data:)/.test(target.coverImage)
       ? target.coverImage
@@ -64,8 +89,59 @@ export default function UserProfile() {
         ? `https://${target.website}`
         : null;
 
+  const publicInterests = isLocked ? [] : getPublicInterests(target);
+  const interestPool = useMemo<string[]>(() => {
+    const pool: any[] = (target as any)?.interests || me.interests || [];
+    return [...new Set(pool.filter(Boolean))] as string[];
+  }, [target, me.interests]);
+
   const showToast = (title: string, subtitle: string) =>
     window.dispatchEvent(new CustomEvent('show-toast', { detail: { title, subtitle } }));
+
+  const openInterests = () => {
+    setDraftPublic(getPublicInterests(target));
+    setMoreOpen(false);
+    setInterestsOpen(true);
+  };
+
+  const toggleDraft = (interest: string) => {
+    setDraftPublic((prev) =>
+      prev.includes(interest)
+        ? prev.filter((i) => i !== interest)
+        : prev.length < 3
+          ? [...prev, interest]
+          : prev
+    );
+  };
+
+  const savePublicInterests = async () => {
+    if (!convexUserId || !isSelf) return;
+    try {
+      await updateUserMutation({
+        userId: convexUserId as any,
+        publicInterests: draftPublic.length > 0 ? draftPublic : undefined,
+      });
+      updateUser({ publicInterests: draftPublic });
+      setInterestsOpen(false);
+      showToast('Interests updated', 'Shown on your public profile.');
+    } catch {
+      showToast('Error', 'Could not update interests.');
+    }
+  };
+
+  const handleCoverUploaded = async (storageId: string, blobUrl: string) => {
+    if (!convexUserId || !isSelf) return;
+    try {
+      await updateUserMutation({
+        userId: convexUserId as any,
+        coverImage: storageId,
+      });
+      updateUser({ coverImage: blobUrl });
+      showToast('Cover photo updated', '');
+    } catch {
+      showToast('Error', 'Could not save cover photo.');
+    }
+  };
 
   const handleToggleFollow = async () => {
     if (!convexUserId || !id || isSelf) return;
@@ -136,11 +212,10 @@ export default function UserProfile() {
   };
 
   const tabbed = useMemo(() => {
-    if (!content) return { posts: [], rallies: [], events: [], media: [] };
-    const out = { posts: [] as any[], rallies: [] as any[], events: [] as any[], media: [] as any[] };
+    if (!content) return { posts: [], rallies: [], media: [] };
+    const out = { posts: [] as any[], rallies: [] as any[], media: [] as any[] };
     for (const c of content) {
-      if (c.type === 'EVENT') out.events.push(c);
-      else if (c.type === 'POST') out.posts.push(c);
+      if (c.type === 'POST') out.posts.push(c);
       else out.rallies.push(c);
       if (c.mediaUrl) out.media.push(c);
     }
@@ -195,11 +270,16 @@ export default function UserProfile() {
   const activeList =
     activeTab === 'posts'
       ? tabbed.posts
-      : activeTab === 'events'
-        ? tabbed.events
-        : activeTab === 'media'
-          ? tabbed.media
-          : tabbed.rallies;
+      : activeTab === 'media'
+        ? tabbed.media
+        : tabbed.rallies;
+
+  const messageLabel =
+    !directStatus
+      ? 'Message'
+      : (directStatus as any).status === 'pending_from_me'
+        ? 'Pending'
+        : 'Message';
 
   return (
     <PageShell title={target?.name ? `${target.name}'s profile` : 'Profile'}>
@@ -207,15 +287,13 @@ export default function UserProfile() {
         {/* Identity */}
         <div>
           {/* Cover */}
-          <div className="relative h-32 sm:h-44 overflow-hidden bg-gradient-to-br from-violet-600 via-indigo-600 to-sky-500">
-            {coverUrl && (
-              <img
-                src={coverUrl}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            )}
-          </div>
+          <CoverBanner
+            ref={coverRef}
+            coverImage={coverUrl}
+            canEdit={isSelf}
+            onCoverUploaded={handleCoverUploaded}
+            onError={(msg) => showToast('Error', msg)}
+          />
 
           <div className="px-6 pb-6 sm:pb-7 text-center">
             <Avatar
@@ -227,7 +305,7 @@ export default function UserProfile() {
 
             <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap px-2">
               <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-                {target?.organizationName || target?.name || 'Loading…'}
+                {displayName}
               </h2>
               {target?.isNINVerified && <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />}
               {isOrgBiz && (
@@ -241,7 +319,9 @@ export default function UserProfile() {
                 </span>
               )}
             </div>
-            <p className="text-xs font-bold text-zinc-400 mb-2.5">{target ? `@${target.username}` : ''}</p>
+            <p className="text-xs font-bold text-zinc-400 mb-2.5">
+              {target ? `@${target.username}` : ''}
+            </p>
 
             {!isLocked && (
               <>
@@ -252,7 +332,7 @@ export default function UserProfile() {
                       ? 'Follow this page to stay updated on posts and events.'
                       : 'Nothing here yet.'}
                 </p>
-                <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4">
+                <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4 flex flex-col items-center">
                   {target?.location && (
                     <div className="flex items-center justify-center gap-1 text-zinc-600">
                       <MapPin className="w-3.5 h-3.5 text-zinc-400" />
@@ -270,8 +350,17 @@ export default function UserProfile() {
                       <span className="break-all">{target?.website}</span>
                     </a>
                   )}
-                  {showInterests && target?.interests && target.interests.length > 0 && (
-                    <p className="text-zinc-400 px-4 line-clamp-2">{target.interests.join(' · ')}</p>
+                  {publicInterests.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                      {publicInterests.map((interest) => (
+                        <span
+                          key={interest}
+                          className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold ring-1 ring-inset ring-indigo-100"
+                        >
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
                 {isOrgBiz && <OrgSocialLinks links={target?.socialLinks || []} className="mb-4" />}
@@ -284,61 +373,95 @@ export default function UserProfile() {
               </p>
             )}
 
-          <div className="flex items-center justify-center gap-2">
-            {!isSelf && convexUserId && (
-              <button
-                onClick={handleToggleFollow}
-                disabled={isFollowBusy}
-                className={cn(
-                  'px-5 py-2.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50',
-                  isFollowing
-                    ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
-                    : 'bg-zinc-900 hover:bg-zinc-700 text-white shadow-sm'
-                )}
-              >
-                {isFollowBusy ? (
-                  '…'
-                ) : isFollowing ? (
-                  <><UserCheck className="w-4 h-4" /> Following</>
-                ) : (
-                  <><UserPlus className="w-4 h-4" /> Follow</>
-                )}
-              </button>
-            )}
-            {!isSelf && convexUserId && (
-              <Link
-                to={`/report/${id}`}
-                className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
-              >
-                <Flag className="w-4 h-4" /> Report
-              </Link>
-            )}
-            {!isSelf && convexUserId && directStatus && (directStatus as any).status !== 'blocked' && (
-              <button
-                onClick={handleMessage}
-                disabled={isMessaging || (directStatus as any).status === 'pending_from_me'}
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95 disabled:opacity-50"
-              >
-                {isMessaging ? (
-                  '…'
-                ) : (directStatus as any).status === 'pending_from_me' ? (
-                  <><MessageCircle className="w-4 h-4" /> Pending</>
-                ) : (directStatus as any).status === 'mutual' ? (
-                  <><MessageCircle className="w-4 h-4" /> Message</>
-                ) : (
-                  <><MessageCircle className="w-4 h-4" /> Message</>
-                )}
-              </button>
-            )}
-            {!isSelf && convexUserId && (
-              <button
-                onClick={handleBlock}
-                className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
-              >
-                <Ban className="w-4 h-4" /> Block
-              </button>
-            )}
-          </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {isSelf && convexUserId ? (
+                <>
+                  <Link
+                    to="/settings/personal-info"
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <Pencil className="w-4 h-4" /> Edit Profile
+                  </Link>
+                  <button
+                    onClick={() => coverRef.current?.openPicker()}
+                    className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
+                  >
+                    <Camera className="w-4 h-4" /> Edit Cover
+                  </button>
+                  <button
+                    onClick={openInterests}
+                    className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
+                  >
+                    <BadgeCheck className="w-4 h-4" /> Edit Interests
+                  </button>
+                </>
+              ) : (
+                convexUserId && (
+                  <>
+                    <button
+                      onClick={handleToggleFollow}
+                      disabled={isFollowBusy}
+                      className={cn(
+                        'px-5 py-2.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50',
+                        isFollowing
+                          ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
+                          : 'bg-zinc-900 hover:bg-zinc-700 text-white shadow-sm'
+                      )}
+                    >
+                      {isFollowBusy ? (
+                        '…'
+                      ) : isFollowing ? (
+                        <><UserCheck className="w-4 h-4" /> Following</>
+                      ) : (
+                        <><UserPlus className="w-4 h-4" /> Follow</>
+                      )}
+                    </button>
+                    {directStatus && (directStatus as any).status !== 'blocked' && (
+                      <button
+                        onClick={handleMessage}
+                        disabled={isMessaging || (directStatus as any).status === 'pending_from_me'}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95 disabled:opacity-50"
+                      >
+                        {isMessaging ? (
+                          '…'
+                        ) : (
+                          <><MessageCircle className="w-4 h-4" /> {messageLabel}</>
+                        )}
+                      </button>
+                    )}
+                    <div className="relative">
+                      <button
+                        onClick={() => setMoreOpen((o) => !o)}
+                        className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
+                        aria-label="More actions"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                      {moreOpen && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
+                          <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
+                            <Link
+                              to={`/report/${id}`}
+                              onClick={() => setMoreOpen(false)}
+                              className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                            >
+                              <Flag className="w-4 h-4 text-rose-500" /> Report
+                            </Link>
+                            <button
+                              onClick={handleBlock}
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                            >
+                              <Ban className="w-4 h-4 text-red-500" /> Block
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )
+              )}
+            </div>
           </div>
         </div>
 
@@ -355,7 +478,7 @@ export default function UserProfile() {
         {!isLocked && (
           <>
             <div className="flex border-b border-zinc-100">
-              {(isOrgBiz ? (['posts', 'rallies', 'events', 'media'] as const) : (['posts', 'rallies', 'media'] as const)).map((tab) => (
+              {(['posts', 'rallies', 'media'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -387,18 +510,85 @@ export default function UserProfile() {
             </div>
           </>
         )}
-
-        {/* Self: link to edit */}
-        {isSelf && (
-          <Link
-            to="/settings/personal-info"
-            className="flex items-center justify-between p-4 sm:p-5 hover:bg-zinc-50/80 transition-colors font-bold text-zinc-900 text-sm group"
-          >
-            <span>Edit Profile Information</span>
-            <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all" />
-          </Link>
-        )}
       </div>
+
+      {/* Edit Interests modal (self only) */}
+      {interestsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-black text-zinc-900">Public interests</h3>
+              <button
+                onClick={() => setInterestsOpen(false)}
+                className="p-2 -mr-2 rounded-full hover:bg-zinc-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-600" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500 font-medium mb-4 leading-relaxed">
+              Pick up to 3 interests to show on your public profile. The rest stay
+              private and are only used for recommendations.
+            </p>
+
+            {interestPool.length === 0 ? (
+              <Link
+                to="/settings/personal-info"
+                onClick={() => setInterestsOpen(false)}
+                className="block text-center py-4 rounded-2xl border-2 border-dashed border-zinc-200 text-sm font-bold text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors"
+              >
+                Add interests in Edit Profile first
+              </Link>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 mb-5">
+                {interestPool.map((interest) => {
+                  const isSelected = draftPublic.includes(interest);
+                  const atLimit = draftPublic.length >= 3 && !isSelected;
+                  const addedOrder = draftPublic.indexOf(interest);
+                  return (
+                    <button
+                      key={interest}
+                      type="button"
+                      disabled={atLimit}
+                      onClick={() => toggleDraft(interest)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-40',
+                        isSelected
+                          ? 'bg-zinc-900 text-white shadow-xs ring-1 ring-zinc-900'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                      )}
+                    >
+                      {interest}
+                      {isSelected && (
+                        <span className="text-[10px] font-black text-zinc-400">
+                          #{addedOrder + 1}
+                        </span>
+                      )}
+                      {!isSelected && atLimit && <span className="text-zinc-400">(private)</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setInterestsOpen(false)}
+                className="flex-1 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-sm font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={savePublicInterests}
+                className="flex-1 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-bold inline-flex items-center justify-center gap-1.5 transition-colors active:scale-[0.98]"
+              >
+                <Check className="w-4 h-4" /> Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Message request modal */}
       {requestModal && (

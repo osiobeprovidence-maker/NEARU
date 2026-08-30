@@ -10,22 +10,20 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, FileText, HelpingHand, Calendar } from 'lucide-react';
+import { X, FileText, HelpingHand } from 'lucide-react';
 
 interface CreateContentSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called with 'post', 'rally' or 'event' when the user makes a selection. */
-  onSelect: (type: 'post' | 'rally' | 'event') => void;
-  /** Show the Event option — only for LALOA Pro organizations/businesses. */
-  canCreateEvent?: boolean;
+  /** Called with 'post' or 'rally' when the user makes a selection.
+   *  Events are created from the Organization/Business page, not here. */
+  onSelect: (type: 'post' | 'rally') => void;
 }
 
 export default function CreateContentSheet({
   isOpen,
   onClose,
   onSelect,
-  canCreateEvent = false,
 }: CreateContentSheetProps) {
   return (
     <AnimatePresence>
@@ -113,27 +111,6 @@ export default function CreateContentSheet({
                   </p>
                 </div>
               </button>
-
-              {/* Event (LALOA Pro org/business only) */}
-              {canCreateEvent && (
-                <button
-                  onClick={() => onSelect('event')}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-zinc-100 hover:border-violet-200 hover:bg-violet-50/40 text-left transition-all active:scale-[0.98] group"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
-                    <Calendar className="w-6 h-6 text-violet-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-black text-zinc-900 text-base tracking-tight">
-                      Event
-                    </p>
-                    <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
-                      Host or share a local event for your organization or
-                      business. Requires LALOA Pro.
-                    </p>
-                  </div>
-                </button>
-              )}
             </div>
           </motion.div>
         </>

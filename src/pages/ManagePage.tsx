@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import Avatar from '../components/Avatar';
+import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import OrgSocialLinks, {
@@ -19,7 +20,7 @@ import {
   Calendar,
   Building2,
   Image,
-  Rocket,
+  HelpingHand,
   ChevronRight,
   ExternalLink,
   Pencil,
@@ -52,6 +53,8 @@ export default function ManagePage() {
   const { user, convexUserId, isPro, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'events' | 'media'>('posts');
   const [editOpen, setEditOpen] = useState(false);
+  const coverRef = useRef<CoverBannerHandle>(null);
+  const updateUserMutation = useMutation(api.users.update);
 
   const isOrgBiz =
     user.accountType === 'organization' || user.accountType === 'business';
@@ -158,6 +161,23 @@ export default function ManagePage() {
     );
   };
 
+  const showToast = (t: string, s: string) =>
+    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: t, subtitle: s } }));
+
+  const handleCoverUploaded = async (storageId: string, blobUrl: string) => {
+    if (!convexUserId) return;
+    try {
+      await updateUserMutation({
+        userId: convexUserId as any,
+        coverImage: storageId,
+      });
+      updateUser({ coverImage: blobUrl });
+      showToast('Cover photo updated', '');
+    } catch {
+      showToast('Error', 'Could not save cover photo.');
+    }
+  };
+
   // Not an org/business account — show a helpful gate instead of the page.
   if (!isOrgBiz) {
     return (
@@ -205,15 +225,14 @@ export default function ManagePage() {
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 divide-y divide-zinc-100 overflow-hidden">
         {/* Cover + Identity */}
         <div>
-          <div className="relative h-32 sm:h-44 overflow-hidden bg-gradient-to-br from-violet-600 via-indigo-600 to-sky-500">
-            {coverUrl && (
-              <img
-                src={coverUrl}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            )}
-          </div>
+          {/* Cover */}
+          <CoverBanner
+            ref={coverRef}
+            coverImage={coverUrl}
+            canEdit
+            onCoverUploaded={handleCoverUploaded}
+            onError={(msg) => showToast('Error', msg)}
+          />
 
           <div className="px-6 pb-6 sm:pb-7 text-center">
             <Avatar
@@ -278,6 +297,14 @@ export default function ManagePage() {
                 <Pencil className="w-4 h-4" />
                 Edit Page
               </button>
+              <button
+                onClick={() => dispatchCreate('EVENT')}
+                className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
+                title="Create a new Event"
+              >
+                <Calendar className="w-4 h-4" />
+                Create Event
+              </button>
               <Link
                 to={`/user/${convexUserId}`}
                 className="px-5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
@@ -328,7 +355,9 @@ export default function ManagePage() {
             <EmptyState
               icon={<Calendar className="w-8 h-8" />}
               title="No events yet"
-              body="Events you create with the + button will appear here."
+              body="Host a local event for your organization or business."
+              actionLabel="Create an Event"
+              onAction={() => dispatchCreate('EVENT')}
             />
           ) : activeTab === 'posts' ? (
             <EmptyState
@@ -340,7 +369,7 @@ export default function ManagePage() {
             />
           ) : activeTab === 'rallies' ? (
             <EmptyState
-              icon={<Rocket className="w-8 h-8" />}
+              icon={<HelpingHand className="w-8 h-8" />}
               title="No RALLYs yet"
               body="Create a RALLY to bring people together near you."
               actionLabel="Create a RALLY"
@@ -562,8 +591,8 @@ function EditPageSheet({
         location: location.trim() || undefined,
         website: websiteValue,
         socialLinks: links.length > 0 ? links : undefined,
-        avatar: avatarStorageId || avatar,
-        coverImage: coverStorageId || cover,
+        avatar: avatar || undefined,
+        coverImage: cover || undefined,
       });
 
       onClose();

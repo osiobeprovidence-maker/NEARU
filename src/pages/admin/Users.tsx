@@ -21,7 +21,6 @@ import {
   ChevronDown,
   UserPlus,
   BadgeCheck,
-  Zap,
   Flag,
   Calendar,
   Send,

@@ -100,12 +100,12 @@ export default function AppShell() {
     };
   }, []);
 
-  // Called when the user picks an option in the create sheet. 'event' is only
-  // offered to Pro org/business accounts and opens the flow with EVENT selected.
-  const handleCreateSelect = (choice: 'post' | 'rally' | 'event') => {
+  // Called when the user picks an option in the create sheet. Only Post and
+  // Rally are offered here — Events are created from the Organization/Business
+  // page, which dispatches 'open-create-rally' with type EVENT directly.
+  const handleCreateSelect = (choice: 'post' | 'rally') => {
     setIsCreateContentOpen(false);
     if (choice === 'post') setCreateInitialType('POST');
-    else if (choice === 'event') setCreateInitialType('EVENT');
     else setCreateInitialType(undefined);
     setIsCreateModalOpen(true);
   };
@@ -215,7 +215,6 @@ export default function AppShell() {
         isOpen={isCreateContentOpen}
         onClose={() => setIsCreateContentOpen(false)}
         onSelect={handleCreateSelect}
-        canCreateEvent={isOrgOrBiz && !!user.isPro}
       />
 
       <LocationFilterModal 

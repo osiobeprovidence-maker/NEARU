@@ -56,6 +56,9 @@ export interface User {
   gender?: string;
   birthday?: string;
   interests?: string[];
+  /** Up to 3 interest tags the user opts to show publicly on their profile.
+   *  Distinct from `interests` which is the private/personalization list. */
+  publicInterests?: string[];
   isNINVerified: boolean;
   isPhoneVerified: boolean;
   badges?: string[];

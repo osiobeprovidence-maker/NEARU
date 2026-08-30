@@ -12,7 +12,7 @@ import {
   Search,
   Menu,
   X,
-  Zap,
+  HelpingHand,
   ArrowLeft,
   CheckCircle2,
   AlertTriangle,
@@ -34,7 +34,7 @@ import { AdminToastContainer } from '../components/admin/AdminToastContainer';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
   { icon: Users, label: 'User Management', path: '/admin/users' },
-  { icon: Zap, label: 'RALLY Moderation', path: '/admin/rallies' },
+  { icon: HelpingHand, label: 'RALLY Moderation', path: '/admin/rallies' },
   { icon: Flag, label: 'Reports', path: '/admin/reports', badgeKey: 'pendingReports' },
   { icon: BadgeCheck, label: 'Verification', path: '/admin/verification', badgeKey: 'pendingVerifications' },
   { icon: Bell, label: 'Notifications', path: '/admin/notifications' },

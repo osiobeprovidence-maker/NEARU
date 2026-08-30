@@ -55,6 +55,7 @@ interface AuthContextType {
     bio?: string;
     location?: string;
     interests?: string[];
+    publicInterests?: string[];
     showInterests?: boolean;
   }) => Promise<void>;
   grantPro: () => Promise<void>;
@@ -151,6 +152,7 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
     gender: cu.gender,
     birthday: cu.birthday,
     interests: cu.interests,
+    publicInterests: cu.publicInterests,
     isNINVerified: cu.isNINVerified ?? false,
     isPhoneVerified: cu.isPhoneVerified ?? false,
     badges: cu.badges,
@@ -574,6 +576,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bio?: string;
     location?: string;
     interests?: string[];
+    publicInterests?: string[];
     showInterests?: boolean;
   }) => {
     if (convexUserId) {
@@ -582,6 +585,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: updates.bio,
         location: updates.location,
         interests: updates.interests,
+        publicInterests: updates.publicInterests,
         showInterests: updates.showInterests,
       });
     }
