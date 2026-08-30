@@ -640,22 +640,29 @@ export const create = mutation({
       if (base) eventTag = `#${base}`;
     }
 
+    // Resolve + validate the access model at the data layer (server-side):
+    // honor an explicit pricing choice, falling back to legacy isPaid/price
+    // for older clients. 'paid' always maps to isPaid=true and must include a
+    // price > 0; 'free' and 'none' never store a price.
+    const effectivePricing: "free" | "paid" | "none" = args.pricing
+      ? args.pricing
+      : args.isPaid
+      ? "paid"
+      : "none";
+    const effectiveIsPaid = effectivePricing === "paid";
+    const effectivePrice =
+      effectiveIsPaid && args.price && args.price > 0
+        ? Math.round(args.price)
+        : undefined;
+    if (effectiveIsPaid && effectivePrice === undefined) {
+      throw new Error("Paid RALLYs must include a price greater than zero.");
+    }
+
     const rallyId = await ctx.db.insert("rallies", {
       ...args,
-      // Normalize the access model: honor an explicit pricing choice, falling
-      // back to legacy isPaid/price for older clients. 'paid' always maps to
-      // isPaid=true and must include a price > 0, so the price is enforced
-      // server-side rather than trusted from the client.
-      pricing: args.pricing ? args.pricing : args.isPaid ? "paid" : "none",
-      isPaid:
-        (args.pricing ?? (args.isPaid ? "paid" : "none")) === "paid" ||
-        (args.isPaid && !args.pricing),
-      price:
-        (args.pricing ?? (args.isPaid ? "paid" : "none")) === "paid" &&
-        args.price &&
-        args.price > 0
-          ? Math.round(args.price)
-          : undefined,
+      pricing: effectivePricing,
+      isPaid: effectiveIsPaid,
+      price: effectivePrice,
       // Only store interest on POST type; clear it for RALLY types to keep data clean
       interest: args.type === "POST" && args.interest ? args.interest.toLowerCase().trim() : undefined,
       // Event tag only meaningful on RALLY types
