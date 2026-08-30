@@ -20,7 +20,9 @@ import {
   LayoutDashboard,
   MapPin,
   ChevronDown,
-  ArrowLeft
+  ArrowLeft,
+  Building2,
+  Store
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -115,8 +117,20 @@ export default function AppShell() {
     { label: 'Notifications', icon: Bell, path: '/notifications' },
   ];
 
+  const isOrgOrBiz =
+    user.accountType === 'organization' || user.accountType === 'business';
+
   const secondaryNavItems = [
     { label: 'Profile', icon: User, path: '/profile' },
+    ...(isOrgOrBiz
+      ? [
+          {
+            label: 'My Page',
+            icon: user.accountType === 'business' ? Store : Building2,
+            path: '/manage',
+          },
+        ]
+      : []),
     { label: 'Verification', icon: ShieldCheck, path: '/verification' },
     { label: 'RALLY+', icon: Crown, path: '/plus' },
   ];
@@ -136,6 +150,7 @@ export default function AppShell() {
     if (path === '/my-rallys') return 'My RALLYS';
     if (path === '/notifications') return 'Notifications';
     if (path === '/profile') return 'Profile';
+    if (path === '/manage') return 'My Page';
     if (path === '/profile/edit') return 'Edit Profile';
     if (path === '/verification') return 'Verification';
     if (path === '/plus') return 'RALLY+';
@@ -326,6 +341,7 @@ export default function AppShell() {
                 routeLocation.pathname.startsWith('/settings/') || 
                 routeLocation.pathname === '/profile/edit' || 
                 routeLocation.pathname === '/verification' || 
+                routeLocation.pathname === '/manage' ||
                 routeLocation.pathname === '/plus' ||
                 routeLocation.pathname === '/safety' || 
                 routeLocation.pathname === '/terms' || 
@@ -360,6 +376,7 @@ export default function AppShell() {
                routeLocation.pathname === '/profile/edit' || 
                routeLocation.pathname.startsWith('/settings/') ||
                routeLocation.pathname === '/verification' ||
+               routeLocation.pathname === '/manage' ||
                routeLocation.pathname === '/plus' ||
                routeLocation.pathname === '/safety' ||
                routeLocation.pathname === '/terms' ||

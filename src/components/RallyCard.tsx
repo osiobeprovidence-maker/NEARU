@@ -342,18 +342,23 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
-            <span>
+          <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5 min-w-0">
+            <span className="truncate">
               {rally.creator.username
                 ? rally.creator.username.startsWith('@')
                   ? rally.creator.username
                   : `@${rally.creator.username}`
                 : ''}
             </span>
-            {rally.city && (
+            <span>·</span>
+            <span className="shrink-0">{timeAgo(rally.createdAt)}</span>
+            {(rally.locationLabel || rally.city) && (
               <>
                 <span>·</span>
-                <span>{rally.city}</span>
+                <span className="flex items-center gap-0.5 truncate">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{rally.locationLabel || rally.city}</span>
+                </span>
               </>
             )}
           </div>
@@ -422,20 +427,6 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         )}
       </div>
 
-      {/* Hashtags */}
-      {rally.hashtags && rally.hashtags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {rally.hashtags.slice(0, 5).map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100"
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Event association (event posts in feed) */}
       {rally.rallyLinkId && rally.linkedEvent && (
         <Link
@@ -466,6 +457,12 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       )}
       <p className="text-sm text-zinc-600 leading-relaxed mb-4 line-clamp-3">
         {rally.description}
+        {rally.hashtags?.slice(0, 5).map((tag) => (
+          <span key={tag} className="text-indigo-600 font-semibold">
+            {' '}
+            #{tag}
+          </span>
+        ))}
       </p>
 
       {/* Media */}
@@ -496,42 +493,38 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
         </div>
       )}
 
-      {/* Meta row */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        {(rally.locationLabel || rally.city) && (
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
-            <MapPin className="w-3.5 h-3.5" />
-            {rally.locationLabel || rally.city}
-          </div>
-        )}
-        {rally.time && rally.time !== 'Soon' && (
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
-            <Clock className="w-3.5 h-3.5" />
-            {rally.time}
-          </div>
-        )}
-        {rally.eventDate && (
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
-            <Calendar className="w-3.5 h-3.5" />
-            {rally.eventDate}
-          </div>
-        )}
-        {isEvent && rally.capacity && rally.capacity > 0 && (
-          <div
-            className={cn(
-              'flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md',
-              isFull
-                ? 'bg-rose-50 text-rose-600'
-                : 'bg-indigo-50 text-indigo-600'
-            )}
-          >
-            <Users className="w-3.5 h-3.5" />
-            {isFull
-              ? 'SOLD OUT'
-              : `${Math.max(0, rally.capacity - localRsvpCount)} SPOTS LEFT`}
-          </div>
-        )}
-      </div>
+      {/* Event details — only for actual EVENT content */}
+      {isEvent && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          {rally.time && rally.time !== 'Soon' && (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+              <Clock className="w-3.5 h-3.5" />
+              {rally.time}
+            </div>
+          )}
+          {rally.eventDate && (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+              <Calendar className="w-3.5 h-3.5" />
+              {rally.eventDate}
+            </div>
+          )}
+          {rally.capacity && rally.capacity > 0 && (
+            <div
+              className={cn(
+                'flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md',
+                isFull
+                  ? 'bg-rose-50 text-rose-600'
+                  : 'bg-indigo-50 text-indigo-600'
+              )}
+            >
+              <Users className="w-3.5 h-3.5" />
+              {isFull
+                ? 'SOLD OUT'
+                : `${Math.max(0, rally.capacity - localRsvpCount)} SPOTS LEFT`}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* RSVP count for events */}
       {isEvent && localRsvpCount > 0 && (
@@ -679,10 +672,24 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Tiny helper — avoids importing toast context in card
+// Tiny helpers — avoid importing toast context in card
 // ---------------------------------------------------------------------------
 function showToast(title: string, subtitle: string) {
   window.dispatchEvent(
     new CustomEvent('show-toast', { detail: { title, subtitle } })
   );
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diff = Math.max(0, Date.now() - then);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  return new Date(iso).toLocaleDateString();
 }
