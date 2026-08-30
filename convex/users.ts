@@ -1,7 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-const SUPER_ADMIN_EMAIL = "riderEasy@gmail.com";
+const SUPER_ADMIN_EMAIL = "riderezzy@gmail.com";
 
 export const isAdmin = query({
   args: { userId: v.id("users") },

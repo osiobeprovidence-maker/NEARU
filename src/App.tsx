@@ -52,7 +52,7 @@ const AdminAnalytics = React.lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
 const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
 
-const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
+const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
 
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();

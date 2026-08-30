@@ -22,7 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 
-const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
+const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
 
 export default function Settings() {
   const { logout, user } = useAuth();

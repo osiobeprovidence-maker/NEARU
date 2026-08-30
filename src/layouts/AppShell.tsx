@@ -49,7 +49,7 @@ export default function AppShell() {
     updateLocation 
   } = useLocationContext();
   
-  const SUPER_ADMIN_EMAIL = 'riderEasy@gmail.com';
+  const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
   const isAdmin = user.email === SUPER_ADMIN_EMAIL;
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

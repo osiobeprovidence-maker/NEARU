@@ -7,7 +7,7 @@ import admin from "firebase-admin";
 import { callConvexQuery } from "./convexClient.js";
 import { authError } from "./errors.js";
 
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "riderEasy@gmail.com";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "riderezzy@gmail.com";
 
 let appInit = false;
 function getFirebaseApp() {
