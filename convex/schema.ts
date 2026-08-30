@@ -130,6 +130,12 @@ export default defineSchema({
     peopleInterested: v.number(),
     isPaid: v.boolean(),
     price: v.optional(v.number()),
+    // Access model: 'free' = FREE, 'paid' = charged admission, 'none' = no
+    // admission fee applied. Kept alongside legacy isPaid/price for backwards
+    // compatibility with existing data and the rest of the product.
+    pricing: v.optional(
+      v.union(v.literal("free"), v.literal("paid"), v.literal("none"))
+    ),
     creatorId: v.id("users"),
     status: v.union(
       v.literal("ACTIVE"),

@@ -51,6 +51,7 @@ function mapRally(r: any): Rally {
     peopleInterested: r.peopleInterested,
     isPaid: r.isPaid,
     price: r.price,
+    pricing: r.pricing,
     creator: r.creator
       ? {
           id: r.creator._id,

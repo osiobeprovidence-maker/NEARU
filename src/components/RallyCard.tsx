@@ -22,6 +22,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Rally } from '../types';
+import { rallyAccess } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import Avatar from './Avatar';
 import { useMutation, useQuery } from 'convex/react';
@@ -108,6 +109,9 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
 
   const config = typeConfig[rally.type];
   const Icon = config.icon;
+  // Access badge — POST content never shows a price/admission badge.
+  const access = rallyAccess(rally);
+  const isPostType = rally.type === 'POST';
 
   // Action button labels
   const defaultActionText = isAsk
@@ -364,7 +368,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
           </div>
         </Link>
 
-        {/* Type + paid badges */}
+        {/* Type + price badges */}
         <div className="flex items-center gap-2 shrink-0">
           <div
             className={cn(
@@ -374,13 +378,16 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
           >
             {rally.type}
           </div>
-          {rally.isPaid ? (
-            <div className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200">
-              {rally.price ? `₦${rally.price.toLocaleString()}` : 'PAID'}
-            </div>
-          ) : (
-            <div className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200">
-              FREE
+          {!isPostType && (
+            <div
+              className={cn(
+                'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ring-1 ring-inset',
+                access.kind === 'paid'
+                  ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                  : 'bg-zinc-100 text-zinc-600 ring-zinc-200'
+              )}
+            >
+              {access.label}
             </div>
           )}
         </div>

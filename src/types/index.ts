@@ -88,6 +88,8 @@ export interface Rally {
   peopleInterested: number;
   isPaid: boolean;
   price?: number;
+  /** Access model: 'free' = FREE, 'paid' = charged admission, 'none' = no admission fee. */
+  pricing?: 'free' | 'paid' | 'none';
   creator: User;
   status: 'ACTIVE' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;

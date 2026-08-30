@@ -21,6 +21,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { createMuxUpload, putFileToMux, waitForPlayback } from '../lib/mux';
 import { ActivityType } from '../types';
+import { RallyPricing } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -68,7 +69,7 @@ export default function CreateRallyModal({
   const [step, setStep] = useState(1);
   const [type, setType] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState('');
-  const [isPaid, setIsPaid] = useState<boolean | null>(null);
+  const [pricing, setPricing] = useState<RallyPricing | null>(null);
   const [price, setPrice] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
@@ -115,10 +116,11 @@ export default function CreateRallyModal({
   const hasLocation =
     geoState === 'active' || geoState === 'manual' || geoState === 'updating';
 
-  // POST type is always free — set isPaid automatically when type changes
+  // POST type never takes an admission model — clear any stale pricing choice
+  // when the type changes so POST can't accidentally be marked Paid.
   useEffect(() => {
     if (type && POST_ONLY_TYPES.includes(type)) {
-      setIsPaid(false);
+      setPricing(null);
     }
   }, [type]);
 
@@ -135,7 +137,7 @@ export default function CreateRallyModal({
     setStep(1);
     setType(null);
     setDescription('');
-    setIsPaid(null);
+    setPricing(null);
     setPrice('');
     setEventDate('');
     setEventTime('');
@@ -257,14 +259,19 @@ export default function CreateRallyModal({
 
   const handlePost = async () => {
     if (!type || !description.trim()) return;
-    // For non-POST types, paid/free must be chosen
-    if (!POST_ONLY_TYPES.includes(type) && isPaid === null) return;
+    // For non-POST types, the admission model must be chosen
+    if (!POST_ONLY_TYPES.includes(type) && pricing === null) return;
 
     setIsPosting(true);
     try {
       const userId = await ensureConvexUser();
       const title = description.split('\n')[0].slice(0, 80) || `${type} RALLY`;
-      const effectiveIsPaid = isPaid ?? false;
+      // POST never carries an admission model; RALLY types publish the explicit
+      // three-way pricing choice (free / paid / no admission fee).
+      const effectivePricing: RallyPricing = POST_ONLY_TYPES.includes(type)
+        ? 'none'
+        : (pricing ?? 'none');
+      const effectiveIsPaid = effectivePricing === 'paid';
 
       const rallyId = await createRally({
         type,
@@ -278,6 +285,7 @@ export default function CreateRallyModal({
         isPaid: effectiveIsPaid,
         price:
           effectiveIsPaid && price ? parseInt(price, 10) : undefined,
+        pricing: effectivePricing,
         creatorId: userId as any,
         city: city || undefined,
         locationLabel: rallyLocation,
@@ -355,11 +363,11 @@ export default function CreateRallyModal({
   // Validation
   // -------------------------------------------------------------------------
   const isPost = type && POST_ONLY_TYPES.includes(type);
-  const needsPaidChoice = type && !isPost;
+  const needsPricingChoice = type && !isPost;
   const canReview =
     !!description.trim() &&
     !isUploading &&
-    (isPost || (isPaid !== null && (!isPaid || !!price)));
+    (isPost || (pricing !== null && (pricing !== 'paid' || !!price)));
 
   // -------------------------------------------------------------------------
   // Visual config
@@ -861,17 +869,17 @@ export default function CreateRallyModal({
                         </div>
                       </div>
 
-                      {/* Free / Paid */}
+                      {/* Admission model: Free / Paid / No admission fee */}
                       <div className="space-y-3">
                         <h3 className="text-sm font-bold text-zinc-900">
-                          Free or Paid?
+                          Admission
                         </h3>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-2">
                           <button
-                            onClick={() => setIsPaid(false)}
+                            onClick={() => setPricing('free')}
                             className={cn(
-                              'py-3 rounded-xl font-bold text-sm transition-all border-2',
-                              isPaid === false
+                              'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm transition-all border-2',
+                              pricing === 'free'
                                 ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
                                 : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
                             )}
@@ -879,18 +887,29 @@ export default function CreateRallyModal({
                             FREE
                           </button>
                           <button
-                            onClick={() => setIsPaid(true)}
+                            onClick={() => setPricing('paid')}
                             className={cn(
-                              'py-3 rounded-xl font-bold text-sm transition-all border-2',
-                              isPaid === true
+                              'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm transition-all border-2',
+                              pricing === 'paid'
                                 ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-xs'
                                 : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
                             )}
                           >
                             PAID
                           </button>
+                          <button
+                            onClick={() => setPricing('none')}
+                            className={cn(
+                              'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm leading-tight transition-all border-2',
+                              pricing === 'none'
+                                ? 'border-indigo-500 bg-indigo-50 text-indigo-800 shadow-xs'
+                                : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
+                            )}
+                          >
+                            No admission fee
+                          </button>
                         </div>
-                        {isPaid && (
+                        {pricing === 'paid' && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
@@ -976,16 +995,22 @@ export default function CreateRallyModal({
                           </div>
                         )}
                       </div>
-                      {!isPost && isPaid !== null && (
+                      {!isPost && pricing !== null && (
                         <div
                           className={cn(
                             'ml-auto px-2.5 py-1 rounded-full text-xs font-bold',
-                            isPaid
+                            pricing === 'paid'
                               ? 'bg-amber-100 text-amber-700'
+                              : pricing === 'none'
+                              ? 'bg-zinc-100 text-zinc-600'
                               : 'bg-emerald-100 text-emerald-700'
                           )}
                         >
-                          {isPaid ? `₦${price || '?'}` : 'FREE'}
+                          {pricing === 'paid'
+                            ? `₦${price || '?'}`
+                            : pricing === 'free'
+                            ? 'FREE'
+                            : 'No admission fee'}
                         </div>
                       )}
                     </div>

@@ -1,31 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import PageShell from '../components/PageShell';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import { cn } from '../lib/utils';
-import { Users, Calendar, Crown } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Rally } from '../types';
 
 export default function MyRallys() {
-  const navigate = useNavigate();
-  const { convexUserId, isPro, user } = useAuth();
+  const { convexUserId } = useAuth();
   const [activeTab, setActiveTab] = useState('Created');
   // Optimistic local delete — remove card immediately without waiting for re-query
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
-
-  const canCreateEvent =
-    isPro &&
-    (user.accountType === 'organization' || user.accountType === 'business');
-
-  const openCreateEvent = () => {
-    window.dispatchEvent(
-      new CustomEvent('open-create-rally', { detail: { type: 'EVENT' } })
-    );
-  };
 
   const myRallies = useQuery(
     api.rallies.listByCreator,
@@ -50,6 +38,7 @@ export default function MyRallys() {
       peopleInterested: r.peopleInterested,
       isPaid: r.isPaid,
       price: r.price,
+      pricing: r.pricing,
       creator: r.creator
         ? {
             id: r.creator._id,
@@ -120,16 +109,6 @@ export default function MyRallys() {
             </button>
           ))}
         </div>
-        {canCreateEvent && (
-          <button
-            onClick={openCreateEvent}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-all active:scale-95 shrink-0"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            Create Event
-            <Crown className="w-3 h-3 text-amber-400" />
-          </button>
-        )}
       </div>
 
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">

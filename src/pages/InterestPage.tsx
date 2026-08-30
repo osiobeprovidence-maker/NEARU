@@ -56,6 +56,7 @@ export default function InterestPage() {
     peopleInterested: r.peopleInterested,
     isPaid: r.isPaid,
     price: r.price,
+    pricing: r.pricing,
     creator: r.creator ? {
       id: r.creator._id,
       name: r.creator.name,

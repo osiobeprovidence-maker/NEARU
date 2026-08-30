@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Rally } from '../types';
+import { rallyAccess } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import Avatar from './Avatar';
 import { useMutation, useQuery } from 'convex/react';
@@ -98,6 +99,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   const isPost = post.type === 'POST';
   const isRallyContent = !isPost; // ASK / HELP / JOIN / EVENT
   const action = post.type !== 'POST' ? RALLY_ACTION[post.type] : undefined;
+  const access = rallyAccess(post);
 
   // Is the event at capacity?
   const isFull =
@@ -452,9 +454,9 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                 <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600">
                   Rally
                 </span>
-                {post.isPaid && (
+                {access.kind === 'paid' && (
                   <span className="ml-auto text-[11px] font-bold text-amber-700">
-                    {post.price ? `₦${post.price.toLocaleString()}` : 'Paid'}
+                    {access.label}
                   </span>
                 )}
               </div>

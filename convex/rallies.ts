@@ -573,6 +573,10 @@ export const create = mutation({
     peopleNeeded: v.number(),
     isPaid: v.boolean(),
     price: v.optional(v.number()),
+    // Access model: 'free' | 'paid' | 'none' (none = no admission fee).
+    pricing: v.optional(
+      v.union(v.literal("free"), v.literal("paid"), v.literal("none"))
+    ),
     creatorId: v.id("users"),
     // Event hub: optional pre-configured event tag; auto-generated if absent.
     eventTag: v.optional(v.string()),
@@ -638,6 +642,20 @@ export const create = mutation({
 
     const rallyId = await ctx.db.insert("rallies", {
       ...args,
+      // Normalize the access model: honor an explicit pricing choice, falling
+      // back to legacy isPaid/price for older clients. 'paid' always maps to
+      // isPaid=true and must include a price > 0, so the price is enforced
+      // server-side rather than trusted from the client.
+      pricing: args.pricing ? args.pricing : args.isPaid ? "paid" : "none",
+      isPaid:
+        (args.pricing ?? (args.isPaid ? "paid" : "none")) === "paid" ||
+        (args.isPaid && !args.pricing),
+      price:
+        (args.pricing ?? (args.isPaid ? "paid" : "none")) === "paid" &&
+        args.price &&
+        args.price > 0
+          ? Math.round(args.price)
+          : undefined,
       // Only store interest on POST type; clear it for RALLY types to keep data clean
       interest: args.type === "POST" && args.interest ? args.interest.toLowerCase().trim() : undefined,
       // Event tag only meaningful on RALLY types

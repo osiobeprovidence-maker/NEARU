@@ -72,6 +72,7 @@ export default function ManagePage() {
       peopleInterested: r.peopleInterested,
       isPaid: r.isPaid,
       price: r.price,
+      pricing: r.pricing,
       creator: {
         id: convexUserId || 'me',
         name: user.name,

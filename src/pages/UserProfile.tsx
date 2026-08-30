@@ -143,6 +143,7 @@ export default function UserProfile() {
     peopleInterested: r.peopleInterested,
     isPaid: r.isPaid,
     price: r.price,
+    pricing: r.pricing,
     creator: target
       ? {
           id: target._id,

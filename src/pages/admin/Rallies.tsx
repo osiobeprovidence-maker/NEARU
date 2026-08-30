@@ -31,6 +31,7 @@ import { useAdmin, AdminRally } from '../../contexts/AdminContext';
 import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
 import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
+import { rallyAccess } from '../../lib/rallyPricing';
 
 export default function AdminRallies() {
   const { 
@@ -137,11 +138,22 @@ export default function AdminRallies() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-bold text-zinc-900 truncate">{r.title}</span>
-              {r.isPaid && (
-                <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0">
-                  ₦{r.price?.toLocaleString()}
-                </span>
-              )}
+              {(() => {
+                const a = rallyAccess(r);
+                if (a.kind === 'none') return null;
+                return (
+                  <span
+                    className={cn(
+                      'text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0',
+                      a.kind === 'paid'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-emerald-100 text-emerald-800'
+                    )}
+                  >
+                    {a.label}
+                  </span>
+                );
+              })()}
             </div>
             <p className="text-[11px] text-zinc-500 font-medium line-clamp-1 mt-0.5">{r.description}</p>
           </div>
@@ -457,7 +469,7 @@ export default function AdminRallies() {
               <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
                 <span className="text-[10px] text-zinc-400 uppercase font-bold">Listing Type</span>
                 <p className="text-base font-black text-zinc-900 mt-0.5">
-                  {selectedRally.isPaid ? `₦${selectedRally.price?.toLocaleString()}` : 'Free Community'}
+                  {rallyAccess(selectedRally).label}
                 </p>
               </div>
             </div>
