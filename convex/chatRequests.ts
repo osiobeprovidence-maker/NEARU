@@ -172,7 +172,32 @@ export const listSentByUser = query({
 export const get = query({
   args: { requestId: v.id("chatRequests") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.requestId);
+    const request = await ctx.db.get(args.requestId);
+    if (!request) return null;
+    const sender: any = request.fromUserId
+      ? await ctx.db.get(request.fromUserId)
+      : null;
+    let avatar = sender?.avatar || "";
+    if (avatar && !avatar.startsWith("http")) {
+      try {
+        avatar = (await ctx.storage.getUrl(avatar)) ?? "";
+      } catch {
+        avatar = "";
+      }
+    }
+    return {
+      ...request,
+      sender: sender
+        ? {
+            _id: sender._id,
+            name: sender.name,
+            username: sender.username,
+            avatar,
+            isNINVerified: sender.isNINVerified,
+            badges: sender.badges,
+          }
+        : null,
+    };
   },
 });
 

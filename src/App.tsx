@@ -19,6 +19,7 @@ const Explore = React.lazy(() => import('./pages/Explore'));
 const MyRallys = React.lazy(() => import('./pages/MyRallys'));
 const Messages = React.lazy(() => import('./pages/Messages'));
 const Chat = React.lazy(() => import('./pages/Chat'));
+const ChatRequest = React.lazy(() => import('./pages/ChatRequest'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const ManagePage = React.lazy(() => import('./pages/ManagePage'));
@@ -122,6 +123,7 @@ const AppRoutes = () => {
           <Route path="explore" element={<Explore />} />
           <Route path="my-rallys" element={<MyRallys />} />
           <Route path="messages" element={<Messages />} />
+          <Route path="messages/request/:id" element={<ChatRequest />} />
           <Route path="messages/:id" element={<Chat />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />

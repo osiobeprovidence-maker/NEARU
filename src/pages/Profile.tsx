@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
-import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag, Crown, Building2, Store, User as UserIcon } from 'lucide-react';
+import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag, Crown, Building2, Store, MoreHorizontal, Share2, Camera, User as UserIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
@@ -79,6 +79,20 @@ export default function Profile() {
     api.follows.getFollowingCount,
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
+  const profile = useQuery(
+    api.users.getProfile,
+    convexUserId ? { userId: convexUserId as any, viewerId: convexUserId as any } : 'skip'
+  );
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const shareProfile = () => {
+    const url = `${window.location.origin}/user/${convexUserId}`;
+    if (navigator.share) {
+      navigator.share({ title: user.name || 'Profile', url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied', 'Profile link copied to clipboard.'));
+    }
+  };
 
   const publicInterests = getPublicInterests(user);
 
@@ -121,70 +135,118 @@ export default function Profile() {
             onError={(msg) => showToast('Error', msg)}
           />
 
-          <div className="p-6 sm:p-8 text-center">
-            <div className="relative inline-block mb-3">
-            <Avatar
-              src={user.avatar}
-              name={user.name}
-              size="xl"
-              className="mx-auto shadow-sm border-2 border-white ring-1 ring-zinc-200"
-            />
-            <Link
-              to="/settings/personal-info"
-              className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95"
-              title="Change Photo"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="flex items-center justify-center gap-1.5 mb-0.5">
-            <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-              {user.name}
-            </h2>
-            {user.isNINVerified && (
-              <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-            )}
-          </div>
-
-          <p className="text-xs font-bold text-zinc-400 mb-2.5">{user.username}</p>
-
-          <p className="text-sm text-zinc-700 font-medium max-w-sm mx-auto leading-relaxed mb-2">
-            "{user.bio || 'Always looking for something fun to do.'}"
-          </p>
-
-          <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4">
-            <div className="flex items-center justify-center gap-1 text-zinc-600">
-              <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-              <span>{user.location || 'Location not set'}</span>
+          <div className="px-4 sm:px-6 pb-2">
+            {/* Avatar overlapping cover, left-aligned */}
+            <div className="relative -mt-10 sm:-mt-14 z-10 w-fit">
+              <Avatar
+                src={user.avatar}
+                name={user.name}
+                size="xl"
+                className="border-4 border-white shadow-lg"
+              />
+              <Link
+                to="/settings/personal-info"
+                className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95"
+                title="Change Photo"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            {user.gender && user.gender !== 'Prefer not to say' && (
-              <p className="text-zinc-400">{user.gender}</p>
-            )}
+
+            <div className="flex items-center gap-1.5 mt-3 mb-0.5 flex-wrap">
+              <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+                {user.name}
+              </h2>
+              {user.isNINVerified && (
+                <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+              )}
+            </div>
+            <p className="text-sm font-semibold text-zinc-400 mb-1">
+              {user.username ? `@${user.username}` : ''}
+            </p>
+
+            <p className="text-sm text-zinc-700 font-medium leading-relaxed mb-1 max-w-xl">
+              {user.bio || 'Always looking for something fun to do.'}
+            </p>
+          </div>
+
+          {/* Action row */}
+          <div className="px-4 sm:px-6 mt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/settings/personal-info"
+                className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
+              >
+                <Edit3 className="w-4 h-4" /> Edit Profile
+              </Link>
+              <button
+                onClick={() => coverRef.current?.openPicker()}
+                className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-sm font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
+              >
+                <Camera className="w-4 h-4" /> Edit Cover
+              </button>
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setMoreOpen((o) => !o)}
+                  className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
+                  aria-label="More actions"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+                {moreOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
+                      <Link
+                        to={`/user/${convexUserId}`}
+                        onClick={() => setMoreOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                      >
+                        <UserIcon className="w-4 h-4 text-zinc-500" /> View Public Profile
+                      </Link>
+                      <button
+                        onClick={() => { setMoreOpen(false); shareProfile(); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                      >
+                        <Share2 className="w-4 h-4 text-indigo-500" /> Share Profile
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Metadata under bio/actions */}
+          <div className="px-4 sm:px-6 mt-4">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600 font-medium">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="w-4 h-4 text-zinc-400" />
+                {user.location || 'Location not set'}
+              </span>
+              {user.gender && user.gender !== 'Prefer not to say' && (
+                <>
+                  <span className="text-zinc-300">•</span>
+                  <span>{user.gender}</span>
+                </>
+              )}
+            </div>
+
             {publicInterests.length > 0 ? (
-              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
                 {publicInterests.map((interest) => (
                   <span
                     key={interest}
-                    className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold ring-1 ring-inset ring-indigo-100"
+                    className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold ring-1 ring-inset ring-indigo-100"
                   >
                     {interest}
                   </span>
                 ))}
               </div>
             ) : (
-              <p className="text-zinc-400">Add interests to personalize your feed.</p>
+              <p className="text-zinc-400 text-xs font-medium mt-2.5">Add interests to personalize your feed.</p>
             )}
           </div>
-
-          <Link
-            to="/settings/personal-info"
-            className="w-full sm:w-auto sm:px-8 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-xl text-xs font-bold transition-colors inline-flex items-center justify-center gap-1.5 active:scale-98"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
-            Edit Profile
-          </Link>
-        </div>
         </div>
 
         {/* Interests visibility toggle */}

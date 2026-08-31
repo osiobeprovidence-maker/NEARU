@@ -79,6 +79,135 @@ export const getByUsername = query({
   },
 });
 
+/**
+ * View-aware profile serialization.
+ *
+ * Returns a single DTO that distinguishes OWNER vs PUBLIC viewers, so that
+ * privacy-sensitive fields are enforced server-side (never just hidden in CSS):
+ *
+ *  - OWNER: full identity, private interest list (interests), the showInterests
+ *    setting, and their own Following count.
+ *  - PUBLIC: only bio/location/gender, interests ONLY if showInterests is not
+ *    false, posts + followers counts, and the follow/message relationship.
+ *    The Following count is NEVER returned to a public viewer, and no list of
+ *    accounts the owner follows is ever exposed.
+ */
+export const getProfile = query({
+  args: {
+    userId: v.id("users"),
+    viewerId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    if (user.avatar && !user.avatar.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.avatar);
+        if (url) user.avatar = url;
+      } catch {}
+    }
+    if (user.coverImage && !user.coverImage.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.coverImage);
+        if (url) user.coverImage = url;
+      } catch {}
+    }
+
+    const isSelf = !!args.viewerId && args.viewerId.toString() === args.userId.toString();
+
+    // Posts count = content created by this user (canonical source).
+    const allCreated = await ctx.db
+      .query("rallies")
+      .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+      .collect();
+    const postsCount = allCreated.length;
+
+    // Follower count = users who follow this profile owner.
+    const followers = await ctx.db
+      .query("follows")
+      .withIndex("by_following", (q) => q.eq("followingId", args.userId))
+      .collect();
+    const followersCount = followers.length;
+
+    const base = {
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      avatar: user.avatar,
+      coverImage: user.coverImage ?? null,
+      bio: user.bio ?? user.description ?? null,
+      location: user.location ?? null,
+      gender: user.gender ?? null,
+      badge: { isNINVerified: !!user.isNINVerified, badges: user.badges ?? [] },
+      accountType: user.accountType ?? "personal",
+      organizationName: user.organizationName ?? null,
+      category: user.category ?? null,
+      isPro: !!user.isPro,
+      socialLinks: user.socialLinks ?? [],
+      website: user.website ?? null,
+      isFounded: false,
+      showInterestsSetting: user.showInterests !== false,
+      postsCount,
+      followersCount,
+    };
+
+    // ----- OWNER VIEW -----
+    if (isSelf) {
+      return {
+        ...base,
+        isSelf: true,
+        interests: user.interests ?? [],
+        showInterests: user.showInterests !== false,
+        followingCount: (
+          await ctx.db
+            .query("follows")
+            .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+            .collect()
+        ).length,
+        // Owner can always see their own interests regardless of privacy toggle.
+        interestsVisible: user.interests && user.interests.length > 0 ? true : false,
+        followingList: undefined,
+        isFollowing: false,
+        canFollow: false,
+      };
+    }
+
+    // ----- PUBLIC VIEW -----
+    // Interests are only exposed when the owner opted in via "showInterests".
+    const showInterests = user.showInterests !== false;
+    const publicInterests = (user.publicInterests && user.publicInterests.length > 0
+      ? user.publicInterests
+      : (user.interests ?? [])
+    ).slice(0, 3).filter(Boolean);
+    const interests = showInterests ? publicInterests : [];
+
+    // Whether the viewer follows the owner (for the Follow/Following button).
+    let isFollowing = false;
+    if (args.viewerId) {
+      const rel = await ctx.db
+        .query("follows")
+        .withIndex("by_pair", (q) =>
+          q.eq("followerId", args.viewerId).eq("followingId", args.userId)
+        )
+        .unique();
+      isFollowing = rel !== null;
+    }
+
+    return {
+      ...base,
+      isSelf: false,
+      interests,
+      showInterests,
+      // Strictly NO following count / no following list for public viewers.
+      followingCount: undefined,
+      followingList: undefined,
+      isFollowing,
+      canFollow: !isSelf && !!args.viewerId,
+    };
+  },
+});
+
 export const getByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {

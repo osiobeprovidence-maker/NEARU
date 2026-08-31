@@ -22,6 +22,8 @@ import {
   Pencil,
   Camera,
   Check,
+  Share2,
+  ShieldAlert,
 } from 'lucide-react';
 import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
@@ -45,6 +47,10 @@ export default function UserProfile() {
 
   const target = useQuery(
     api.users.get,
+    id ? { userId: id as any, viewerId: convexUserId as any } : 'skip'
+  );
+  const profile = useQuery(
+    api.users.getProfile,
     id ? { userId: id as any, viewerId: convexUserId as any } : 'skip'
   );
   const stats = useQuery(api.rallies.getProfileStats, id ? { userId: id as any } : 'skip');
@@ -166,6 +172,15 @@ export default function UserProfile() {
     navigate('/');
   };
 
+  const shareProfile = () => {
+    const url = `${window.location.origin}/user/${id}`;
+    if (navigator.share) {
+      navigator.share({ title: target?.name || 'Profile', url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied', 'Profile link copied to clipboard.'));
+    }
+  };
+
   const handleMessage = async () => {
     if (!convexUserId || !id || isSelf) return;
     if (!directStatus) return;
@@ -282,195 +297,254 @@ export default function UserProfile() {
         : 'Message';
 
   return (
-    <PageShell title={target?.name ? `${target.name}'s profile` : 'Profile'}>
-      <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 divide-y divide-zinc-100 overflow-hidden max-w-2xl mx-auto">
-        {/* Identity */}
-        <div>
-          {/* Cover */}
-          <CoverBanner
-            ref={coverRef}
-            coverImage={coverUrl}
-            canEdit={isSelf}
-            onCoverUploaded={handleCoverUploaded}
-            onError={(msg) => showToast('Error', msg)}
-          />
+    <PageShell title={profile?.name || target?.name ? `${profile?.name || target?.name}'s profile` : 'Profile'}>
+      <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden max-w-2xl mx-auto">
 
-          <div className="px-6 pb-6 sm:pb-7 text-center">
+        {/* -------- COVER -------- */}
+        <CoverBanner
+          ref={coverRef}
+          coverImage={coverUrl}
+          canEdit={isSelf}
+          onCoverUploaded={handleCoverUploaded}
+          onError={(msg) => showToast('Error', msg)}
+        />
+
+        {/* -------- IDENTITY (avatar overlaps cover, left-aligned) -------- */}
+        <div className="px-4 sm:px-6 pb-2">
+          <div className="relative -mt-10 sm:-mt-14 z-10 w-fit">
             <Avatar
-              src={target?.avatar}
-              name={target?.name || 'User'}
+              src={profile?.avatar || target?.avatar}
+              name={profile?.name || target?.name || 'User'}
               size="xl"
-              className="mx-auto -mt-10 sm:-mt-12 mb-3 shadow-md ring-4 ring-white"
+              className="border-4 border-white shadow-lg"
             />
-
-            <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap px-2">
-              <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-                {displayName}
-              </h2>
-              {target?.isNINVerified && <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />}
-              {isOrgBiz && (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
-                  {target?.accountType === 'business' ? 'Business' : 'Organization'}
-                </span>
-              )}
-              {isOrgBiz && target?.category && (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
-                  {target.category}
-                </span>
-              )}
-            </div>
-            <p className="text-xs font-bold text-zinc-400 mb-2.5">
-              {target ? `@${target.username}` : ''}
-            </p>
-
-            {!isLocked && (
-              <>
-                <p className="text-sm text-zinc-700 font-medium max-w-sm mx-auto leading-relaxed mb-3">
-                  {target?.description || target?.bio
-                    ? target?.description || target?.bio
-                    : isOrgBiz
-                      ? 'Follow this page to stay updated on posts and events.'
-                      : 'Nothing here yet.'}
-                </p>
-                <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4 flex flex-col items-center">
-                  {target?.location && (
-                    <div className="flex items-center justify-center gap-1 text-zinc-600">
-                      <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>{target.location}</span>
-                    </div>
-                  )}
-                  {websiteUrl && (
-                    <a
-                      href={websiteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-indigo-600 hover:underline font-semibold"
-                    >
-                      <Globe className="w-3.5 h-3.5 text-indigo-500" />
-                      <span className="break-all">{target?.website}</span>
-                    </a>
-                  )}
-                  {publicInterests.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                      {publicInterests.map((interest) => (
-                        <span
-                          key={interest}
-                          className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold ring-1 ring-inset ring-indigo-100"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {isOrgBiz && <OrgSocialLinks links={target?.socialLinks || []} className="mb-4" />}
-              </>
+            {isSelf && convexUserId && (
+              <Link
+                to="/settings/personal-info"
+                className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95"
+                title="Change Photo"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </Link>
             )}
-
-            {isLocked && (
-              <p className="text-sm text-zinc-500 font-medium max-w-xs mx-auto mb-4">
-                This account is private. Follow to see more.
-              </p>
-            )}
-
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {isSelf && convexUserId ? (
-                <>
-                  <Link
-                    to="/settings/personal-info"
-                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
-                  >
-                    <Pencil className="w-4 h-4" /> Edit Profile
-                  </Link>
-                  <button
-                    onClick={() => coverRef.current?.openPicker()}
-                    className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
-                  >
-                    <Camera className="w-4 h-4" /> Edit Cover
-                  </button>
-                  <button
-                    onClick={openInterests}
-                    className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
-                  >
-                    <BadgeCheck className="w-4 h-4" /> Edit Interests
-                  </button>
-                </>
-              ) : (
-                convexUserId && (
-                  <>
-                    <button
-                      onClick={handleToggleFollow}
-                      disabled={isFollowBusy}
-                      className={cn(
-                        'px-5 py-2.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50',
-                        isFollowing
-                          ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
-                          : 'bg-zinc-900 hover:bg-zinc-700 text-white shadow-sm'
-                      )}
-                    >
-                      {isFollowBusy ? (
-                        '…'
-                      ) : isFollowing ? (
-                        <><UserCheck className="w-4 h-4" /> Following</>
-                      ) : (
-                        <><UserPlus className="w-4 h-4" /> Follow</>
-                      )}
-                    </button>
-                    {directStatus && (directStatus as any).status !== 'blocked' && (
-                      <button
-                        onClick={handleMessage}
-                        disabled={isMessaging || (directStatus as any).status === 'pending_from_me'}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95 disabled:opacity-50"
-                      >
-                        {isMessaging ? (
-                          '…'
-                        ) : (
-                          <><MessageCircle className="w-4 h-4" /> {messageLabel}</>
-                        )}
-                      </button>
-                    )}
-                    <div className="relative">
-                      <button
-                        onClick={() => setMoreOpen((o) => !o)}
-                        className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
-                        aria-label="More actions"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                      {moreOpen && (
-                        <>
-                          <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
-                          <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
-                            <Link
-                              to={`/report/${id}`}
-                              onClick={() => setMoreOpen(false)}
-                              className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                            >
-                              <Flag className="w-4 h-4 text-rose-500" /> Report
-                            </Link>
-                            <button
-                              onClick={handleBlock}
-                              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                            >
-                              <Ban className="w-4 h-4 text-red-500" /> Block
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )
-              )}
-            </div>
           </div>
+
+          <div className="flex items-center gap-1.5 mt-3 mb-0.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+              {profile?.name || target?.name || 'Loading…'}
+            </h1>
+            {(profile?.badge?.isNINVerified ?? target?.isNINVerified) && (
+              <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+            )}
+            {(isOrgBiz) && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
+                {profile?.accountType === 'business' || target?.accountType === 'business' ? 'Business' : 'Organization'}
+              </span>
+            )}
+            {(isOrgBiz && (profile?.category || target?.category)) && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
+                {profile?.category || target?.category}
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-semibold text-zinc-400 mb-1">
+            {profile?.username || target?.username ? `@${profile?.username || target?.username}` : ''}
+          </p>
+
+          {/* Bio — directly under username */}
+          {!isLocked ? (
+            <p className="text-sm text-zinc-700 font-medium leading-relaxed mb-1 max-w-xl">
+              {profile?.bio || target?.bio || (isOrgBiz
+                ? 'Follow this page to stay updated on posts and events.'
+                : 'Nothing here yet.')}
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500 font-medium max-w-xs mb-1">
+              This account is private. Follow to see more.
+            </p>
+          )}
         </div>
 
-        {/* Stats */}
-        <div className="py-4 sm:py-5 px-4 bg-zinc-50/50">
-          <div className="grid grid-cols-3 divide-x divide-zinc-200/70 text-center max-w-md mx-auto">
-            <StatCell label="Posts" value={stats?.posted ?? (stats === undefined ? null : 0)} />
-            <StatCell label="Followers" value={followerCount ?? (followerCount === undefined ? null : 0)} />
-            <StatCell label="Following" value={followingCount ?? (followingCount === undefined ? null : 0)} />
+        {/* -------- SOCIAL ACTIONS (own dedicated row) -------- */}
+        <div className="px-4 sm:px-6 mt-3">
+          {isSelf && convexUserId ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/settings/personal-info"
+                className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
+              >
+                <Pencil className="w-4 h-4" /> Edit Profile
+              </Link>
+              <button
+                onClick={() => coverRef.current?.openPicker()}
+                className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-sm font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
+              >
+                <Camera className="w-4 h-4" /> Edit Cover
+              </button>
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setMoreOpen((o) => !o)}
+                  className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
+                  aria-label="More actions"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+                {moreOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
+                      <button
+                        onClick={() => { setMoreOpen(false); shareProfile(); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                      >
+                        <Share2 className="w-4 h-4 text-indigo-500" /> Share Profile
+                      </button>
+                      <button
+                        onClick={openInterests}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                      >
+                        <ShieldAlert className="w-4 h-4 text-amber-500" /> Edit Public Interests
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            convexUserId && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleToggleFollow}
+                  disabled={isFollowBusy}
+                  className={cn(
+                    'px-5 py-2.5 rounded-xl text-sm font-bold transition-all inline-flex items-center gap-1.5 active:scale-95 disabled:opacity-50',
+                    isFollowing
+                      ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
+                      : 'bg-zinc-900 hover:bg-zinc-700 text-white shadow-sm'
+                  )}
+                >
+                  {isFollowBusy ? (
+                    '…'
+                  ) : isFollowing ? (
+                    <><UserCheck className="w-4 h-4" /> Following</>
+                  ) : (
+                    <><UserPlus className="w-4 h-4" /> Follow</>
+                  )}
+                </button>
+                {directStatus && (directStatus as any).status !== 'blocked' && (
+                  <button
+                    onClick={handleMessage}
+                    disabled={isMessaging || (directStatus as any).status === 'pending_from_me'}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95 disabled:opacity-50"
+                  >
+                    {isMessaging ? (
+                      '…'
+                    ) : (
+                      <><MessageCircle className="w-4 h-4" /> {messageLabel}</>
+                    )}
+                  </button>
+                )}
+                <div className="relative ml-auto">
+                  <button
+                    onClick={() => setMoreOpen((o) => !o)}
+                    className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
+                    aria-label="More actions"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                  {moreOpen && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
+                        <button
+                          onClick={() => { setMoreOpen(false); shareProfile(); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                        >
+                          <Share2 className="w-4 h-4 text-indigo-500" /> Share Profile
+                        </button>
+                        <Link
+                          to={`/report/${id}`}
+                          onClick={() => setMoreOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                        >
+                          <Flag className="w-4 h-4 text-rose-500" /> Report
+                        </Link>
+                        <button
+                          onClick={handleBlock}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-rose-600 text-xs font-bold transition-colors border-t border-zinc-100"
+                        >
+                          <Ban className="w-4 h-4 text-red-500" /> Block
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+        </div>
+
+        {/* -------- METADATA (location / gender) under bio -------- */}
+        {!isLocked && (
+          <div className="px-4 sm:px-6 mt-4">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600 font-medium">
+              {profile?.location || target?.location ? (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="w-4 h-4 text-zinc-400" />
+                  {profile?.location || target?.location}
+                </span>
+              ) : null}
+              {(profile?.location || target?.location) && (profile?.gender || target?.gender) && (
+                <span className="text-zinc-300">•</span>
+              )}
+              {profile?.gender || target?.gender ? (
+                <span>{(profile?.gender || target?.gender) === 'Prefer not to say' ? '' : profile?.gender || target?.gender}</span>
+              ) : null}
+            </div>
+
+            {/* Interests under metadata */}
+            {publicInterests.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {publicInterests.map((interest) => (
+                  <span
+                    key={interest}
+                    className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold ring-1 ring-inset ring-indigo-100"
+                  >
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {websiteUrl && (
+              <a
+                href={websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-1 text-indigo-600 hover:underline font-semibold text-sm"
+              >
+                <Globe className="w-4 h-4 text-indigo-500" />
+                <span className="break-all">{target?.website}</span>
+              </a>
+            )}
+            {isOrgBiz && <OrgSocialLinks links={target?.socialLinks || []} className="mt-3" />}
+
+            {isLocked && (
+              <p className="text-sm text-zinc-500 font-medium max-w-xs">
+                Follow {isFollowing ? 'this account' : 'to see more'}.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* -------- STATISTICS (dedicated section, no Following for public) -------- */}
+        <div className="mt-5 py-4 sm:py-5 px-4 border-t border-zinc-200/70 bg-zinc-50/40">
+          <div className={cn('grid divide-x divide-zinc-200/70 text-center max-w-md mx-auto', isSelf ? 'grid-cols-3' : 'grid-cols-2')}>
+            <StatCell label="Posts" value={profile ? profile.postsCount : (stats?.posted ?? (stats === undefined ? null : 0))} />
+            <StatCell label="Followers" value={profile ? profile.followersCount : (followerCount ?? (followerCount === undefined ? null : 0))} />
+            {isSelf && (
+              <StatCell label="Following" value={profile ? profile.followingCount : (followingCount ?? (followingCount === undefined ? null : 0))} />
+            )}
           </div>
         </div>
 
