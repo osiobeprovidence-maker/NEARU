@@ -5,6 +5,7 @@ import { BadgeCheck, Edit3, ChevronRight, MapPin, Tag, Crown, Building2, Store, 
 import { Link, useNavigate } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
+import QueryErrorBoundary from '../components/QueryErrorBoundary';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { getPublicInterests } from '../lib/utils';
@@ -121,6 +122,7 @@ export default function Profile() {
   const rated    = stats?.rated    ?? (stats === undefined ? null : 0);
 
   return (
+    <QueryErrorBoundary message="Your profile couldn't be loaded right now. Please try again.">
     <PageShell title="Profile">
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 divide-y divide-zinc-100 overflow-hidden">
 
@@ -417,6 +419,7 @@ export default function Profile() {
         </div>
       )}
     </PageShell>
+    </QueryErrorBoundary>
   );
 }
 

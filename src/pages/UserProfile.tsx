@@ -24,10 +24,12 @@ import {
   Check,
   Share2,
   ShieldAlert,
+  User as UserIcon,
 } from 'lucide-react';
 import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
+import QueryErrorBoundary from '../components/QueryErrorBoundary';
 
 export default function UserProfile() {
   const { id } = useParams();
@@ -35,6 +37,12 @@ export default function UserProfile() {
   const { user: me, convexUserId, updateUser, blockUser } = useAuth();
 
   const isSelf = !!convexUserId && convexUserId === id;
+
+  // Only query Convex with ids that look like real Convex user ids. A malformed
+  // URL segment (e.g. /user/abc or an encoded/truncated value) makes Convex's
+  // v.id("users") validator throw an ArgumentValidationError, which previously
+  // surfaced as a full-app crash. We treat those as "user not found" instead.
+  const validId = !!id && /^[A-Za-z0-9]{8,}$/.test(id) ? id : null;
 
   const [requestModal, setRequestModal] = useState(false);
   const [requestText, setRequestText] = useState('');
@@ -47,26 +55,26 @@ export default function UserProfile() {
 
   const target = useQuery(
     api.users.get,
-    id ? { userId: id as any, viewerId: (convexUserId ?? undefined) as any } : 'skip'
+    validId ? { userId: validId as any, viewerId: (convexUserId ?? undefined) as any } : 'skip'
   );
   const profile = useQuery(
     api.users.getProfile,
-    id ? { userId: id as any, viewerId: (convexUserId ?? undefined) as any } : 'skip'
+    validId ? { userId: validId as any, viewerId: (convexUserId ?? undefined) as any } : 'skip'
   );
-  const stats = useQuery(api.rallies.getProfileStats, id ? { userId: id as any } : 'skip');
-  const followerCount = useQuery(api.follows.getFollowerCount, id ? { userId: id as any } : 'skip');
-  const followingCount = useQuery(api.follows.getFollowingCount, id ? { userId: id as any } : 'skip');
+  const stats = useQuery(api.rallies.getProfileStats, validId ? { userId: validId as any } : 'skip');
+  const followerCount = useQuery(api.follows.getFollowerCount, validId ? { userId: validId as any } : 'skip');
+  const followingCount = useQuery(api.follows.getFollowingCount, validId ? { userId: validId as any } : 'skip');
   const isFollowing = useQuery(
     api.follows.isFollowing,
-    convexUserId && id ? { followerId: convexUserId as any, followingId: id as any } : 'skip'
+    convexUserId && validId ? { followerId: convexUserId as any, followingId: validId as any } : 'skip'
   );
   const content = useQuery(
     api.rallies.listByCreator,
-    id ? { creatorId: id as any, userId: (convexUserId ?? undefined) as any } : 'skip'
+    validId ? { creatorId: validId as any, userId: (convexUserId ?? undefined) as any } : 'skip'
   );
   const directStatus = useQuery(
     api.chatRequests.getDirectStatus,
-    convexUserId && id ? { viewerId: convexUserId as any, targetId: id as any } : 'skip'
+    convexUserId && validId ? { viewerId: convexUserId as any, targetId: validId as any } : 'skip'
   );
 
   const followMut = useMutation(api.follows.follow);
@@ -296,7 +304,30 @@ export default function UserProfile() {
         ? 'Pending'
         : 'Message';
 
+  // Malformed / unsupported profile URL — never send junk ids to Convex and
+  // never crash the whole app via the error boundary. Show a clean empty state.
+  if (id && !validId) {
+    return (
+      <PageShell title="Profile">
+        <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
+          <div className="p-10 sm:p-12 text-center">
+            <div className="w-16 h-16 rounded-3xl bg-zinc-100 flex items-center justify-center mx-auto mb-5">
+              <UserIcon className="w-8 h-8 text-zinc-400" strokeWidth={1.75} />
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
+              Profile not found
+            </h3>
+            <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto leading-relaxed">
+              We couldn't find that account. It may have been removed or the link is incorrect.
+            </p>
+          </div>
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
+    <QueryErrorBoundary message="We couldn't load this profile right now. Please try again.">
     <PageShell title={profile?.name || target?.name ? `${profile?.name || target?.name}'s profile` : 'Profile'}>
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden max-w-2xl mx-auto">
 
@@ -697,6 +728,7 @@ export default function UserProfile() {
         </div>
       )}
     </PageShell>
+    </QueryErrorBoundary>
   );
 }
 
