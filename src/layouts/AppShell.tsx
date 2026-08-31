@@ -36,6 +36,7 @@ import LocationFilterModal from '../components/LocationFilterModal';
 import LocationDebug from '../components/LocationDebug';
 import NotificationListener from '../components/NotificationListener';
 import NotificationPanel from '../components/NotificationPanel';
+import { initNotificationSound } from '../lib/notificationSound';
 
 export default function AppShell() {
   const navigate = useNavigate();
@@ -66,6 +67,22 @@ export default function AppShell() {
     api.notifications.unreadCount,
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
+
+  // Live conversation list, used to (a) show an unread badge on the Messages
+  // nav items and (b) drive the real-time message toasts in NotificationListener.
+  const conversations = useQuery(
+    api.messages.listConversationsWithParticipants,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
+
+  const unreadMessages = (conversations ?? []).reduce(
+    (sum: number, c: any) => sum + (c.myUnread ?? 0),
+    0
+  );
+
+  useEffect(() => {
+    initNotificationSound();
+  }, []);
 
   useEffect(() => {
     setIsNotifPanelOpen(false);
@@ -224,7 +241,7 @@ export default function AppShell() {
       />
 
       <LocationDebug />
-      <NotificationListener />
+      <NotificationListener conversations={conversations} />
       <NotificationPanel open={isNotifPanelOpen} onClose={() => setIsNotifPanelOpen(false)} />
 
       {/* Desktop Sidebar */}
@@ -261,7 +278,12 @@ export default function AppShell() {
                 }
               >
                 <item.icon className="w-5 h-5" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.path === '/messages' && !!unreadMessages && (
+                  <span className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-black flex items-center justify-center shrink-0">
+                    {unreadMessages > 99 ? '99+' : unreadMessages}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -453,8 +475,13 @@ export default function AppShell() {
         </div>
 
         <div className="flex-1 flex justify-around items-center">
-          <NavLink to="/messages" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
+          <NavLink to="/messages" className={({isActive}) => cn("relative flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
             <MessageSquare className="w-6 h-6" />
+            {!!unreadMessages && (
+              <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+                {unreadMessages > 99 ? '99+' : unreadMessages}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/profile" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
             <User className="w-6 h-6" />
