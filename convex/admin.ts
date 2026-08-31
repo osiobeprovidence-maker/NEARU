@@ -616,15 +616,29 @@ const DEFAULT_SETTINGS = {
   primaryColor: "#4f46e5",
 };
 
+// Resolve a stored asset from a raw Convex storage id to a public URL.
+// Values that are already full URLs (http) are returned unchanged.
+async function resolveBrandAsset(ctx: any, value: string | undefined): Promise<string | null> {
+  if (!value) return null;
+  if (value.startsWith("http")) return value;
+  try {
+    const url = await ctx.storage.getUrl(value);
+    return url ?? value;
+  } catch {
+    return value;
+  }
+}
+
 export const getSystemSettings = query({
   args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const doc = await ctx.db.query("systemSettings").first();
-    return {
-      ...DEFAULT_SETTINGS,
-      ...(doc || {}),
-    };
+    const merged = { ...DEFAULT_SETTINGS, ...(doc || {}) };
+    merged.brandLogoUrl = await resolveBrandAsset(ctx, merged.brandLogoUrl);
+    merged.brandIconUrl = await resolveBrandAsset(ctx, merged.brandIconUrl);
+    merged.faviconUrl = await resolveBrandAsset(ctx, merged.faviconUrl);
+    return merged;
   },
 });
 
@@ -636,9 +650,9 @@ export const getPublicBranding = query({
     const doc = await ctx.db.query("systemSettings").first();
     return {
       platformName: doc?.platformName ?? DEFAULT_SETTINGS.platformName,
-      brandLogoUrl: doc?.brandLogoUrl ?? null,
-      brandIconUrl: doc?.brandIconUrl ?? null,
-      faviconUrl: doc?.faviconUrl ?? null,
+      brandLogoUrl: await resolveBrandAsset(ctx, doc?.brandLogoUrl),
+      brandIconUrl: await resolveBrandAsset(ctx, doc?.brandIconUrl),
+      faviconUrl: await resolveBrandAsset(ctx, doc?.faviconUrl),
       brandFont: doc?.brandFont ?? DEFAULT_SETTINGS.brandFont,
       primaryColor: doc?.primaryColor ?? DEFAULT_SETTINGS.primaryColor,
     };

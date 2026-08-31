@@ -42,6 +42,9 @@ export default function AdminSettings() {
 
   // Local form state
   const [formData, setFormData] = useState({ ...systemSettings });
+  // Previewable URLs separate from the raw storage ids that get saved, since
+  // the server resolves storage ids -> public urls on read.
+  const [brandPreviews, setBrandPreviews] = useState<Partial<Record<'brandLogoUrl' | 'brandIconUrl' | 'faviconUrl', string>>>({});
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminRole, setNewAdminRole] = useState<'moderator' | 'admin' | 'support'>('moderator');
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -59,6 +62,11 @@ export default function AdminSettings() {
       brandFont: systemSettings.brandFont || 'system',
       primaryColor: systemSettings.primaryColor || '#4f46e5',
     }));
+    setBrandPreviews({
+      brandLogoUrl: systemSettings.brandLogoUrl || '',
+      brandIconUrl: systemSettings.brandIconUrl || '',
+      faviconUrl: systemSettings.faviconUrl || '',
+    });
   }, [systemSettings.platformName, systemSettings.defaultRadiusKm, systemSettings.supportedCities, systemSettings.brandLogoUrl, systemSettings.brandIconUrl, systemSettings.faviconUrl, systemSettings.brandFont, systemSettings.primaryColor]);
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -91,9 +99,13 @@ export default function AdminSettings() {
         headers: { 'Content-Type': file.type },
       });
       if (!upRes.ok) throw new Error('Upload failed');
+      // Convex returns the storage id (unique string). We save the raw id so
+      // the backend can resolve it to a fresh, non-expiring public URL.
       const storageId = await upRes.json();
-      const url = `${import.meta.env.VITE_CONVEX_URL ?? 'https://rare-rooster-878.eu-west-1.convex.cloud'}/api/storage/${storageId}`;
-      setFormData((prev) => ({ ...prev, [key]: url }));
+      if (!storageId) throw new Error('Upload failed');
+      setFormData((prev) => ({ ...prev, [key]: storageId }));
+      const convexSite = import.meta.env.VITE_CONVEX_SITE_URL ?? 'https://rare-rooster-878.eu-west-1.convex.site';
+      setBrandPreviews((prev) => ({ ...prev, [key]: `${convexSite}/api/storage/${storageId}` }));
       showToast('Asset uploaded — remember to save branding.', 'success');
     } catch (err) {
       showToast((err as Error).message || 'Upload failed.', 'danger');
@@ -350,7 +362,7 @@ export default function AdminSettings() {
                     </div>
                     {formData[asset.key] && (
                       <div className="mb-2 bg-white border border-zinc-100 rounded-xl p-2 flex items-center justify-center h-16">
-                        <img src={formData[asset.key]} alt={asset.label} className="max-h-full max-w-full object-contain" />
+                        <img src={brandPreviews[asset.key]} alt={asset.label} className="max-h-full max-w-full object-contain" />
                       </div>
                     )}
                     <input
@@ -366,7 +378,10 @@ export default function AdminSettings() {
                     <p className="text-[10px] text-zinc-400 font-medium mt-1">{asset.hint}</p>
                     {formData[asset.key] && (
                       <button
-                        onClick={() => setFormData((prev) => ({ ...prev, [asset.key]: undefined }))}
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, [asset.key]: undefined }));
+                          setBrandPreviews((prev) => ({ ...prev, [asset.key]: '' }));
+                        }}
                         className="mt-2 text-[10px] font-bold text-rose-600 hover:text-rose-700"
                       >
                         Remove

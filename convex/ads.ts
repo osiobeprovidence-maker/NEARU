@@ -1,20 +1,43 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+async function resolveAdUrls(ctx: any, ad: any) {
+  const resolved: Record<string, unknown> = { ...ad };
+  for (const key of ["imageUrl", "brandLogoUrl"]) {
+    const val = ad[key];
+    if (val && typeof val === "string" && !val.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(val);
+        if (url) resolved[key] = url;
+      } catch {}
+    }
+  }
+  return resolved;
+}
+
+export const generateAdUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const listActive = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const ads = await ctx.db
       .query("ads")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
+    return Promise.all(ads.map((ad: any) => resolveAdUrls(ctx, ad)));
   },
 });
 
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("ads").collect();
+    const ads = await ctx.db.query("ads").collect();
+    return Promise.all(ads.map((ad: any) => resolveAdUrls(ctx, ad)));
   },
 });
 
