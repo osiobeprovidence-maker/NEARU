@@ -47,11 +47,11 @@ export default function UserProfile() {
 
   const target = useQuery(
     api.users.get,
-    id ? { userId: id as any, viewerId: convexUserId as any } : 'skip'
+    id ? { userId: id as any, viewerId: (convexUserId ?? undefined) as any } : 'skip'
   );
   const profile = useQuery(
     api.users.getProfile,
-    id ? { userId: id as any, viewerId: convexUserId as any } : 'skip'
+    id ? { userId: id as any, viewerId: (convexUserId ?? undefined) as any } : 'skip'
   );
   const stats = useQuery(api.rallies.getProfileStats, id ? { userId: id as any } : 'skip');
   const followerCount = useQuery(api.follows.getFollowerCount, id ? { userId: id as any } : 'skip');
@@ -62,7 +62,7 @@ export default function UserProfile() {
   );
   const content = useQuery(
     api.rallies.listByCreator,
-    id ? { creatorId: id as any, userId: convexUserId as any } : 'skip'
+    id ? { creatorId: id as any, userId: (convexUserId ?? undefined) as any } : 'skip'
   );
   const directStatus = useQuery(
     api.chatRequests.getDirectStatus,

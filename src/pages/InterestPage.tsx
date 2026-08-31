@@ -17,7 +17,7 @@ export default function InterestPage() {
 
   const posts = useQuery(
     api.rallies.listByInterest,
-    decoded ? { interest: decoded, userId: convexUserId as any } : 'skip'
+    decoded ? { interest: decoded, userId: (convexUserId ?? undefined) as any } : 'skip'
   );
   const people = useQuery(
     api.users.listPeople,

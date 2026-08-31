@@ -70,7 +70,39 @@ export async function requireFirebaseUser(req) {
   } catch (err) {
     // Log the real reason server-side (credential misconfiguration, clock skew,
     // genuinely expired token, etc.) without exposing details to the browser.
-    console.error("[auth] verifyIdToken failed:", err?.message || err);
+    const code = err?.code || "";
+    const msg = err?.message || "";
+    console.error("[auth] verifyIdToken failed:", {
+      code,
+      message: msg,
+      // Best-effort token diagnostics without leaking signatures: the token's
+      // issuer/audience identify which Firebase project minted it vs the one
+      // this server verifies against.
+      projectId: process.env.FIREBASE_PROJECT_ID || "(unset)",
+      hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+      hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+      tokenPayload: (() => {
+        try {
+          // payload is the middle JWT segment (base64url) -> JSON
+          const parts = token.split(".");
+          if (parts.length !== 3) return "(malformed token)";
+          const payload = JSON.parse(
+            Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+          );
+          return {
+            iss: payload.iss,
+            aud: payload.aud,
+            project_id: payload.aud ? String(payload.aud).replace(/^[0-9]+$/, "<api-key-numeric>") : undefined,
+            exp: payload.exp,
+            auth_time: payload.auth_time,
+            iat: payload.iat,
+            uid: payload.user_id,
+          };
+        } catch {
+          return "(could not decode token)";
+        }
+      })(),
+    });
     const e = new Error("Invalid or expired authentication token");
     e.statusCode = 401;
     e.code = "AUTHENTICATION_ERROR";
