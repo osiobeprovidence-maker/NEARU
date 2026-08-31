@@ -167,6 +167,11 @@ export interface SystemSettings {
   requireEmailVerification: boolean;
   autoVerifyPhone: boolean;
   maintenanceMode: boolean;
+  brandLogoUrl?: string;
+  brandIconUrl?: string;
+  faviconUrl?: string;
+  brandFont?: string;
+  primaryColor?: string;
   updatedAt?: number;
   updatedBy?: string;
 }
@@ -316,6 +321,10 @@ export function updateSettings(
     method: "POST",
     body: JSON.stringify(fields),
   });
+}
+
+export function getBrandUploadUrl(): Promise<{ uploadUrl: string }> {
+  return api("/api/admin/settings/upload-url");
 }
 
 // ---------------------------------------------------------------------------

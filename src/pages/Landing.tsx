@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import BrandLogo from '../components/BrandLogo';
 import { 
   AlertCircle, 
   Heart, 
@@ -37,10 +38,7 @@ export default function Landing() {
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-zinc-100">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <span className="text-white font-black text-lg tracking-tighter">L</span>
-            </div>
-            <span className="font-black text-xl tracking-tighter text-zinc-900">lalao</span>
+            <BrandLogo boxClassName="w-8 h-8" rounded="rounded-lg" nameClassName="text-xl" fallbackLetter="l" />
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -469,10 +467,7 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-                  <span className="text-white font-black text-sm tracking-tighter">L</span>
-                </div>
-                <span className="font-black text-lg tracking-tighter text-zinc-900">lalao</span>
+                <BrandLogo boxClassName="w-7 h-7" rounded="rounded-lg" nameClassName="text-lg" fallbackLetter="l" />
               </div>
               <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
                 A Nigerian-first community app where people can ASK, HELP, or JOIN — safely and locally.

@@ -83,8 +83,15 @@ export default async function handler(req, res) {
       return ok(res, { logs });
     }
 
+    // -------- GET /api/admin/settings/upload-url --------
+    if (head === "settings" && id === "upload-url" && method === "GET") {
+      const ctx = await adminContext(req);
+      const uploadUrl = await callConvexMutation("admin:generateBrandUploadUrl", ctx);
+      return ok(res, { uploadUrl });
+    }
+
     // -------- GET/POST /api/admin/settings --------
-    if (head === "settings") {
+    if (head === "settings" && !id) {
       const ctx = await adminContext(req);
       if (method === "GET") {
         const settings = await callConvexQuery("admin:getSystemSettings", ctx);
@@ -100,6 +107,11 @@ export default async function handler(req, res) {
           "requireEmailVerification",
           "autoVerifyPhone",
           "maintenanceMode",
+          "brandLogoUrl",
+          "brandIconUrl",
+          "faviconUrl",
+          "brandFont",
+          "primaryColor",
         ];
         const args = { ...ctx };
         for (const key of allowed) {

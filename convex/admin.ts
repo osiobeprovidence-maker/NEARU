@@ -594,7 +594,7 @@ export const actOnReport = mutation({
 // ---------------------------------------------------------------------------
 
 const DEFAULT_SETTINGS = {
-  platformName: "RALLY",
+  platformName: "lalao",
   defaultRadiusKm: 5,
   supportedCities: [
     "Lagos",
@@ -609,6 +609,11 @@ const DEFAULT_SETTINGS = {
   requireEmailVerification: false,
   autoVerifyPhone: false,
   maintenanceMode: false,
+  brandLogoUrl: undefined,
+  brandIconUrl: undefined,
+  faviconUrl: undefined,
+  brandFont: "system",
+  primaryColor: "#4f46e5",
 };
 
 export const getSystemSettings = query({
@@ -619,6 +624,23 @@ export const getSystemSettings = query({
     return {
       ...DEFAULT_SETTINGS,
       ...(doc || {}),
+    };
+  },
+});
+
+// Public-safe branding read used by the user-facing app. No admin auth required;
+// only exposes cosmetic fields, never internal configuration.
+export const getPublicBranding = query({
+  args: {},
+  handler: async (ctx) => {
+    const doc = await ctx.db.query("systemSettings").first();
+    return {
+      platformName: doc?.platformName ?? DEFAULT_SETTINGS.platformName,
+      brandLogoUrl: doc?.brandLogoUrl ?? null,
+      brandIconUrl: doc?.brandIconUrl ?? null,
+      faviconUrl: doc?.faviconUrl ?? null,
+      brandFont: doc?.brandFont ?? DEFAULT_SETTINGS.brandFont,
+      primaryColor: doc?.primaryColor ?? DEFAULT_SETTINGS.primaryColor,
     };
   },
 });
@@ -634,6 +656,11 @@ export const updateSystemSettings = mutation({
     requireEmailVerification: v.optional(v.boolean()),
     autoVerifyPhone: v.optional(v.boolean()),
     maintenanceMode: v.optional(v.boolean()),
+    brandLogoUrl: v.optional(v.string()),
+    brandIconUrl: v.optional(v.string()),
+    faviconUrl: v.optional(v.string()),
+    brandFont: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const admin = await gate(ctx, args);
@@ -665,6 +692,16 @@ export const updateSystemSettings = mutation({
       createdAt: now,
     });
     return { ok: true };
+  },
+});
+
+// Admin-only signed upload URL for branding assets (logo, icon, favicon).
+// The URL is bound to this Convex deployment's storage bucket.
+export const generateBrandUploadUrl = mutation({
+  args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
+  handler: async (ctx, args) => {
+    await gate(ctx, args);
+    return await ctx.storage.generateUploadUrl();
   },
 });
 

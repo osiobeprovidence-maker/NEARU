@@ -540,6 +540,12 @@ export default defineSchema({
     requireEmailVerification: v.boolean(),
     autoVerifyPhone: v.boolean(),
     maintenanceMode: v.boolean(),
+    // Branding customization (optional; applied across the user-facing app)
+    brandLogoUrl: v.optional(v.string()),
+    brandIconUrl: v.optional(v.string()),
+    faviconUrl: v.optional(v.string()),
+    brandFont: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
     updatedAt: v.number(),
     updatedBy: v.id("users"),
   }),

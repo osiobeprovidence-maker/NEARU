@@ -146,6 +146,11 @@ export interface SystemSettings {
   requireNINForPaidRallies: boolean;
   autoHideReportsThreshold: number;
   supportedCities: string[];
+  brandLogoUrl?: string;
+  brandIconUrl?: string;
+  faviconUrl?: string;
+  brandFont?: string;
+  primaryColor?: string;
 }
 
 interface AdminContextType {
@@ -394,7 +399,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [audienceCounts, setAudienceCounts] = useState<{ all: number; verified: number; plus: number } | null>(null);
   const [userDetails, setUserDetails] = useState<Record<string, AdminUserDetail>>({});
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({
-    platformName: 'RALLY',
+    platformName: 'lalao',
     supportEmail: '',
     defaultRadiusKm: 5,
     maxRalliesPerUser: 0,
@@ -403,6 +408,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     requireNINForPaidRallies: false,
     autoHideReportsThreshold: 0,
     supportedCities: ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Enugu', 'Benin City', 'Kano'],
+    brandLogoUrl: undefined,
+    brandIconUrl: undefined,
+    faviconUrl: undefined,
+    brandFont: 'system',
+    primaryColor: '#4f46e5',
   });
   const [toasts, setToasts] = useState<AdminToast[]>([]);
   const [loading, setLoading] = useState(true);
@@ -454,6 +464,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           platformName: s.platformName,
           defaultRadiusKm: s.defaultRadiusKm,
           supportedCities: s.supportedCities,
+          brandLogoUrl: s.brandLogoUrl,
+          brandIconUrl: s.brandIconUrl,
+          faviconUrl: s.faviconUrl,
+          brandFont: s.brandFont,
+          primaryColor: s.primaryColor,
         }));
       }
       if (countsRes.status === 'fulfilled') setAudienceCounts(countsRes.value.counts);
@@ -531,6 +546,11 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         'requireEmailVerification',
         'autoVerifyPhone',
         'maintenanceMode',
+        'brandLogoUrl',
+        'brandIconUrl',
+        'faviconUrl',
+        'brandFont',
+        'primaryColor',
       ];
       const payload: Partial<BackendSettings> = {};
       const backendToSocial: Record<string, keyof BackendSettings> = {};

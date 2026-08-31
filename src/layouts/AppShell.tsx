@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Avatar from '../components/Avatar';
+import BrandLogo from '../components/BrandLogo';
 import { Outlet, NavLink, useNavigate, Link, useLocation as useRouteLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -230,10 +231,7 @@ export default function AppShell() {
       <aside className="hidden md:flex flex-col w-64 fixed h-full bg-white border-r border-zinc-200 overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center gap-2 font-black text-2xl tracking-tighter text-zinc-900 mb-6 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-              L
-            </div>
-            lalao
+            <BrandLogo boxClassName="w-8 h-8" rounded="rounded-lg" nameClassName="text-2xl" />
           </div>
 
           {/* Desktop Location Selector */}

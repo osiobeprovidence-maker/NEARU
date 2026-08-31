@@ -16,16 +16,29 @@ import {
   Bell, 
   Sparkles,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Upload,
+  Palette,
+  Type,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useAdmin } from '../../contexts/AdminContext';
+import { getBrandUploadUrl } from '../../lib/adminClient';
 import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
 import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
 
+const BRAND_FONTS = [
+  { value: 'system', label: 'System default' },
+  { value: 'sans', label: 'Modern Sans' },
+  { value: 'serif', label: 'Elegant Serif' },
+  { value: 'mono', label: 'Technical Mono' },
+];
+
 export default function AdminSettings() {
   const { systemSettings, updateSettings, auditLogs, users, showToast, metrics } = useAdmin();
-  const [activeTab, setActiveTab] = useState<'general' | 'moderation' | 'location' | 'verification' | 'team' | 'audit'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'branding' | 'moderation' | 'location' | 'verification' | 'team' | 'audit'>('general');
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   // Local form state
   const [formData, setFormData] = useState({ ...systemSettings });
@@ -40,8 +53,13 @@ export default function AdminSettings() {
       platformName: systemSettings.platformName,
       defaultRadiusKm: systemSettings.defaultRadiusKm,
       supportedCities: systemSettings.supportedCities,
+      brandLogoUrl: systemSettings.brandLogoUrl,
+      brandIconUrl: systemSettings.brandIconUrl,
+      faviconUrl: systemSettings.faviconUrl,
+      brandFont: systemSettings.brandFont || 'system',
+      primaryColor: systemSettings.primaryColor || '#4f46e5',
     }));
-  }, [systemSettings.platformName, systemSettings.defaultRadiusKm, systemSettings.supportedCities]);
+  }, [systemSettings.platformName, systemSettings.defaultRadiusKm, systemSettings.supportedCities, systemSettings.brandLogoUrl, systemSettings.brandIconUrl, systemSettings.faviconUrl, systemSettings.brandFont, systemSettings.primaryColor]);
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +68,38 @@ export default function AdminSettings() {
       defaultRadiusKm: formData.defaultRadiusKm,
       supportedCities: formData.supportedCities,
     });
+  };
+
+  const handleSaveBranding = () => {
+    updateSettings({
+      platformName: formData.platformName,
+      brandLogoUrl: formData.brandLogoUrl,
+      brandIconUrl: formData.brandIconUrl,
+      faviconUrl: formData.faviconUrl,
+      brandFont: formData.brandFont,
+      primaryColor: formData.primaryColor,
+    });
+  };
+
+  const handleBrandUpload = async (key: 'brandLogoUrl' | 'brandIconUrl' | 'faviconUrl', file: File) => {
+    setUploadingKey(key);
+    try {
+      const { uploadUrl } = await getBrandUploadUrl();
+      const upRes = await fetch(uploadUrl, {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      if (!upRes.ok) throw new Error('Upload failed');
+      const storageId = await upRes.json();
+      const url = `${import.meta.env.VITE_CONVEX_URL ?? 'https://rare-rooster-878.eu-west-1.convex.cloud'}/api/storage/${storageId}`;
+      setFormData((prev) => ({ ...prev, [key]: url }));
+      showToast('Asset uploaded — remember to save branding.', 'success');
+    } catch (err) {
+      showToast((err as Error).message || 'Upload failed.', 'danger');
+    } finally {
+      setUploadingKey(null);
+    }
   };
 
   const adminTeamMembers = users.filter(u => u.role !== 'user');
@@ -122,11 +172,11 @@ export default function AdminSettings() {
 
         {activeTab !== 'audit' && activeTab !== 'team' && (
           <button
-            onClick={handleSaveSettings}
+            onClick={activeTab === 'branding' ? handleSaveBranding : handleSaveSettings}
             className="flex items-center gap-2 px-5 py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold rounded-2xl transition-all shadow-sm self-start sm:self-auto"
           >
             <Save className="w-4 h-4" />
-            <span>Save Configuration</span>
+            <span>{activeTab === 'branding' ? 'Save Branding' : 'Save Configuration'}</span>
           </button>
         )}
       </div>
@@ -135,6 +185,7 @@ export default function AdminSettings() {
       <div className="flex items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl w-full sm:w-fit overflow-x-auto custom-scrollbar">
         {[
           { id: 'general', label: 'General' },
+          { id: 'branding', label: 'Branding' },
           { id: 'moderation', label: 'Content Moderation' },
           { id: 'location', label: 'Geofencing & Cities' },
           { id: 'verification', label: 'NIN & Safety' },
@@ -212,6 +263,118 @@ export default function AdminSettings() {
                 className="w-full p-3 bg-zinc-100 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium opacity-60 cursor-not-allowed"
               />
               <p className="text-[10px] text-zinc-400 font-medium mt-1">Managed by the platform backend — not editable here.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'branding' && (
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs space-y-6">
+          <div>
+            <h3 className="text-lg font-black text-zinc-900 flex items-center gap-2">
+              <Palette className="w-5 h-5 text-indigo-600" />
+              Platform Branding & Appearance
+            </h3>
+            <p className="text-xs text-zinc-500 font-medium mt-1">
+              Customize how your community sees the app: name, logo, icon, favicon, typography, and accent color. Saves apply instantly across the user-facing app.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
+                Platform Name
+              </label>
+              <input
+                type="text"
+                value={formData.platformName}
+                onChange={(e) => setFormData({ ...formData, platformName: e.target.value })}
+                className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+              <p className="text-[10px] text-zinc-400 font-medium mt-1">Shown in the logo, app title, and browser tab.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
+                Brand Font
+              </label>
+              <select
+                value={formData.brandFont || 'system'}
+                onChange={(e) => setFormData({ ...formData, brandFont: e.target.value })}
+                className="w-full p-3 bg-white border border-zinc-200 rounded-2xl text-xs sm:text-sm font-bold"
+              >
+                {BRAND_FONTS.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-zinc-400 font-medium mt-1">Applies to titles & the app frame.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
+                Accent (Primary) Color
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={formData.primaryColor || '#4f46e5'}
+                  onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
+                  className="w-12 h-12 rounded-xl border border-zinc-200 cursor-pointer bg-white"
+                />
+                <input
+                  type="text"
+                  value={formData.primaryColor || ''}
+                  onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
+                  className="flex-1 p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs sm:text-sm font-mono font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-400 font-medium mt-1">Used for buttons, highlights, and brand accents.</p>
+            </div>
+
+            <div className="sm:row-span-2 sm:col-span-2">
+              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                Brand Assets
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {([
+                  { key: 'brandLogoUrl' as const, label: 'Logo', hint: 'Full / wide logo (SVG, PNG or WebP)' },
+                  { key: 'brandIconUrl' as const, label: 'App Icon', hint: 'Square icon for the badge' },
+                  { key: 'faviconUrl' as const, label: 'Favicon', hint: 'Browser tab icon' },
+                ]).map((asset) => (
+                  <div key={asset.key} className="p-4 bg-zinc-50 rounded-2xl border border-zinc-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-black text-zinc-900">{asset.label}</span>
+                      {formData[asset.key] && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">SET</span>
+                      )}
+                    </div>
+                    {formData[asset.key] && (
+                      <div className="mb-2 bg-white border border-zinc-100 rounded-xl p-2 flex items-center justify-center h-16">
+                        <img src={formData[asset.key]} alt={asset.label} className="max-h-full max-w-full object-contain" />
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingKey === asset.key}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleBrandUpload(asset.key, file);
+                      }}
+                      className="block w-full text-[11px] text-zinc-600 file:mr-2 file:rounded-lg file:border-0 file:bg-zinc-900 file:text-white file:px-3 file:py-1.5 file:text-[11px] file:font-bold hover:file:bg-zinc-700"
+                    />
+                    <p className="text-[10px] text-zinc-400 font-medium mt-1">{asset.hint}</p>
+                    {formData[asset.key] && (
+                      <button
+                        onClick={() => setFormData((prev) => ({ ...prev, [asset.key]: undefined }))}
+                        className="mt-2 text-[10px] font-bold text-rose-600 hover:text-rose-700"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
