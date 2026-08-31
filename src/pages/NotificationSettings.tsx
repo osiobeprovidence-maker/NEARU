@@ -36,7 +36,7 @@ export default function NotificationSettings() {
   return (
     <PageShell 
       title="Notification Settings"
-      subtitle="Control how and when LALOA sends you alerts and updates"
+      subtitle="Control how and when lalao sends you alerts and updates"
     >
       <div className="space-y-4 max-w-2xl mx-auto pb-12">
         {savedToast && (

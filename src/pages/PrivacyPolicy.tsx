@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">1. Information We Collect</h4>
           <p>
-            When you use LALOA, we collect information you provide directly to us:
+            When you use lalao, we collect information you provide directly to us:
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-zinc-600">
             <li><strong className="text-zinc-800">Account Details:</strong> Name, chosen username, email address, phone number, bio, city, and profile photo.</li>
@@ -68,7 +68,7 @@ export default function PrivacyPolicy() {
         <section className="space-y-3">
           <h4 className="text-base font-black text-zinc-900">3. Location Privacy & Approximation</h4>
           <p>
-            LALOA does not publicly expose your live, continuous GPS coordinate path or your private home address. Distance indicators (e.g. "0.7 km away") use randomized approximate neighborhood coordinates. Precise venue locations are only shared when both parties mutually accept a RALLY.
+            lalao does not publicly expose your live, continuous GPS coordinate path or your private home address. Distance indicators (e.g. "0.7 km away") use randomized approximate neighborhood coordinates. Precise venue locations are only shared when both parties mutually accept a RALLY.
           </p>
         </section>
 

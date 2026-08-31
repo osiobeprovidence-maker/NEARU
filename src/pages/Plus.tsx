@@ -25,7 +25,7 @@ export default function Plus() {
     setBusy(true);
     try {
       await grantPro();
-      showToast('Welcome to LALOA Pro!', 'You can now create an Organization or Business account.');
+      showToast('Welcome to lalao Pro!', 'You can now create an Organization or Business account.');
     } catch (e: any) {
       showToast('Error', e?.message || 'Could not upgrade.');
     } finally {
@@ -41,7 +41,7 @@ export default function Plus() {
             <div className="w-14 h-14 rounded-2xl bg-emerald-600 flex items-center justify-center mx-auto mb-5 text-white">
               <Crown className="w-7 h-7" />
             </div>
-            <h2 className="text-2xl font-black mb-2">You're a LALOA Pro member.</h2>
+            <h2 className="text-2xl font-black mb-2">You're a lalao Pro member.</h2>
             <p className="text-emerald-800/70 text-sm max-w-sm mx-auto font-medium leading-relaxed">
               Your Pro membership is active. You can now create an Organization or
               Business account and manage events.
@@ -64,7 +64,7 @@ export default function Plus() {
             <Crown className="w-7 h-7" />
           </div>
 
-          <h2 className="text-2xl font-black mb-2 text-white">LALOA Pro</h2>
+          <h2 className="text-2xl font-black mb-2 text-white">lalao Pro</h2>
           <p className="text-zinc-300 text-sm mb-6 max-w-sm mx-auto font-medium leading-relaxed">
             Go professional. Create an Organization or Business account, run
             events, and reach more people.
@@ -136,7 +136,7 @@ export default function Plus() {
             className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-bold tracking-wide hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4 text-amber-400" />}
-            <span>{busy ? 'Activating…' : `GET LALOA PRO — ₦${plans[selectedPlan].perMonth.toLocaleString()}/mo`}</span>
+            <span>{busy ? 'Activating…' : `GET lalao PRO — ₦${plans[selectedPlan].perMonth.toLocaleString()}/mo`}</span>
           </button>
           <p className="text-center text-[11px] text-zinc-400 mt-3">
             Billing activation is in progress. Organization & Business accounts are unlocked with Pro.

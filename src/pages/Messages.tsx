@@ -312,7 +312,7 @@ export default function Messages() {
         <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-500 shrink-0 mt-0.5" />
         <div>
           <span className="font-bold text-zinc-800 block mb-0.5">Trust & Safety Reminder</span>
-          <p className="text-zinc-500">Keep communication inside LALOA. Do not share personal contact details like phone numbers or exact residential addresses until you have built trust.</p>
+          <p className="text-zinc-500">Keep communication inside lalao. Do not share personal contact details like phone numbers or exact residential addresses until you have built trust.</p>
         </div>
       </div>
     </PageShell>

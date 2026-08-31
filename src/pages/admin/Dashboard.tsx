@@ -453,7 +453,7 @@ export default function AdminDashboard() {
         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs flex flex-col justify-between">
           <div>
             <h3 className="text-lg sm:text-xl font-black text-zinc-900 tracking-tight">Platform Snapshot</h3>
-            <p className="text-xs text-zinc-500 font-medium mb-4">Current record counts across LALOA</p>
+            <p className="text-xs text-zinc-500 font-medium mb-4">Current record counts across lalao</p>
 
             <div className="space-y-3">
               {snapshot.map((row) => (
@@ -469,7 +469,7 @@ export default function AdminDashboard() {
             <div className="mt-5 p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
               <TrendingUp className="w-5 h-5 text-emerald-600 shrink-0" />
               <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">
-                Overall activity is derived live from the LALOA database — no cached or simulated figures.
+                Overall activity is derived live from the lalao database — no cached or simulated figures.
               </p>
             </div>
           </div>

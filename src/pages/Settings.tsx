@@ -281,7 +281,7 @@ export default function Settings() {
               className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all font-bold text-xs sm:text-sm active:scale-98 shadow-sm"
             >
               <Download className="w-4 h-4" />
-              <span>Install LALOA</span>
+              <span>Install lalao</span>
             </button>
           )}
 

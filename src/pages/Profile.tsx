@@ -39,7 +39,7 @@ export default function Profile() {
   const requestType = async (key: 'personal' | 'organization' | 'business') => {
     const t = accountTypes.find((a) => a.key === key)!;
     if (t.needsPro && !isPro) {
-      showToast('LALOA Pro required', 'Upgrade to create an Organization or Business account.');
+      showToast('lalao Pro required', 'Upgrade to create an Organization or Business account.');
       navigate('/plus');
       return;
     }
@@ -280,7 +280,7 @@ export default function Profile() {
           <p className="text-[11px] text-zinc-500 font-medium mb-4">
             {isPro
               ? 'You can act as a Personal, Organization or Business account.'
-              : 'Organizations & Businesses require LALOA Pro.'}
+              : 'Organizations & Businesses require lalao Pro.'}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {accountTypes.map((t) => {

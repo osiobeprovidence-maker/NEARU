@@ -553,11 +553,11 @@ export const syncLocation = mutation({
 });
 
 // ---------------------------------------------------------------------------
-// Account types & LALOA Pro
+// Account types & lalao Pro
 // ---------------------------------------------------------------------------
 
 /**
- * Grant or revoke LALOA Pro. Billing is deferred to a later Paystack phase;
+ * Grant or revoke lalao Pro. Billing is deferred to a later Paystack phase;
  * until then this is the explicit upgrade path (called from the Plus page).
  */
 export const setPro = mutation({
@@ -576,7 +576,7 @@ export const setPro = mutation({
 
 /**
  * Set the account type (personal | organization | business).
- * Professional account types (organization/business) require LALOA Pro.
+ * Professional account types (organization/business) require lalao Pro.
  * Default for all users is "personal".
  */
 export const setAccountType = mutation({
@@ -595,7 +595,7 @@ export const setAccountType = mutation({
 
     const professional = args.accountType === "organization" || args.accountType === "business";
     if (professional && user.isPro !== true) {
-      throw new Error("You need LALOA Pro to create an Organization or Business account.");
+      throw new Error("You need lalao Pro to create an Organization or Business account.");
     }
 
     const patch: Record<string, unknown> = {

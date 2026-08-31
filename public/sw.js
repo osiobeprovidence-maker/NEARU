@@ -26,7 +26,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'LALOA', body: 'New activity nearby', url: '/' };
+  let data = { title: 'lalao', body: 'New activity nearby', url: '/' };
   if (event.data) {
     try {
       data = { ...data, ...event.data.json() };

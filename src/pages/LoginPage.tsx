@@ -108,7 +108,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center">
               <span className="text-white font-black text-xl tracking-tighter">L</span>
             </div>
-            <span className="font-black text-2xl tracking-tighter text-zinc-900">LALOA</span>
+            <span className="font-black text-2xl tracking-tighter text-zinc-900">lalao</span>
           </div>
 
           <h1 className="text-3xl font-black text-zinc-900 tracking-tight mb-2">

@@ -332,7 +332,7 @@ export default function Onboarding() {
         transition={{ delay: 0.15, duration: 0.5 }}
         className="text-3xl sm:text-4xl font-black text-zinc-900 tracking-tight"
       >
-        Welcome to LALOA
+        Welcome to lalao
       </motion.h1>
       <motion.p
         initial={{ y: 20, opacity: 0 }}
@@ -603,7 +603,7 @@ export default function Onboarding() {
           Choose a username
         </h2>
         <p className="mt-2 text-sm text-zinc-500 mb-8">
-          This is how people will find you on LALOA.
+          This is how people will find you on lalao.
         </p>
         <form onSubmit={(e) => { e.preventDefault(); navigateTo('profile', 7); }} className="space-y-5">
           <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
@@ -642,7 +642,7 @@ export default function Onboarding() {
           Tell us your name
         </h2>
         <p className="mt-2 text-sm text-zinc-500 mb-8">
-          This is how other members will see you on LALOA.
+          This is how other members will see you on lalao.
         </p>
         <form onSubmit={handleProfileSubmit} className="space-y-4">
           <input

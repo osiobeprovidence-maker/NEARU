@@ -220,7 +220,7 @@ export default function AdminSettings() {
       {activeTab === 'moderation' && (
         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-zinc-200 shadow-xs space-y-6">
           <h3 className="text-lg font-black text-zinc-900">Safety & Content Moderation Policies</h3>
-          <p className="text-xs text-zinc-500 font-medium">These automatic policies are enforced server-side by the LALOA backend.</p>
+          <p className="text-xs text-zinc-500 font-medium">These automatic policies are enforced server-side by the lalao backend.</p>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-200">

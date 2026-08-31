@@ -40,7 +40,7 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
               <span className="text-white font-black text-lg tracking-tighter">L</span>
             </div>
-            <span className="font-black text-xl tracking-tighter text-zinc-900">LALOA</span>
+            <span className="font-black text-xl tracking-tighter text-zinc-900">lalao</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -90,7 +90,7 @@ export default function Landing() {
               transition={{ duration: 0.6, delay: 0.1 }}
               className="mt-6 text-base sm:text-lg text-zinc-500 max-w-xl mx-auto leading-relaxed"
             >
-              Need help? Offering a ride? Looking for company? LALOA connects you 
+              Need help? Offering a ride? Looking for company? lalao connects you 
               with verified people around you — fast, safe, and local.
             </motion.p>
 
@@ -158,7 +158,7 @@ export default function Landing() {
             transition={{ duration: 0.5 }}
             className="mt-3 text-sm sm:text-base text-zinc-500 max-w-lg mx-auto"
           >
-            Every post on LALOA falls into one of three categories. 
+            Every post on lalao falls into one of three categories. 
             Pick what fits — your community will show up.
           </motion.p>
         </motion.div>
@@ -444,7 +444,7 @@ export default function Landing() {
             transition={{ duration: 0.5 }}
             className="mt-4 text-sm sm:text-base text-zinc-500 max-w-md mx-auto"
           >
-            Join thousands of verified Nigerians already using LALOA 
+            Join thousands of verified Nigerians already using lalao 
             to connect, help, and do things together.
           </motion.p>
           <motion.div
@@ -456,7 +456,7 @@ export default function Landing() {
               onClick={handleGetStarted}
               className="px-10 py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 inline-flex items-center gap-2"
             >
-              Join LALOA for free
+              Join lalao for free
               <ArrowRight className="w-4 h-4" />
             </button>
           </motion.div>
@@ -472,7 +472,7 @@ export default function Landing() {
                 <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
                   <span className="text-white font-black text-sm tracking-tighter">L</span>
                 </div>
-                <span className="font-black text-lg tracking-tighter text-zinc-900">LALOA</span>
+                <span className="font-black text-lg tracking-tighter text-zinc-900">lalao</span>
               </div>
               <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
                 A Nigerian-first community app where people can ASK, HELP, or JOIN — safely and locally.
@@ -485,7 +485,7 @@ export default function Landing() {
             </div>
           </div>
           <div className="mt-8 pt-6 border-t border-zinc-100 text-[11px] text-zinc-400 font-medium">
-            &copy; {new Date().getFullYear()} LALOA. All rights reserved. Made in Nigeria.
+            &copy; {new Date().getFullYear()} lalao. All rights reserved. Made in Nigeria.
           </div>
         </div>
       </footer>

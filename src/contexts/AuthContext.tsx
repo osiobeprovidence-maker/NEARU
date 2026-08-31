@@ -606,7 +606,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  // LALOA Pro + account types
+  // lalao Pro + account types
   const grantPro = async () => {
     if (!convexUserId) throw new Error('Not logged in');
     await convexSetPro({ userId: convexUserId as any, isPro: true });

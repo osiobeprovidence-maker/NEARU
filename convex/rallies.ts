@@ -617,7 +617,7 @@ export const create = mutation({
       .filter((h) => h.length > 0);
     const uniqueHashtags = [...new Set(normalizedHashtags)];
 
-    // Event Hub / LALOA Pro: creating an EVENT requires Pro AND an
+    // Event Hub / lalao Pro: creating an EVENT requires Pro AND an
     // organization or business account (server-side gate). Personal accounts
     // cannot host events from the normal create menu.
     if (args.type === "EVENT") {
@@ -627,7 +627,7 @@ export const create = mutation({
         creator?.accountType === "business";
       if (!creator?.isPro || !isProAccount) {
         throw new Error(
-          "Creating an Event requires a LALOA Pro Organization or Business account."
+          "Creating an Event requires a lalao Pro Organization or Business account."
         );
       }
     }

@@ -1,6 +1,6 @@
 {
-  "name": "LALOA — Post. Rally. Connect.",
-  "short_name": "LALOA",
+  "name": "lalao — Post. Rally. Connect.",
+  "short_name": "lalao",
   "description": "Ask for help, offer help, or join activities with people around you.",
   "start_url": "/",
   "display": "standalone",

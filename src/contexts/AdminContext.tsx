@@ -30,7 +30,7 @@ import { User, Rally } from '../types';
 // ---------------------------------------------------------------------------
 // Public interfaces (kept identical to the previous implementation so existing
 // admin pages keep compiling). All values are now hydrated from the real
-// LALOA backend via the serverless admin API.
+// lalao backend via the serverless admin API.
 // ---------------------------------------------------------------------------
 
 export interface AdminUser extends User {

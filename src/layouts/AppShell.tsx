@@ -118,7 +118,7 @@ export default function AppShell() {
   const handleRallyCreated = () => {
     setIsCreateModalOpen(false);
     setToastConfig({
-      title: "Posted to LALOA.",
+      title: "Posted to lalao.",
       subtitle: "People around you can now discover it."
     });
     setTimeout(() => setToastConfig(null), 4000);
@@ -179,7 +179,7 @@ export default function AppShell() {
     if (path === '/settings/help' || path === '/help') return 'Help & Support';
     if (path === '/terms') return 'Terms of Service';
     if (path === '/privacy') return 'Privacy Policy';
-    return 'LALOA';
+    return 'lalao';
   };
 
   const mobileTitle = getMobileHeaderTitle();
@@ -233,7 +233,7 @@ export default function AppShell() {
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
               L
             </div>
-            LALOA
+            lalao
           </div>
 
           {/* Desktop Location Selector */}
@@ -374,7 +374,7 @@ export default function AppShell() {
                 </button>
               )}
               <h1 className="text-xl font-black tracking-tight text-zinc-900 truncate">
-                {mobileTitle || 'LALOA'}
+                {mobileTitle || 'lalao'}
               </h1>
             </div>
           )}

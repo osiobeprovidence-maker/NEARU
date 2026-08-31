@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { requireAdmin } from "./adminHelpers";
 
 // ---------------------------------------------------------------------------
-// LALOA Admin / CRM backend.
+// lalao Admin / CRM backend.
 //
 // SECURITY MODEL (mirrors convex/verifications.ts):
 // Every admin function requires a `serverSecret` that matches
