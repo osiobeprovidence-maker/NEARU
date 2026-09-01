@@ -56,7 +56,8 @@ const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
 const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
 
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
+  const { user, isAuthLoading, isProfileLoading } = useAuth();
+  if (isAuthLoading || isProfileLoading) return null;
   if (user.email !== SUPER_ADMIN_EMAIL) {
     return <Navigate to="/" replace />;
   }
@@ -78,6 +79,7 @@ const AppRoutes = () => {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signin" element={<LoginPage />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="*" element={<Landing />} />
       </Routes>

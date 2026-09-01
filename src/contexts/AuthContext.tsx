@@ -2,9 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { User, PrivacySettings, NotificationSettings, AppSettings, TrustedContact, BlockedUser } from '../types';
 import {
   auth,
+  googleProvider,
+  signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -13,6 +16,10 @@ import {
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface AuthContextType {
   isLoggedIn: boolean;
@@ -23,11 +30,15 @@ interface AuthContextType {
   user: User;
   convexUserId: string | null;
   firebaseUser: FirebaseUser | null;
-  register: (email: string, password: string) => Promise<void>;
+  // Auth actions
   login: (emailOrUsername: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   sendMagicLink: (email: string) => Promise<void>;
   loginWithMagicLink: () => Promise<boolean>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => void;
+  // Profile helpers
   updateUser: (updates: Partial<User>) => void;
   waitForEmailVerification: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<void>;
@@ -64,6 +75,10 @@ interface AuthContextType {
     organizationName?: string
   ) => Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
 
 const defaultPrivacySettings: PrivacySettings = {
   profileVisibility: 'public',
@@ -113,10 +128,12 @@ const AuthContext = createContext<AuthContextType>({
   user: EMPTY_USER,
   convexUserId: null,
   firebaseUser: null,
-  register: async () => {},
   login: async () => {},
+  loginWithGoogle: async () => {},
+  register: async () => {},
   sendMagicLink: async () => {},
   loginWithMagicLink: async () => false,
+  resetPassword: async () => {},
   logout: () => {},
   updateUser: () => {},
   waitForEmailVerification: async () => false,
@@ -124,7 +141,7 @@ const AuthContext = createContext<AuthContextType>({
   setupTOTP: async () => ({ secret: '', qrCode: '' }),
   verifyTOTP: async () => false,
   saveUserToConvex: async () => '',
-  updateUserVerification: async () => {},
+  updateUserVerification: () => {},
   updatePrivacySettings: () => {},
   updateNotificationSettings: () => {},
   updateAppSettings: () => {},
@@ -139,6 +156,10 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 const STORAGE_KEY = 'rally_user_profile_v1';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function convexUserToUser(cu: any, firebaseEmail: string): User {
   return {
@@ -180,14 +201,41 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
   };
 }
 
+/**
+ * Translate raw Firebase auth error codes into friendly user-facing messages.
+ * The technical code is preserved on err.code so dev logs still have it.
+ */
+function friendlyAuthError(err: any): string {
+  const code: string = err?.code || '';
+  if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+    return 'Your email or password is incorrect.';
+  }
+  if (code === 'auth/email-already-in-use') return 'An account with this email already exists.';
+  if (code === 'auth/weak-password') return 'Password must be at least 6 characters.';
+  if (code === 'auth/invalid-email') return 'Please enter a valid email address.';
+  if (code === 'auth/user-disabled') return 'This account has been disabled.';
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return 'Google sign-in was cancelled.';
+  }
+  if (code === 'auth/popup-blocked') return 'Pop-up was blocked by your browser. Please allow pop-ups and try again.';
+  if (code === 'auth/network-request-failed') return 'Something went wrong. Please check your connection and try again.';
+  if (code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
+  if (code === 'auth/account-exists-with-different-credential') {
+    return 'An account already exists with this email using a different sign-in method.';
+  }
+  return err?.message || 'Something went wrong. Please try again.';
+}
+
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [user, setUser] = useState<User>(EMPTY_USER);
-  // Read the cached Convex user ID from localStorage. We deliberately do NOT
-  // trust this value blindly — it is only used as a hint to avoid an extra
-  // round-trip. If the ID is stale (wrong deployment, deleted user, etc.) the
-  // getByEmail query below will override it when the Firebase user is known.
+  // The cached Convex user ID from localStorage is treated as a hint only.
+  // The live getByFirebaseUid query always overrides it once resolved.
   const [convexUserId, setConvexUserId] = useState<string | null>(() => {
     return localStorage.getItem('rally_convex_user_id');
   });
@@ -195,11 +243,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [hasConvexProfile, setHasConvexProfile] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
 
-  const queryEmail = firebaseUser?.email || undefined;
-  const queryResult = useQuery(api.users.getByEmail, queryEmail !== undefined ? { email: queryEmail } : 'skip');
+  // ---------------------------------------------------------------------------
+  // Primary Convex lookup — keyed on Firebase UID (fast, stable, no duplicates)
+  // Falls back to email lookup for legacy users via getOrCreateByFirebaseUid.
+  // ---------------------------------------------------------------------------
+  const queryUid = firebaseUser?.uid ?? undefined;
+  const uidQueryResult = useQuery(
+    api.users.getByFirebaseUid,
+    queryUid !== undefined ? { firebaseUid: queryUid } : 'skip'
+  );
+
+  // Convex mutations
   const convexCreateUser = useMutation(api.users.create);
   const convexUpdateAuth = useMutation(api.users.updateAuth);
-  const convexGetOrCreateByEmail = useMutation(api.users.getOrCreateByEmail);
+  const convexGetOrCreateByFirebaseUid = useMutation(api.users.getOrCreateByFirebaseUid);
+  const convexLinkFirebaseUid = useMutation(api.users.linkFirebaseUid);
   const convexUpdatePrivacy = useMutation(api.users.updatePrivacySettings);
   const convexUpdateNotifications = useMutation(api.users.updateNotificationSettings);
   const convexUpdateApp = useMutation(api.users.updateAppSettings);
@@ -209,6 +267,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const convexSetPro = useMutation(api.users.setPro);
   const convexSetAccountType = useMutation(api.users.setAccountType);
 
+  // ---------------------------------------------------------------------------
+  // Firebase auth state listener
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
@@ -219,8 +280,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(EMPTY_USER);
         setIsProfileLoading(false);
         setProfileChecked(true);
-        // Clear ALL cached auth state on sign-out so stale IDs can never
-        // survive into the next session and cause getProfile errors.
         localStorage.removeItem('rally_convex_user_id');
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -228,19 +287,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Sync Convex profile whenever the UID-based query result changes
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (firebaseUser === null) return;
 
-    if (queryResult === undefined) {
-      // Still loading — keep showing the profile loading spinner.
+    if (uidQueryResult === undefined) {
       setIsProfileLoading(true);
       return;
     }
 
-    if (queryResult === null) {
-      // Firebase user is authenticated but has no Convex record.
-      // Evict any stale cached ID — it clearly doesn't match this Firebase
-      // user in the current deployment.
+    if (uidQueryResult === null) {
+      // No Convex record for this Firebase UID yet.
+      // The syncNewUser effect below will call getOrCreateByFirebaseUid.
       setHasConvexProfile(false);
       setConvexUserId(null);
       setIsProfileLoading(false);
@@ -249,57 +309,113 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // A valid Convex record was found for this Firebase user's email.
-    // The live query result is always authoritative — override whatever
-    // was cached in localStorage (which may be from a different session
-    // or deployment and is the root cause of stale-ID getProfile errors).
-    const u = convexUserToUser(queryResult, firebaseUser.email || '');
+    // Found — the live query result is always authoritative.
+    const u = convexUserToUser(uidQueryResult, firebaseUser.email || '');
     setUser(u);
-    setConvexUserId(queryResult._id);
+    setConvexUserId(uidQueryResult._id);
     setHasConvexProfile(true);
     setIsProfileLoading(false);
     setProfileChecked(true);
-    localStorage.setItem('rally_convex_user_id', queryResult._id);
+    localStorage.setItem('rally_convex_user_id', uidQueryResult._id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-  }, [firebaseUser, queryResult]);
 
+    // One-time migration: if the record was found but lacks firebaseUid
+    // (shouldn't happen via getByFirebaseUid, but guard anyway).
+    if (!(uidQueryResult as any).firebaseUid) {
+      convexLinkFirebaseUid({
+        userId: uidQueryResult._id as any,
+        firebaseUid: firebaseUser.uid,
+      }).catch(() => {});
+    }
+  }, [firebaseUser, uidQueryResult]);
+
+  // ---------------------------------------------------------------------------
+  // Auto-create or migrate a Convex record for a Firebase user with no profile.
+  // Handles: new Google sign-ins, new email sign-ups before onboarding completes,
+  // and legacy email-only users (the mutation handles the email-migration path).
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!firebaseUser || !profileChecked || hasConvexProfile || convexUserId) return;
 
-    const syncExistingUser = async () => {
+    const syncNewUser = async () => {
       try {
-        const userId = await convexGetOrCreateByEmail({
+        const result = await convexGetOrCreateByFirebaseUid({
+          firebaseUid: firebaseUser.uid,
+          email: firebaseUser.email || undefined,
           name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          username: firebaseUser.email?.split('@')[0] || 'user',
-          email: firebaseUser.email || '',
+          photoURL: firebaseUser.photoURL || undefined,
+          provider: firebaseUser.providerData?.[0]?.providerId || 'password',
         });
-        if (userId) {
-          setConvexUserId(userId);
-          localStorage.setItem('rally_convex_user_id', userId);
+        if (result?.userId) {
+          setConvexUserId(result.userId);
+          localStorage.setItem('rally_convex_user_id', result.userId);
+          // If a new record was just created for a Google user we have a
+          // profile, but hasConvexProfile will be set true by the UID query
+          // once it re-fires. For newly-onboarded email users, hasConvexProfile
+          // stays false so they're routed to /onboarding to fill in username etc.
         }
       } catch (err) {
-        console.error('Failed to sync existing user to Convex:', err);
+        console.error('[AuthContext] syncNewUser failed:', err);
       }
     };
 
-    syncExistingUser();
-  }, [firebaseUser, profileChecked, hasConvexProfile, convexUserId, convexGetOrCreateByEmail]);
+    syncNewUser();
+  }, [firebaseUser, profileChecked, hasConvexProfile, convexUserId, convexGetOrCreateByFirebaseUid]);
 
   const isLoggedIn = !!firebaseUser;
 
+  // ---------------------------------------------------------------------------
+  // Auth actions
+  // ---------------------------------------------------------------------------
+
+  const login = async (emailOrUsername: string, password: string) => {
+    let email = emailOrUsername;
+    if (!emailOrUsername.includes('@')) {
+      const res = await fetch('/api/login-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: emailOrUsername }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.email) throw new Error('Username not found');
+      email = data.email;
+    }
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged fires → uidQueryResult re-evaluates →
+      // syncNewUser runs if no Convex record exists.
+      // The calling page should navigate to '/' after this resolves.
+    } catch (err: any) {
+      // Re-throw with a friendly message so the UI can display it.
+      throw new Error(friendlyAuthError(err));
+    }
+  };
+
   const register = async (email: string, password: string) => {
-    if (auth.currentUser) {
-      await sendEmailVerification(auth.currentUser, {
+    try {
+      if (auth.currentUser) {
+        await sendEmailVerification(auth.currentUser, {
+          url: window.location.origin,
+          handleCodeInApp: true,
+        });
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(cred.user, {
         url: window.location.origin,
         handleCodeInApp: true,
       });
-      return;
+    } catch (err) {
+      throw new Error(friendlyAuthError(err));
     }
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await sendEmailVerification(cred.user, {
-      url: window.location.origin,
-      handleCodeInApp: true,
-    });
   };
 
   const resendVerificationEmail = async () => {
@@ -316,70 +432,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return !!auth.currentUser.emailVerified;
   };
 
-  const setupTOTP = async (email: string) => {
-    const res = await fetch('/api/totp-setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to setup TOTP');
-    return data;
-  };
-
-  const verifyTOTP = async (secret: string, token: string) => {
-    const res = await fetch('/api/totp-verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret, token }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Invalid code');
-    return data.valid;
-  };
-
-  const saveUserToConvex = async (data: {
-    name: string;
-    username: string;
-    email: string;
-    passwordHash: string;
-    totpSecret?: string;
-    totpEnabled?: boolean;
-    isEmailVerified: boolean;
-  }) => {
-    const userId = await convexCreateUser({
-      name: data.name,
-      username: data.username,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=6366f1&color=fff&bold=true&size=200`,
-      email: data.email,
-      isNINVerified: false,
-      isPhoneVerified: false,
-      isEmailVerified: data.isEmailVerified,
-      passwordHash: data.passwordHash || undefined,
-    });
-    if (data.totpSecret || data.totpEnabled) {
-      await convexUpdateAuth({
-        userId: userId as any,
-        totpSecret: data.totpSecret || undefined,
-        totpEnabled: data.totpEnabled || false,
-      });
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (err: any) {
+      // For security, don't reveal whether the email exists.
+      // Log the real error server-side but show a generic message.
+      console.error('[AuthContext] resetPassword error:', err?.code, err?.message);
+      // Only surface hard errors (invalid email format etc).
+      if (err?.code === 'auth/invalid-email') {
+        throw new Error('Please enter a valid email address.');
+      }
+      // Otherwise swallow — we show "if an account exists we've sent a link"
     }
-    return userId;
-  };
-
-  const login = async (emailOrUsername: string, password: string) => {
-    let email = emailOrUsername;
-    if (!emailOrUsername.includes('@')) {
-      const res = await fetch('/api/login-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: emailOrUsername }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.email) throw new Error('Username not found');
-      email = data.email;
-    }
-    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const sendMagicLink = async (email: string) => {
@@ -407,12 +472,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth);
   };
 
+  // ---------------------------------------------------------------------------
+  // TOTP (serverless-backed)
+  // ---------------------------------------------------------------------------
+
+  const setupTOTP = async (email: string) => {
+    const res = await fetch('/api/totp-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to setup TOTP');
+    return data;
+  };
+
+  const verifyTOTP = async (secret: string, token: string) => {
+    const res = await fetch('/api/totp-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, token }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid code');
+    return data.valid;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Convex user creation (called from the end of onboarding)
+  // ---------------------------------------------------------------------------
+
+  const saveUserToConvex = async (data: {
+    name: string;
+    username: string;
+    email: string;
+    passwordHash: string;
+    totpSecret?: string;
+    totpEnabled?: boolean;
+    isEmailVerified: boolean;
+  }) => {
+    const userId = await convexCreateUser({
+      name: data.name,
+      username: data.username,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=6366f1&color=fff&bold=true&size=200`,
+      email: data.email,
+      isNINVerified: false,
+      isPhoneVerified: false,
+      isEmailVerified: data.isEmailVerified,
+      passwordHash: data.passwordHash || undefined,
+    });
+    // Link the Firebase UID to the freshly-created Convex record so
+    // future lookups use the fast uid-indexed path.
+    if (firebaseUser) {
+      await convexLinkFirebaseUid({
+        userId: userId as any,
+        firebaseUid: firebaseUser.uid,
+      }).catch(() => {});
+    }
+    if (data.totpSecret || data.totpEnabled) {
+      await convexUpdateAuth({
+        userId: userId as any,
+        totpSecret: data.totpSecret || undefined,
+        totpEnabled: data.totpEnabled || false,
+      });
+    }
+    return userId;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Local user state helpers
+  // ---------------------------------------------------------------------------
+
   const updateUser = (updates: Partial<User>) => {
     setUser((prev) => {
       const updated = { ...prev, ...updates };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
@@ -423,26 +557,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updatedBadges = currentBadges.includes('NIN Verified')
         ? currentBadges
         : [...currentBadges, 'NIN Verified'];
-      const updated = {
-        ...prev,
-        isNINVerified: true,
-        badges: updatedBadges,
-      };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
+      const updated = { ...prev, isNINVerified: true, badges: updatedBadges };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
+
+  // ---------------------------------------------------------------------------
+  // Settings persistence — local + Convex
+  // ---------------------------------------------------------------------------
 
   const updatePrivacySettings = (settings: Partial<PrivacySettings>) => {
     setUser((prev) => {
       const updated = {
         ...prev,
-        privacySettings: {
-          ...(prev.privacySettings || defaultPrivacySettings),
-          ...settings,
-        },
+        privacySettings: { ...(prev.privacySettings || defaultPrivacySettings), ...settings },
       };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       return updated;
@@ -465,10 +594,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       const updated = {
         ...prev,
-        notificationSettings: {
-          ...(prev.notificationSettings || defaultNotificationSettings),
-          ...settings,
-        },
+        notificationSettings: { ...(prev.notificationSettings || defaultNotificationSettings), ...settings },
       };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       return updated;
@@ -495,10 +621,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       const updated = {
         ...prev,
-        appSettings: {
-          ...(prev.appSettings || defaultAppSettings),
-          ...settings,
-        },
+        appSettings: { ...(prev.appSettings || defaultAppSettings), ...settings },
       };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       return updated;
@@ -518,15 +641,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const addTrustedContact = (contact: Omit<TrustedContact, 'id'>) => {
-    const newContact: TrustedContact = {
-      ...contact,
-      id: `tc-${Date.now()}`,
-    };
+    const newContact: TrustedContact = { ...contact, id: `tc-${Date.now()}` };
     setUser((prev) => {
-      const updated = {
-        ...prev,
-        trustedContacts: [...(prev.trustedContacts || []), newContact],
-      };
+      const updated = { ...prev, trustedContacts: [...(prev.trustedContacts || []), newContact] };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       return updated;
     });
@@ -559,13 +676,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (convexUserId) {
       convexBlock({
         userId: convexUserId as any,
-        blockedUser: {
-          id,
-          name,
-          username,
-          avatar,
-          blockedAt: new Date().toISOString(),
-        },
+        blockedUser: { id, name, username, avatar, blockedAt: new Date().toISOString() },
       }).catch((err) => console.error('Failed to persist block:', err));
     }
   };
@@ -580,10 +691,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return updated;
     });
     if (convexUserId) {
-      convexUnblock({
-        userId: convexUserId as any,
-        blockedId: userId,
-      }).catch((err) => console.error('Failed to persist unblock:', err));
+      convexUnblock({ userId: convexUserId as any, blockedId: userId })
+        .catch((err) => console.error('Failed to persist unblock:', err));
     }
   };
 
@@ -614,14 +723,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAppCache = () => {
     setUser((prev) => ({
       ...prev,
-      appSettings: {
-        ...(prev.appSettings || defaultAppSettings),
-        cacheSizeMB: 0.1,
-      },
+      appSettings: { ...(prev.appSettings || defaultAppSettings), cacheSizeMB: 0.1 },
     }));
   };
 
-  // lalao Pro + account types
   const grantPro = async () => {
     if (!convexUserId) throw new Error('Not logged in');
     await convexSetPro({ userId: convexUserId as any, isPro: true });
@@ -666,10 +771,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         convexUserId,
         firebaseUser,
-        register,
         login,
+        loginWithGoogle,
+        register,
         sendMagicLink,
         loginWithMagicLink,
+        resetPassword,
         logout,
         updateUser,
         waitForEmailVerification,

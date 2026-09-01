@@ -80,9 +80,16 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (firebaseUser) {
+      // Google (or any OAuth) user — they're already authenticated.
+      // Pre-fill name from their Google profile and skip straight to username.
+      if (firebaseUser.displayName) {
+        const parts = firebaseUser.displayName.trim().split(/\s+/);
+        setFirstName(parts[0] || '');
+        setLastName(parts.slice(1).join(' ') || '');
+      }
+      setEmail(firebaseUser.email || '');
       setStep('username');
       setStepIndex(6);
-      setEmail(firebaseUser.email || '');
     }
   }, []);
 
@@ -248,17 +255,26 @@ export default function Onboarding() {
     const interestsLabels = selectedInterests
       .map((id) => INTERESTS.find((i) => i.id === id)?.label)
       .filter(Boolean) as string[];
+
+    // For Google/OAuth users, use the verified Firebase email.
+    // For email/password users, use the email they entered during signup.
+    const effectiveEmail = firebaseUser?.email || email;
+    const effectiveName = fullName || firstName || firebaseUser?.displayName || 'User';
+    const effectiveUsername = username || effectiveEmail.split('@')[0].toLowerCase();
+
     const userData = {
-      name: fullName || firstName,
-      username: username || email.split('@')[0].toLowerCase(),
-      email,
+      name: effectiveName,
+      username: effectiveUsername,
+      email: effectiveEmail,
       totpSecret: totpSecret || undefined,
       totpEnabled: !!totpSecret,
-      isEmailVerified: true,
+      isEmailVerified: firebaseUser?.emailVerified ?? true,
     };
     const profileData = {
       ...userData,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=6366f1&color=fff&bold=true&size=200`,
+      avatar:
+        firebaseUser?.photoURL ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(effectiveName)}&background=6366f1&color=fff&bold=true&size=200`,
     };
     localStorage.setItem('rally_user_profile_v1', JSON.stringify(profileData));
     updateUser(profileData);
@@ -275,7 +291,6 @@ export default function Onboarding() {
       console.error('Convex save failed (will retry later):', err);
     }
 
-    // Persist onboarding selection (interests, interview-friendly profile flag)
     try {
       await persistProfile({
         interests: interestsLabels.length > 0 ? interestsLabels : undefined,

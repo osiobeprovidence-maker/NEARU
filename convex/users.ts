@@ -229,6 +229,146 @@ export const getProfile = query({
   },
 });
 
+/**
+ * Look up a user by their stable Firebase UID.
+ * This is the primary lookup path for all signed-in users.
+ * Returns null (never throws) for unknown or missing UIDs.
+ */
+export const getByFirebaseUid = query({
+  args: { firebaseUid: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+      .unique();
+    if (!user) return null;
+    if (user.avatar && !user.avatar.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.avatar);
+        if (url) user.avatar = url;
+      } catch {}
+    }
+    if (user.coverImage && !user.coverImage.startsWith("http")) {
+      try {
+        const url = await ctx.storage.getUrl(user.coverImage);
+        if (url) user.coverImage = url;
+      } catch {}
+    }
+    return redact(user);
+  },
+});
+
+/**
+ * Find-or-create a Convex user for a given Firebase UID.
+ * Lookup order (prevents duplicates):
+ *   1. by firebaseUid index (fast path, new and returning accounts)
+ *   2. by email index (migration path for legacy users created before this field)
+ *   3. create a new record
+ *
+ * When an existing email-only record is found, the firebaseUid is written
+ * back so future lookups always hit the fast path.
+ *
+ * photoURL is only used on FIRST create — it never overwrites a
+ * user-customised LALAO avatar after initial account creation.
+ */
+export const getOrCreateByFirebaseUid = mutation({
+  args: {
+    firebaseUid: v.string(),
+    email: v.optional(v.string()),
+    name: v.string(),
+    photoURL: v.optional(v.string()),
+    provider: v.string(), // "google" | "password" | "emailLink"
+  },
+  handler: async (ctx, args) => {
+    // 1. Fast path — uid already linked
+    const byUid = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+      .unique();
+    if (byUid) return { userId: byUid._id, isNew: false };
+
+    // 2. Migration path — legacy record exists only by email
+    if (args.email) {
+      const byEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", args.email!))
+        .unique();
+      if (byEmail) {
+        // Back-fill the firebaseUid so this branch is never needed again.
+        await ctx.db.patch(byEmail._id, { firebaseUid: args.firebaseUid });
+        return { userId: byEmail._id, isNew: false };
+      }
+    }
+
+    // 3. New user — build a sensible username from name or email
+    const rawBase = args.name
+      ? args.name.toLowerCase().replace(/[^a-z0-9]/g, "")
+      : (args.email ?? "user").split("@")[0].replace(/[^a-z0-9]/g, "");
+    const base = rawBase.slice(0, 18) || "user";
+
+    // Ensure username is unique by appending a short numeric suffix when needed.
+    let username = base;
+    let suffix = 0;
+    while (true) {
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q) => q.eq("username", username))
+        .unique();
+      if (!existing) break;
+      suffix += 1;
+      username = `${base}${suffix}`;
+    }
+
+    const avatar =
+      args.photoURL ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(args.name)}&background=6366f1&color=fff&bold=true&size=200`;
+
+    const userId = await ctx.db.insert("users", {
+      firebaseUid: args.firebaseUid,
+      name: args.name,
+      username,
+      avatar,
+      email: args.email,
+      isNINVerified: false,
+      isPhoneVerified: false,
+      isEmailVerified: args.provider !== "password", // Google accounts are pre-verified
+      badges: [],
+      rallies: 0,
+      completed: 0,
+      rating: 0,
+      accountType: "personal",
+      isPro: false,
+      createdAt: Date.now(),
+      moderationStatus: "ACTIVE",
+      role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
+    });
+
+    return { userId, isNew: true };
+  },
+});
+
+/**
+ * Write the Firebase UID onto an existing user record that was created
+ * before this field existed (one-time migration, called from AuthContext).
+ */
+export const linkFirebaseUid = mutation({
+  args: {
+    userId: v.id("users"),
+    firebaseUid: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      const user = await ctx.db.get(args.userId);
+      if (!user) return;
+      if (!user.firebaseUid) {
+        await ctx.db.patch(args.userId, { firebaseUid: args.firebaseUid });
+      }
+    } catch {
+      // Stale ID — silently ignore, migration retries next session.
+    }
+  },
+});
+
 export const getByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {

@@ -6,6 +6,12 @@ export default defineSchema({
     name: v.string(),
     username: v.string(),
     avatar: v.string(),
+    // Stable Firebase UID — the primary identity key since Google/OAuth users
+    // may not always have an email address. Written once at account creation
+    // and never changed. Indexed for O(1) lookups on every auth state change.
+    // Legacy users created before this field was added will have it populated
+    // the first time they sign in (via the migration path in AuthContext).
+    firebaseUid: v.optional(v.string()),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
     nin: v.optional(v.string()),
@@ -148,7 +154,7 @@ export default defineSchema({
         })
       )
     ),
-  }).index("by_username", ["username"]).index("by_email", ["email"]),
+  }).index("by_username", ["username"]).index("by_email", ["email"]).index("by_firebase_uid", ["firebaseUid"]),
 
   rallies: defineTable({
     type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN"), v.literal("EVENT"), v.literal("POST")),

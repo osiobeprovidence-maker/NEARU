@@ -1,9 +1,12 @@
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -23,10 +26,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
+// Google provider — configured once here, imported wherever needed.
+export const googleProvider = new GoogleAuthProvider();
+// Request basic profile + email on every sign-in. Additional scopes can be
+// added here later without touching the UI (e.g. drive, calendar).
+googleProvider.addScope("profile");
+googleProvider.addScope("email");
+// Force the account-chooser to always appear so multi-account users can
+// switch identities cleanly.
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
 export {
+  GoogleAuthProvider,
+  signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
