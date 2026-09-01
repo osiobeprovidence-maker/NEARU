@@ -237,6 +237,9 @@ export const getProfile = query({
 export const getByFirebaseUid = query({
   args: { firebaseUid: v.string() },
   handler: async (ctx, args) => {
+    // Empty string is not a valid Firebase UID — return null rather than
+    // scanning the index with a blank key.
+    if (!args.firebaseUid) return null;
     const user = await ctx.db
       .query("users")
       .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
@@ -280,6 +283,9 @@ export const getOrCreateByFirebaseUid = mutation({
     provider: v.string(), // "google" | "password" | "emailLink"
   },
   handler: async (ctx, args) => {
+    // Reject blank UIDs — these indicate a broken auth state client-side.
+    if (!args.firebaseUid) throw new Error("firebaseUid is required");
+
     // 1. Fast path — uid already linked
     const byUid = await ctx.db
       .query("users")

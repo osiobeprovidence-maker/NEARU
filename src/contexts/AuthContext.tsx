@@ -247,7 +247,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Primary Convex lookup — keyed on Firebase UID (fast, stable, no duplicates)
   // Falls back to email lookup for legacy users via getOrCreateByFirebaseUid.
   // ---------------------------------------------------------------------------
-  const queryUid = firebaseUser?.uid ?? undefined;
+  // Guard: never pass an empty string to the query — Convex will reject it.
+  const queryUid = (firebaseUser?.uid && firebaseUser.uid.length > 0)
+    ? firebaseUser.uid
+    : undefined;
   const uidQueryResult = useQuery(
     api.users.getByFirebaseUid,
     queryUid !== undefined ? { firebaseUid: queryUid } : 'skip'
