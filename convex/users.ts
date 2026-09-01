@@ -16,7 +16,12 @@ function redact(user: any) {
 export const isAdmin = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    let user: any;
+    try {
+      user = await ctx.db.get(args.userId);
+    } catch {
+      return false;
+    }
     if (!user) return false;
     if (user.email === SUPER_ADMIN_EMAIL) return true;
     return user.role === "super_admin" || user.role === "admin";
@@ -31,7 +36,14 @@ export const get = query({
     viewerId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    let user: any;
+    try {
+      user = await ctx.db.get(args.userId);
+    } catch {
+      // Stale or malformed ID (e.g. from a previous deployment or corrupted
+      // localStorage) — treat as not-found rather than crashing.
+      return null;
+    }
     if (!user) return null;
     if (user.avatar && !user.avatar.startsWith("http")) {
       try {
@@ -98,7 +110,16 @@ export const getProfile = query({
     viewerId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    // Guard against stale / malformed Convex IDs cached in localStorage from a
+    // previous session or deployment. ctx.db.get throws an internal error on an
+    // ID that belongs to a different deployment; we surface that as null (no
+    // profile) so the frontend can recover gracefully instead of crashing.
+    let user: any;
+    try {
+      user = await ctx.db.get(args.userId);
+    } catch {
+      return null;
+    }
     if (!user) return null;
 
     if (user.avatar && !user.avatar.startsWith("http")) {
@@ -238,7 +259,13 @@ export const getByIds = query({
     const results: Record<string, any> = {};
     for (const id of args.ids) {
       if (!results[id]) {
-        const user = await ctx.db.get(id);
+        let user: any;
+        try {
+          user = await ctx.db.get(id);
+        } catch {
+          // Stale or invalid ID — skip rather than crash.
+          continue;
+        }
         if (user) {
           if (user.avatar && !user.avatar.startsWith("http")) {
             try {
@@ -458,7 +485,12 @@ export const update = mutation({
       filtered.publicInterests = (filtered.publicInterests as string[]).slice(0, 3);
     }
     if (Object.keys(filtered).length === 0) return;
-    await ctx.db.patch(userId, filtered);
+    try {
+      await ctx.db.patch(userId, filtered);
+    } catch {
+      // Document may not exist (stale id); fail silently rather than crashing
+      // the caller. The UI will re-sync on the next getByEmail query.
+    }
   },
 });
 
@@ -719,7 +751,12 @@ export const setAccountType = mutation({
     organizationName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    let user: any;
+    try {
+      user = await ctx.db.get(args.userId);
+    } catch {
+      return null;
+    }
     if (!user) throw new Error("User not found");
 
     const professional = args.accountType === "organization" || args.accountType === "business";
@@ -750,7 +787,12 @@ export const canUseProfessional = query({
   args: { userId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
     if (!args.userId) return false;
-    const user = await ctx.db.get(args.userId);
+    let user: any;
+    try {
+      user = await ctx.db.get(args.userId);
+    } catch {
+      return false;
+    }
     if (!user) return false;
     const professional = user.accountType === "organization" || user.accountType === "business";
     return professional && user.isPro === true;

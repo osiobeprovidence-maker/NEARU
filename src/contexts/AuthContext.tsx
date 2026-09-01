@@ -184,6 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [user, setUser] = useState<User>(EMPTY_USER);
+  // Read the cached Convex user ID from localStorage. We deliberately do NOT
+  // trust this value blindly — it is only used as a hint to avoid an extra
+  // round-trip. If the ID is stale (wrong deployment, deleted user, etc.) the
+  // getByEmail query below will override it when the Firebase user is known.
   const [convexUserId, setConvexUserId] = useState<string | null>(() => {
     return localStorage.getItem('rally_convex_user_id');
   });
@@ -215,6 +219,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(EMPTY_USER);
         setIsProfileLoading(false);
         setProfileChecked(true);
+        // Clear ALL cached auth state on sign-out so stale IDs can never
+        // survive into the next session and cause getProfile errors.
         localStorage.removeItem('rally_convex_user_id');
         localStorage.removeItem(STORAGE_KEY);
       }
@@ -226,18 +232,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (firebaseUser === null) return;
 
     if (queryResult === undefined) {
+      // Still loading — keep showing the profile loading spinner.
       setIsProfileLoading(true);
       return;
     }
 
     if (queryResult === null) {
+      // Firebase user is authenticated but has no Convex record.
+      // Evict any stale cached ID — it clearly doesn't match this Firebase
+      // user in the current deployment.
       setHasConvexProfile(false);
       setConvexUserId(null);
       setIsProfileLoading(false);
       setProfileChecked(true);
+      localStorage.removeItem('rally_convex_user_id');
       return;
     }
 
+    // A valid Convex record was found for this Firebase user's email.
+    // The live query result is always authoritative — override whatever
+    // was cached in localStorage (which may be from a different session
+    // or deployment and is the root cause of stale-ID getProfile errors).
     const u = convexUserToUser(queryResult, firebaseUser.email || '');
     setUser(u);
     setConvexUserId(queryResult._id);
