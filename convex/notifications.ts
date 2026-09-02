@@ -1,5 +1,10 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthenticatedUser } from "./lib/auth";
+
+// ---------------------------------------------------------------------------
+// Queries — no auth required (userId supplied by caller for filtering)
+// ---------------------------------------------------------------------------
 
 export const listByUser = query({
   args: { userId: v.id("users") },
@@ -23,6 +28,16 @@ export const unreadCount = query({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal notification creation — called via ctx.runMutation from other
+ * functions (messages, chatRequests, rallies). Not called directly by the
+ * browser with user intent, so no auth check is needed here; the callers
+ * that produce the notification are already auth-gated.
+ */
 export const create = mutation({
   args: {
     userId: v.id("users"),
@@ -40,19 +55,34 @@ export const create = mutation({
   },
 });
 
+/**
+ * Mark a single notification as read.
+ * Verifies the notification belongs to the authenticated caller.
+ */
 export const markAsRead = mutation({
   args: { notificationId: v.id("notifications") },
   handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const notif = await ctx.db.get(args.notificationId);
+    if (!notif) return;
+    if (notif.userId.toString() !== caller._id.toString()) {
+      throw new Error("Forbidden: you can only mark your own notifications as read.");
+    }
     await ctx.db.patch(args.notificationId, { read: true });
   },
 });
 
+/**
+ * Mark all notifications as read for the authenticated caller.
+ * The client-supplied userId is ignored — auth identity is used.
+ */
 export const markAllAsRead = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+  args: { userId: v.id("users") }, // accepted for compat, ignored
+  handler: async (ctx, _args) => {
+    const caller = await getAuthenticatedUser(ctx);
     const unread = await ctx.db
       .query("notifications")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", caller._id))
       .collect();
     for (const n of unread) {
       if (!n.read) await ctx.db.patch(n._id, { read: true });
@@ -60,12 +90,17 @@ export const markAllAsRead = mutation({
   },
 });
 
+/**
+ * Delete all notifications for the authenticated caller.
+ * The client-supplied userId is ignored — auth identity is used.
+ */
 export const clearAll = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+  args: { userId: v.id("users") }, // accepted for compat, ignored
+  handler: async (ctx, _args) => {
+    const caller = await getAuthenticatedUser(ctx);
     const all = await ctx.db
       .query("notifications")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", caller._id))
       .collect();
     for (const n of all) {
       await ctx.db.delete(n._id);
@@ -73,6 +108,10 @@ export const clearAll = mutation({
   },
 });
 
+/**
+ * Notify nearby users about a new rally.
+ * Called internally from rallies:create — no direct browser auth needed.
+ */
 export const notifyNearbyUsers = mutation({
   args: {
     rallyId: v.id("rallies"),
@@ -90,7 +129,10 @@ export const notifyNearbyUsers = mutation({
       const userLoc = (user.location || "").toLowerCase().trim();
       if (!userLoc) continue;
       if (userLoc.includes(cityLower) || cityLower.includes(userLoc)) {
-        const typeLabel = args.rallyType === "ASK" ? "asked for" : args.rallyType === "HELP" ? "offered help with" : "invited people to join";
+        const typeLabel =
+          args.rallyType === "ASK" ? "asked for" :
+          args.rallyType === "HELP" ? "offered help with" :
+          "invited people to join";
         await ctx.db.insert("notifications", {
           userId: user._id,
           type: "rally_nearby",
@@ -105,21 +147,26 @@ export const notifyNearbyUsers = mutation({
   },
 });
 
+/**
+ * Register a push subscription for the authenticated user.
+ * The client-supplied userId is ignored — auth identity is used.
+ */
 export const savePushSubscription = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // accepted for compat, ignored
     endpoint: v.string(),
     p256dh: v.string(),
     auth: v.string(),
   },
   handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
     const existing = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
       .unique();
     if (existing) return existing._id;
     return await ctx.db.insert("pushSubscriptions", {
-      userId: args.userId,
+      userId: caller._id,
       endpoint: args.endpoint,
       p256dh: args.p256dh,
       auth: args.auth,
@@ -128,6 +175,10 @@ export const savePushSubscription = mutation({
   },
 });
 
+/**
+ * Remove a push subscription by endpoint. No auth check needed — the endpoint
+ * itself is the opaque credential; knowing it is sufficient to remove it.
+ */
 export const removePushSubscription = mutation({
   args: { endpoint: v.string() },
   handler: async (ctx, args) => {

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthenticatedUser, getAuthenticatedUserOrNull } from "./lib/auth";
 
 const SUPER_ADMIN_EMAIL = "riderezzy@gmail.com";
 
@@ -12,6 +13,10 @@ function redact(user: any) {
   void totpSecret;
   return safe;
 }
+
+// ---------------------------------------------------------------------------
+// Queries — read-only, public/semi-public data, no auth required
+// ---------------------------------------------------------------------------
 
 export const isAdmin = query({
   args: { userId: v.id("users") },
@@ -31,8 +36,6 @@ export const isAdmin = query({
 export const get = query({
   args: {
     userId: v.id("users"),
-    // Optional viewer. When provided and not the owner of the profile, the
-    // private interest list is redacted so it is never sent to visitors.
     viewerId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
@@ -40,8 +43,6 @@ export const get = query({
     try {
       user = await ctx.db.get(args.userId);
     } catch {
-      // Stale or malformed ID (e.g. from a previous deployment or corrupted
-      // localStorage) — treat as not-found rather than crashing.
       return null;
     }
     if (!user) return null;
@@ -57,7 +58,6 @@ export const get = query({
         if (url) user.coverImage = url;
       } catch {}
     }
-    // Private interests only travel to the owner of the account.
     if (args.viewerId && args.viewerId.toString() !== args.userId.toString()) {
       const { interests, ...safe } = redact(user);
       void interests;
@@ -91,29 +91,12 @@ export const getByUsername = query({
   },
 });
 
-/**
- * View-aware profile serialization.
- *
- * Returns a single DTO that distinguishes OWNER vs PUBLIC viewers, so that
- * privacy-sensitive fields are enforced server-side (never just hidden in CSS):
- *
- *  - OWNER: full identity, private interest list (interests), the showInterests
- *    setting, and their own Following count.
- *  - PUBLIC: only bio/location/gender, interests ONLY if showInterests is not
- *    false, posts + followers counts, and the follow/message relationship.
- *    The Following count is NEVER returned to a public viewer, and no list of
- *    accounts the owner follows is ever exposed.
- */
 export const getProfile = query({
   args: {
     userId: v.id("users"),
     viewerId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    // Guard against stale / malformed Convex IDs cached in localStorage from a
-    // previous session or deployment. ctx.db.get throws an internal error on an
-    // ID that belongs to a different deployment; we surface that as null (no
-    // profile) so the frontend can recover gracefully instead of crashing.
     let user: any;
     try {
       user = await ctx.db.get(args.userId);
@@ -137,14 +120,12 @@ export const getProfile = query({
 
     const isSelf = !!args.viewerId && args.viewerId.toString() === args.userId.toString();
 
-    // Posts count = content created by this user (canonical source).
     const allCreated = await ctx.db
       .query("rallies")
       .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
       .collect();
     const postsCount = allCreated.length;
 
-    // Follower count = users who follow this profile owner.
     const followers = await ctx.db
       .query("follows")
       .withIndex("by_following", (q) => q.eq("followingId", args.userId))
@@ -173,7 +154,6 @@ export const getProfile = query({
       followersCount,
     };
 
-    // ----- OWNER VIEW -----
     if (isSelf) {
       return {
         ...base,
@@ -186,7 +166,6 @@ export const getProfile = query({
             .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
             .collect()
         ).length,
-        // Owner can always see their own interests regardless of privacy toggle.
         interestsVisible: user.interests && user.interests.length > 0 ? true : false,
         followingList: undefined,
         isFollowing: false,
@@ -194,8 +173,6 @@ export const getProfile = query({
       };
     }
 
-    // ----- PUBLIC VIEW -----
-    // Interests are only exposed when the owner opted in via "showInterests".
     const showInterests = user.showInterests !== false;
     const publicInterests = (user.publicInterests && user.publicInterests.length > 0
       ? user.publicInterests
@@ -203,7 +180,6 @@ export const getProfile = query({
     ).slice(0, 3).filter(Boolean);
     const interests = showInterests ? publicInterests : [];
 
-    // Whether the viewer follows the owner (for the Follow/Following button).
     let isFollowing = false;
     if (args.viewerId) {
       const rel = await ctx.db
@@ -220,7 +196,6 @@ export const getProfile = query({
       isSelf: false,
       interests,
       showInterests,
-      // Strictly NO following count / no following list for public viewers.
       followingCount: undefined,
       followingList: undefined,
       isFollowing,
@@ -229,20 +204,12 @@ export const getProfile = query({
   },
 });
 
-/**
- * Look up a user by their stable Firebase UID.
- * This is the primary lookup path for all signed-in users.
- * Returns null (never throws) for unknown or missing UIDs.
- */
 export const getByFirebaseUid = query({
   args: { firebaseUid: v.string() },
   handler: async (ctx, args) => {
-    // Empty string is not a valid Firebase UID.
     if (!args.firebaseUid) return null;
     let user: any;
     try {
-      // Use .first() instead of .unique() — if a race condition created two
-      // records with the same firebaseUid, .unique() throws; .first() is safe.
       user = await ctx.db
         .query("users")
         .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
@@ -264,120 +231,6 @@ export const getByFirebaseUid = query({
       } catch { user.coverImage = undefined; }
     }
     return redact(user);
-  },
-});
-
-/**
- * Find-or-create a Convex user for a given Firebase UID.
- * Lookup order (prevents duplicates):
- *   1. by firebaseUid index (fast path, new and returning accounts)
- *   2. by email index (migration path for legacy users created before this field)
- *   3. create a new record
- *
- * When an existing email-only record is found, the firebaseUid is written
- * back so future lookups always hit the fast path.
- *
- * photoURL is only used on FIRST create — it never overwrites a
- * user-customised LALAO avatar after initial account creation.
- */
-export const getOrCreateByFirebaseUid = mutation({
-  args: {
-    firebaseUid: v.string(),
-    email: v.optional(v.string()),
-    name: v.string(),
-    photoURL: v.optional(v.string()),
-    provider: v.string(), // "google" | "password" | "emailLink"
-  },
-  handler: async (ctx, args) => {
-    // Reject blank UIDs — these indicate a broken auth state client-side.
-    if (!args.firebaseUid) throw new Error("firebaseUid is required");
-
-    // 1. Fast path — uid already linked
-    const byUid = await ctx.db
-      .query("users")
-      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
-      .first(); // .first() is safe even if duplicates exist; .unique() would throw
-    if (byUid) return { userId: byUid._id, isNew: false };
-
-    // 2. Migration path — legacy record exists only by email
-    if (args.email) {
-      const byEmail = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", args.email!))
-        .unique();
-      if (byEmail) {
-        // Back-fill the firebaseUid so this branch is never needed again.
-        await ctx.db.patch(byEmail._id, { firebaseUid: args.firebaseUid });
-        return { userId: byEmail._id, isNew: false };
-      }
-    }
-
-    // 3. New user — build a sensible username from name or email
-    const rawBase = args.name
-      ? args.name.toLowerCase().replace(/[^a-z0-9]/g, "")
-      : (args.email ?? "user").split("@")[0].replace(/[^a-z0-9]/g, "");
-    const base = rawBase.slice(0, 18) || "user";
-
-    // Ensure username is unique by appending a short numeric suffix when needed.
-    let username = base;
-    let suffix = 0;
-    while (true) {
-      const existing = await ctx.db
-        .query("users")
-        .withIndex("by_username", (q) => q.eq("username", username))
-        .unique();
-      if (!existing) break;
-      suffix += 1;
-      username = `${base}${suffix}`;
-    }
-
-    const avatar =
-      args.photoURL ||
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(args.name)}&background=6366f1&color=fff&bold=true&size=200`;
-
-    const userId = await ctx.db.insert("users", {
-      firebaseUid: args.firebaseUid,
-      name: args.name,
-      username,
-      avatar,
-      email: args.email,
-      isNINVerified: false,
-      isPhoneVerified: false,
-      isEmailVerified: args.provider !== "password", // Google accounts are pre-verified
-      badges: [],
-      rallies: 0,
-      completed: 0,
-      rating: 0,
-      accountType: "personal",
-      isPro: false,
-      createdAt: Date.now(),
-      moderationStatus: "ACTIVE",
-      role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
-    });
-
-    return { userId, isNew: true };
-  },
-});
-
-/**
- * Write the Firebase UID onto an existing user record that was created
- * before this field existed (one-time migration, called from AuthContext).
- */
-export const linkFirebaseUid = mutation({
-  args: {
-    userId: v.id("users"),
-    firebaseUid: v.string(),
-  },
-  handler: async (ctx, args) => {
-    try {
-      const user = await ctx.db.get(args.userId);
-      if (!user) return;
-      if (!user.firebaseUid) {
-        await ctx.db.patch(args.userId, { firebaseUid: args.firebaseUid });
-      }
-    } catch {
-      // Stale ID — silently ignore, migration retries next session.
-    }
   },
 });
 
@@ -415,7 +268,6 @@ export const getByIds = query({
         try {
           user = await ctx.db.get(id);
         } catch {
-          // Stale or invalid ID — skip rather than crash.
           continue;
         }
         if (user) {
@@ -439,18 +291,6 @@ export const getByIds = query({
   },
 });
 
-/**
- * Phase 2: discover/search people for the Explore "People" surface and
- * interest discovery. Returns lightweight user cards with follow status.
- *
- * Visibility rules (no search loophole):
- *  - The viewer is excluded.
- *  - Anyone the viewer has blocked is excluded.
- *  - Users whose profileVisibility === "private" are only returned when the
- *    viewer already follows them (they are never surfaced in open discovery).
- *  - filteredInterests: if provided (e.g. viewing an interest page), only
- *    users who selected that interest are returned.
- */
 export const listPeople = query({
   args: {
     viewerId: v.id("users"),
@@ -465,19 +305,15 @@ export const listPeople = query({
     const viewerBlockedIds = new Set(
       (viewer.blockedUsers ?? []).map((b) => b.id)
     );
-    const viewerBlockedDb = new Set<string>();
 
     const viewerFollowing = await ctx.db
       .query("follows")
       .withIndex("by_follower", (q) => q.eq("followerId", args.viewerId))
       .collect();
-    const followingSet = new Set(
-      viewerFollowing.map((f) => f.followingId.toString())
-    );
+    const followingSet = new Set(viewerFollowing.map((f) => f.followingId.toString()));
 
     const all = await ctx.db.query("users").collect();
     const q = (args.query ?? "").toLowerCase().trim();
-
     const results: any[] = [];
     const avatarCache: Record<string, string | undefined> = {};
 
@@ -486,28 +322,17 @@ export const listPeople = query({
       if (viewerBlockedIds.has(u._id.toString())) continue;
 
       const isFollowing = followingSet.has(u._id.toString());
+      if (u.privacySettings?.profileVisibility === "private" && !isFollowing) continue;
 
-      // Private accounts are hidden from open discovery unless following
-      if (u.privacySettings?.profileVisibility === "private" && !isFollowing) {
-        continue;
-      }
-
-      // Interest filter
       if (args.filteredInterest) {
         const interest = (u.interests ?? []).some(
-          (i) => i.toLowerCase() === args.filteredInterest.toLowerCase()
+          (i) => i.toLowerCase() === args.filteredInterest!.toLowerCase()
         );
         if (!interest) continue;
       }
 
-      // Text filter on name / username
       if (q) {
-        if (
-          !u.name.toLowerCase().includes(q) &&
-          !u.username.toLowerCase().includes(q)
-        ) {
-          continue;
-        }
+        if (!u.name.toLowerCase().includes(q) && !u.username.toLowerCase().includes(q)) continue;
       }
 
       let avatar = u.avatar || "";
@@ -517,9 +342,7 @@ export const listPeople = query({
             avatarCache[avatar] = (await ctx.storage.getUrl(avatar)) ?? undefined;
           }
           avatar = avatarCache[avatar] || "";
-        } catch {
-          avatar = "";
-        }
+        } catch { avatar = ""; }
       }
 
       const followers = await ctx.db
@@ -544,11 +367,164 @@ export const listPeople = query({
 
       if (args.limit && results.length >= args.limit) break;
     }
-
     return results;
   },
 });
 
+export const resolveAvatarUrl = query({
+  args: { avatar: v.string() },
+  handler: async (ctx, args) => {
+    if (args.avatar.startsWith("http")) return args.avatar;
+    try {
+      const url = await ctx.storage.getUrl(args.avatar);
+      return url ?? args.avatar;
+    } catch {
+      return args.avatar;
+    }
+  },
+});
+
+export const canUseProfessional = query({
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    if (!args.userId) return false;
+    let user: any;
+    try {
+      user = await ctx.db.get(args.userId);
+    } catch {
+      return false;
+    }
+    if (!user) return false;
+    const professional = user.accountType === "organization" || user.accountType === "business";
+    return professional && user.isPro === true;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Mutations — account provisioning (called before profile exists)
+// ---------------------------------------------------------------------------
+
+/**
+ * Find-or-create a Convex user for a given Firebase UID.
+ * Uses getAuthenticatedUserOrNull because this runs during onboarding
+ * BEFORE the Convex user record exists.
+ * Verifies the caller's Firebase UID matches the requested UID.
+ */
+export const getOrCreateByFirebaseUid = mutation({
+  args: {
+    firebaseUid: v.string(),
+    email: v.optional(v.string()),
+    name: v.string(),
+    photoURL: v.optional(v.string()),
+    provider: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Verify the caller is authenticated. getAuthenticatedUserOrNull throws if
+    // there is no valid JWT but returns null if no profile exists yet.
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    // Critical: the caller may only provision their OWN Firebase UID.
+    // Prevents user A from creating a record pretending to be user B.
+    if (identity.subject !== args.firebaseUid) {
+      throw new Error("Forbidden: you can only create a profile for your own Firebase account.");
+    }
+
+    const byUid = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+      .first();
+    if (byUid) return { userId: byUid._id, isNew: false };
+
+    if (args.email) {
+      const byEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", args.email!))
+        .unique();
+      if (byEmail) {
+        await ctx.db.patch(byEmail._id, { firebaseUid: args.firebaseUid });
+        return { userId: byEmail._id, isNew: false };
+      }
+    }
+
+    const rawBase = args.name
+      ? args.name.toLowerCase().replace(/[^a-z0-9]/g, "")
+      : (args.email ?? "user").split("@")[0].replace(/[^a-z0-9]/g, "");
+    const base = rawBase.slice(0, 18) || "user";
+
+    let username = base;
+    let suffix = 0;
+    while (true) {
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q) => q.eq("username", username))
+        .unique();
+      if (!existing) break;
+      suffix += 1;
+      username = `${base}${suffix}`;
+    }
+
+    const avatar =
+      args.photoURL ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(args.name)}&background=6366f1&color=fff&bold=true&size=200`;
+
+    const userId = await ctx.db.insert("users", {
+      firebaseUid: args.firebaseUid,
+      name: args.name,
+      username,
+      avatar,
+      email: args.email,
+      isNINVerified: false,
+      isPhoneVerified: false,
+      isEmailVerified: args.provider !== "password",
+      badges: [],
+      rallies: 0,
+      completed: 0,
+      rating: 0,
+      accountType: "personal",
+      isPro: false,
+      createdAt: Date.now(),
+      moderationStatus: "ACTIVE",
+      role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
+    });
+
+    return { userId, isNew: true };
+  },
+});
+
+/**
+ * Back-fill the Firebase UID onto a legacy record (one-time migration).
+ * Uses getAuthenticatedUserOrNull — runs before the UID is linked.
+ * Caller may only link their own Firebase UID.
+ */
+export const linkFirebaseUid = mutation({
+  args: {
+    userId: v.id("users"),
+    firebaseUid: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    // Only allow linking your own Firebase UID.
+    if (identity.subject !== args.firebaseUid) {
+      throw new Error("Forbidden: you can only link your own Firebase UID.");
+    }
+    try {
+      const user = await ctx.db.get(args.userId);
+      if (!user) return;
+      if (!user.firebaseUid) {
+        await ctx.db.patch(args.userId, { firebaseUid: args.firebaseUid });
+      }
+    } catch {
+      // Stale ID — silently ignore.
+    }
+  },
+});
+
+/**
+ * Create a new user record during onboarding.
+ * Requires auth; links the new record to the caller's Firebase UID immediately.
+ */
 export const create = mutation({
   args: {
     name: v.string(),
@@ -562,8 +538,15 @@ export const create = mutation({
     passwordHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Require a valid Firebase JWT even though the Convex record doesn't exist yet.
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
     const userId = await ctx.db.insert("users", {
       ...args,
+      // Link to the authenticated Firebase UID immediately — no separate
+      // linkFirebaseUid call needed after this.
+      firebaseUid: identity.subject,
       badges: [],
       rallies: 0,
       completed: 0,
@@ -578,6 +561,13 @@ export const create = mutation({
   },
 });
 
+/**
+ * updateAuth — patches password hash and TOTP fields.
+ * Called from the Vercel serverless layer (via CONVEX_DEPLOY_KEY) after
+ * account creation. No browser JWT is present in that path, so we do NOT
+ * use getAuthenticatedUser here. This function is only reachable server-side
+ * (the serverless function holds the deploy key; browsers do not).
+ */
 export const updateAuth = mutation({
   args: {
     userId: v.id("users"),
@@ -595,188 +585,10 @@ export const updateAuth = mutation({
   },
 });
 
-export const update = mutation({
-  args: {
-    userId: v.id("users"),
-    name: v.optional(v.string()),
-    username: v.optional(v.string()),
-    organizationName: v.optional(v.string()),
-    avatar: v.optional(v.string()),
-    coverImage: v.optional(v.string()),
-    bio: v.optional(v.string()),
-    description: v.optional(v.string()),
-    website: v.optional(v.string()),
-    category: v.optional(v.string()),
-    socialLinks: v.optional(
-      v.array(
-        v.object({
-          platform: v.string(),
-          url: v.string(),
-        })
-      )
-    ),
-    phone: v.optional(v.string()),
-    gender: v.optional(v.string()),
-    birthday: v.optional(v.string()),
-    location: v.optional(v.string()),
-    locationLatitude: v.optional(v.number()),
-    locationLongitude: v.optional(v.number()),
-    locationAccuracy: v.optional(v.number()),
-    locationUpdatedAt: v.optional(v.number()),
-    interests: v.optional(v.array(v.string())),
-    publicInterests: v.optional(v.array(v.string())),
-    showInterests: v.optional(v.boolean()),
-    pronouns: v.optional(v.string()),
-    showPronouns: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const { userId, ...fields } = args;
-    const filtered = Object.fromEntries(
-      Object.entries(fields).filter(([, v]) => v !== undefined)
-    );
-    // Never let more than 3 interests go public through this mutation.
-    if (filtered.publicInterests) {
-      filtered.publicInterests = (filtered.publicInterests as string[]).slice(0, 3);
-    }
-    if (Object.keys(filtered).length === 0) return;
-    try {
-      await ctx.db.patch(userId, filtered);
-    } catch {
-      // Document may not exist (stale id); fail silently rather than crashing
-      // the caller. The UI will re-sync on the next getByEmail query.
-    }
-  },
-});
-
-export const generateCoverUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.storage.generateUploadUrl();
-  },
-});
-
-export const generateAvatarUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.storage.generateUploadUrl();
-  },
-});
-
-export const resolveAvatarUrl = query({
-  args: { avatar: v.string() },
-  handler: async (ctx, args) => {
-    if (args.avatar.startsWith("http")) return args.avatar;
-    try {
-      const url = await ctx.storage.getUrl(args.avatar);
-      return url ?? args.avatar;
-    } catch {
-      return args.avatar;
-    }
-  },
-});
-
-export const updatePrivacySettings = mutation({
-  args: {
-    userId: v.id("users"),
-    profileVisibility: v.union(
-      v.literal("public"),
-      v.literal("verified_only"),
-      v.literal("private")
-    ),
-    locationPrecision: v.union(
-      v.literal("approximate"),
-      v.literal("exact"),
-      v.literal("city_only")
-    ),
-    whoCanMessage: v.union(
-      v.literal("everyone"),
-      v.literal("verified_only"),
-      v.literal("mutual_interest")
-    ),
-    showOnlineStatus: v.boolean(),
-    showReadReceipts: v.boolean(),
-  },
-  handler: async (ctx, args) => {
-    const { userId, ...settings } = args;
-    await ctx.db.patch(userId, { privacySettings: settings });
-  },
-});
-
-export const updateNotificationSettings = mutation({
-  args: {
-    userId: v.id("users"),
-    pushEnabled: v.boolean(),
-    rallyMatches: v.boolean(),
-    chatMessages: v.boolean(),
-    activityReminders: v.boolean(),
-    safetyAlerts: v.boolean(),
-    emailDigest: v.boolean(),
-    marketingUpdates: v.boolean(),
-    soundEnabled: v.boolean(),
-    vibrationEnabled: v.boolean(),
-  },
-  handler: async (ctx, args) => {
-    const { userId, ...settings } = args;
-    await ctx.db.patch(userId, { notificationSettings: settings });
-  },
-});
-
-export const updateAppSettings = mutation({
-  args: {
-    userId: v.id("users"),
-    theme: v.union(
-      v.literal("system"),
-      v.literal("light"),
-      v.literal("dark")
-    ),
-    language: v.string(),
-    dataSaver: v.boolean(),
-    autoPlayMedia: v.boolean(),
-    cacheSizeMB: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const { userId, ...settings } = args;
-    await ctx.db.patch(userId, { appSettings: settings });
-  },
-});
-
-export const addBlockedUser = mutation({
-  args: {
-    userId: v.id("users"),
-    blockedUser: v.object({
-      id: v.string(),
-      name: v.string(),
-      username: v.string(),
-      avatar: v.string(),
-      blockedAt: v.string(),
-    }),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return;
-    const blocked = user.blockedUsers ?? [];
-    if (blocked.some((b) => b.id === args.blockedUser.id)) return;
-    await ctx.db.patch(args.userId, {
-      blockedUsers: [...blocked, args.blockedUser],
-    });
-  },
-});
-
-export const unblockUser = mutation({
-  args: {
-    userId: v.id("users"),
-    blockedId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return;
-    const blocked = user.blockedUsers ?? [];
-    await ctx.db.patch(args.userId, {
-      blockedUsers: blocked.filter((b) => b.id !== args.blockedId),
-    });
-  },
-});
-
+/**
+ * Legacy find-or-create by email (called only by the serverless layer).
+ * Not callable from the browser JWT path.
+ */
 export const getOrCreateByEmail = mutation({
   args: {
     email: v.string(),
@@ -811,9 +623,159 @@ export const getOrCreateByEmail = mutation({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Mutations — own-profile writes (secured: caller must own the record)
+// ---------------------------------------------------------------------------
+
+/**
+ * Update profile fields. The authenticated user's own record is always
+ * the target — the client-supplied userId arg is ignored entirely.
+ */
+export const update = mutation({
+  args: {
+    // userId is accepted for backwards compat but IGNORED — auth identity wins.
+    userId: v.id("users"),
+    name: v.optional(v.string()),
+    username: v.optional(v.string()),
+    organizationName: v.optional(v.string()),
+    avatar: v.optional(v.string()),
+    coverImage: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    description: v.optional(v.string()),
+    website: v.optional(v.string()),
+    category: v.optional(v.string()),
+    socialLinks: v.optional(
+      v.array(v.object({ platform: v.string(), url: v.string() }))
+    ),
+    phone: v.optional(v.string()),
+    gender: v.optional(v.string()),
+    birthday: v.optional(v.string()),
+    location: v.optional(v.string()),
+    locationLatitude: v.optional(v.number()),
+    locationLongitude: v.optional(v.number()),
+    locationAccuracy: v.optional(v.number()),
+    locationUpdatedAt: v.optional(v.number()),
+    interests: v.optional(v.array(v.string())),
+    publicInterests: v.optional(v.array(v.string())),
+    showInterests: v.optional(v.boolean()),
+    pronouns: v.optional(v.string()),
+    showPronouns: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    // Discard args.userId — always patch the authenticated user's own record.
+    const { userId: _ignored, ...fields } = args;
+    void _ignored;
+    const filtered = Object.fromEntries(
+      Object.entries(fields).filter(([, v]) => v !== undefined)
+    );
+    if (filtered.publicInterests) {
+      filtered.publicInterests = (filtered.publicInterests as string[]).slice(0, 3);
+    }
+    if (Object.keys(filtered).length === 0) return;
+    await ctx.db.patch(caller._id, filtered);
+  },
+});
+
+export const updatePrivacySettings = mutation({
+  args: {
+    userId: v.id("users"), // accepted for compat, ignored
+    profileVisibility: v.union(
+      v.literal("public"), v.literal("verified_only"), v.literal("private")
+    ),
+    locationPrecision: v.union(
+      v.literal("approximate"), v.literal("exact"), v.literal("city_only")
+    ),
+    whoCanMessage: v.union(
+      v.literal("everyone"), v.literal("verified_only"), v.literal("mutual_interest")
+    ),
+    showOnlineStatus: v.boolean(),
+    showReadReceipts: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { userId: _ignored, ...settings } = args;
+    void _ignored;
+    await ctx.db.patch(caller._id, { privacySettings: settings });
+  },
+});
+
+export const updateNotificationSettings = mutation({
+  args: {
+    userId: v.id("users"), // accepted for compat, ignored
+    pushEnabled: v.boolean(),
+    rallyMatches: v.boolean(),
+    chatMessages: v.boolean(),
+    activityReminders: v.boolean(),
+    safetyAlerts: v.boolean(),
+    emailDigest: v.boolean(),
+    marketingUpdates: v.boolean(),
+    soundEnabled: v.boolean(),
+    vibrationEnabled: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { userId: _ignored, ...settings } = args;
+    void _ignored;
+    await ctx.db.patch(caller._id, { notificationSettings: settings });
+  },
+});
+
+export const updateAppSettings = mutation({
+  args: {
+    userId: v.id("users"), // accepted for compat, ignored
+    theme: v.union(v.literal("system"), v.literal("light"), v.literal("dark")),
+    language: v.string(),
+    dataSaver: v.boolean(),
+    autoPlayMedia: v.boolean(),
+    cacheSizeMB: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { userId: _ignored, ...settings } = args;
+    void _ignored;
+    await ctx.db.patch(caller._id, { appSettings: settings });
+  },
+});
+
+export const addBlockedUser = mutation({
+  args: {
+    userId: v.id("users"), // accepted for compat, ignored
+    blockedUser: v.object({
+      id: v.string(),
+      name: v.string(),
+      username: v.string(),
+      avatar: v.string(),
+      blockedAt: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const blocked = caller.blockedUsers ?? [];
+    if (blocked.some((b: any) => b.id === args.blockedUser.id)) return;
+    await ctx.db.patch(caller._id, {
+      blockedUsers: [...blocked, args.blockedUser],
+    });
+  },
+});
+
+export const unblockUser = mutation({
+  args: {
+    userId: v.id("users"), // accepted for compat, ignored
+    blockedId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const blocked = caller.blockedUsers ?? [];
+    await ctx.db.patch(caller._id, {
+      blockedUsers: blocked.filter((b: any) => b.id !== args.blockedId),
+    });
+  },
+});
+
 export const addTrustedContact = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // accepted for compat, ignored
     contact: v.object({
       id: v.string(),
       name: v.string(),
@@ -822,10 +784,9 @@ export const addTrustedContact = mutation({
     }),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return;
-    const contacts = user.trustedContacts ?? [];
-    await ctx.db.patch(args.userId, {
+    const caller = await getAuthenticatedUser(ctx);
+    const contacts = caller.trustedContacts ?? [];
+    await ctx.db.patch(caller._id, {
       trustedContacts: [...contacts, args.contact],
     });
   },
@@ -842,22 +803,22 @@ export const setNINVerified = mutation({
       gender: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, args) => {
-    // Deprecated: the paid verification flow is server-gated.
+  handler: async (_ctx, _args) => {
     throw new Error("setNINVerified is disabled. Use the server-gated verification flow.");
   },
 });
 
 export const syncLocation = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // accepted for compat, ignored
     location: v.string(),
     locationLatitude: v.number(),
     locationLongitude: v.number(),
     locationAccuracy: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, {
+    const caller = await getAuthenticatedUser(ctx);
+    await ctx.db.patch(caller._id, {
       location: args.location,
       locationLatitude: args.locationLatitude,
       locationLongitude: args.locationLongitude,
@@ -867,17 +828,37 @@ export const syncLocation = mutation({
   },
 });
 
+/** Generate a signed upload URL for a cover photo. Requires auth. */
+export const generateCoverUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await getAuthenticatedUser(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/** Generate a signed upload URL for an avatar. Requires auth. */
+export const generateAvatarUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await getAuthenticatedUser(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Account types & lalao Pro
 // ---------------------------------------------------------------------------
 
 /**
- * Mark onboarding as complete. Called at the end of the onboarding wizard.
- * Persists all profile fields collected during onboarding in one atomic write.
+ * Mark onboarding as complete. Uses getAuthenticatedUserOrNull because
+ * this may run before the Convex record is fully linked to the JWT.
+ * If a Convex record exists, uses it; otherwise falls back to the
+ * client-supplied userId (creation just happened in the same session).
  */
 export const completeOnboarding = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // accepted for compat, used as fallback only
     name: v.optional(v.string()),
     username: v.optional(v.string()),
     avatar: v.optional(v.string()),
@@ -886,7 +867,14 @@ export const completeOnboarding = mutation({
     showPronouns: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { userId, ...fields } = args;
+    // Try to get the authenticated user. Falls back to client userId if the
+    // Convex record was just created (getOrCreateByFirebaseUid) and the
+    // reactive query hasn't propagated yet.
+    const caller = await getAuthenticatedUserOrNull(ctx);
+    const targetId = caller ? caller._id : args.userId;
+
+    const { userId: _ignored, ...fields } = args;
+    void _ignored;
     const patch: Record<string, unknown> = { onboardingCompleted: true };
     if (fields.name) patch.name = fields.name;
     if (fields.username) patch.username = fields.username;
@@ -896,29 +884,25 @@ export const completeOnboarding = mutation({
       patch.publicInterests = fields.interests.slice(0, 3);
       patch.showInterests = true;
     }
-    // Store pronouns as undefined (not null) when empty/skipped
     if (fields.pronouns !== undefined) patch.pronouns = fields.pronouns || undefined;
     if (fields.showPronouns !== undefined) patch.showPronouns = fields.showPronouns;
     try {
-      await ctx.db.patch(userId, patch);
+      await ctx.db.patch(targetId, patch);
     } catch {
-      // Stale ID — silent fail, re-syncs on next login.
+      // Stale ID — silent fail.
     }
     return { ok: true };
   },
 });
 
-/**
- * Grant or revoke lalao Pro. Billing is deferred to a later Paystack phase;
- * until then this is the explicit upgrade path (called from the Plus page).
- */
 export const setPro = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // accepted for compat, ignored
     isPro: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, {
+    const caller = await getAuthenticatedUser(ctx);
+    await ctx.db.patch(caller._id, {
       isPro: args.isPro,
       proSince: args.isPro ? Date.now() : undefined,
     });
@@ -926,14 +910,9 @@ export const setPro = mutation({
   },
 });
 
-/**
- * Set the account type (personal | organization | business).
- * Professional account types (organization/business) require lalao Pro.
- * Default for all users is "personal".
- */
 export const setAccountType = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // accepted for compat, ignored
     accountType: v.union(
       v.literal("personal"),
       v.literal("organization"),
@@ -942,52 +921,22 @@ export const setAccountType = mutation({
     organizationName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let user: any;
-    try {
-      user = await ctx.db.get(args.userId);
-    } catch {
-      return null;
-    }
-    if (!user) throw new Error("User not found");
-
+    const caller = await getAuthenticatedUser(ctx);
     const professional = args.accountType === "organization" || args.accountType === "business";
-    if (professional && user.isPro !== true) {
+    if (professional && caller.isPro !== true) {
       throw new Error("You need lalao Pro to create an Organization or Business account.");
     }
-
     const patch: Record<string, unknown> = {
       accountType: args.accountType,
       organizationName:
         args.accountType === "organization" || args.accountType === "business"
-          ? args.organizationName?.trim() || user.name || undefined
+          ? args.organizationName?.trim() || caller.name || undefined
           : undefined,
     };
-    await ctx.db.patch(args.userId, patch);
+    await ctx.db.patch(caller._id, patch);
     return {
       accountType: args.accountType,
       organizationName: patch.organizationName as string | undefined,
     };
   },
 });
-
-/**
- * Whether the user is allowed to act as a professional (organization/business)
- * account. Used by the frontend to gate org-only features.
- */
-export const canUseProfessional = query({
-  args: { userId: v.optional(v.id("users")) },
-  handler: async (ctx, args) => {
-    if (!args.userId) return false;
-    let user: any;
-    try {
-      user = await ctx.db.get(args.userId);
-    } catch {
-      return false;
-    }
-    if (!user) return false;
-    const professional = user.accountType === "organization" || user.accountType === "business";
-    return professional && user.isPro === true;
-  },
-});
-
-

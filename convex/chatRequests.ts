@@ -1,84 +1,53 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { getAuthenticatedUser } from "./lib/auth";
 import {
   isMutualFollow,
   isBlockedBetween,
-  isFollowing,
 } from "./messagingHelpers";
 
 const MAX_ACTIVE_OUTGOING = 3;
 const id = (x: any) => x.toString();
 
-/**
- * Returns the message relationship between the viewer and a target user, so
- * the Message button can decide the correct action:
- *  - mutual: open the direct conversation immediately
- *  - pending_from_me: a request I sent is waiting for accept
- *  - pending_to_me: the target sent me a request (I should accept/decline)
- *  - request: no relationship -> show "Message" to send a request
- *  - blocked: no messaging allowed at all
- */
+// ---------------------------------------------------------------------------
+// Queries — no auth required (read-only, caller-filtered)
+// ---------------------------------------------------------------------------
+
 export const getDirectStatus = query({
-  args: {
-    viewerId: v.id("users"),
-    targetId: v.id("users"),
-  },
+  args: { viewerId: v.id("users"), targetId: v.id("users") },
   handler: async (ctx, args) => {
     if (id(args.viewerId) === id(args.targetId)) return { status: "self" };
-
-    if (await isBlockedBetween(ctx, args.viewerId, args.targetId)) {
-      return { status: "blocked" };
-    }
-
+    if (await isBlockedBetween(ctx, args.viewerId, args.targetId)) return { status: "blocked" };
     const mutual = await isMutualFollow(ctx, args.viewerId, args.targetId);
     if (mutual) {
       const conv = await findDirectConversation(ctx, args.viewerId, args.targetId);
-      return {
-        status: "mutual",
-        conversationId: conv ? conv._id : null,
-      };
+      return { status: "mutual", conversationId: conv ? conv._id : null };
     }
-
-    // Existing pending request from me to them?
     const fromMe = await ctx.db
       .query("chatRequests")
-      .withIndex("by_pair", (q) =>
-        q
-          .eq("fromUserId", args.viewerId)
-          .eq("toUserId", args.targetId)
-      )
+      .withIndex("by_pair", (q) => q.eq("fromUserId", args.viewerId).eq("toUserId", args.targetId))
       .filter((q) => q.eq(q.field("status"), "PENDING"))
       .first();
     if (fromMe) return { status: "pending_from_me", requestId: fromMe._id };
-
-    // Existing pending request from them to me?
     const toMe = await ctx.db
       .query("chatRequests")
-      .withIndex("by_pair", (q) =>
-        q
-          .eq("fromUserId", args.targetId)
-          .eq("toUserId", args.viewerId)
-      )
+      .withIndex("by_pair", (q) => q.eq("fromUserId", args.targetId).eq("toUserId", args.viewerId))
       .filter((q) => q.eq(q.field("status"), "PENDING"))
       .first();
     if (toMe) return { status: "pending_to_me", requestId: toMe._id };
-
-    // Existing accepted (conversation exists)?
     const existingConv = await findDirectConversation(ctx, args.viewerId, args.targetId);
     if (existingConv) return { status: "mutual", conversationId: existingConv._id };
-
     return { status: "request" };
   },
 });
 
 async function findDirectConversation(ctx: any, aId: any, bId: any) {
   const key = [id(aId), id(bId)].sort().join(":");
-  const conv = await ctx.db
+  return await ctx.db
     .query("conversations")
     .withIndex("by_direct_key", (q) => q.eq("directKey", key))
     .unique();
-  return conv;
 }
 
 export const listByUser = query({
@@ -86,12 +55,9 @@ export const listByUser = query({
   handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("chatRequests")
-      .withIndex("by_toUser", (q) =>
-        q.eq("toUserId", args.userId).eq("status", "PENDING")
-      )
+      .withIndex("by_toUser", (q) => q.eq("toUserId", args.userId).eq("status", "PENDING"))
       .order("desc")
       .collect();
-
     const avatarCache: Record<string, string | undefined> = {};
     const results: any[] = [];
     for (const r of rows) {
@@ -99,27 +65,15 @@ export const listByUser = query({
       let avatar = sender?.avatar || "";
       if (avatar && !avatar.startsWith("http")) {
         if (!(avatar in avatarCache)) {
-          try {
-            avatarCache[avatar] = (await ctx.storage.getUrl(avatar)) ?? undefined;
-          } catch {
-            avatarCache[avatar] = undefined;
-          }
+          try { avatarCache[avatar] = (await ctx.storage.getUrl(avatar)) ?? undefined; }
+          catch { avatarCache[avatar] = undefined; }
         }
         avatar = avatarCache[avatar] || "";
       }
       const isMutual = await isMutualFollow(ctx, r.fromUserId, args.userId);
       results.push({
         ...r,
-        sender: sender
-          ? {
-              _id: sender._id,
-              name: sender.name,
-              username: sender.username,
-              avatar,
-              isNINVerified: sender.isNINVerified,
-              badges: sender.badges,
-            }
-          : null,
+        sender: sender ? { _id: sender._id, name: sender.name, username: sender.username, avatar, isNINVerified: sender.isNINVerified, badges: sender.badges } : null,
         isMutual,
       });
     }
@@ -135,7 +89,6 @@ export const listSentByUser = query({
       .withIndex("by_fromUser", (q) => q.eq("fromUserId", args.userId))
       .order("desc")
       .collect();
-
     const avatarCache: Record<string, string | undefined> = {};
     const results: any[] = [];
     for (const r of rows) {
@@ -143,26 +96,14 @@ export const listSentByUser = query({
       let avatar = target?.avatar || "";
       if (avatar && !avatar.startsWith("http")) {
         if (!(avatar in avatarCache)) {
-          try {
-            avatarCache[avatar] = (await ctx.storage.getUrl(avatar)) ?? undefined;
-          } catch {
-            avatarCache[avatar] = undefined;
-          }
+          try { avatarCache[avatar] = (await ctx.storage.getUrl(avatar)) ?? undefined; }
+          catch { avatarCache[avatar] = undefined; }
         }
         avatar = avatarCache[avatar] || "";
       }
       results.push({
         ...r,
-        target: target
-          ? {
-              _id: target._id,
-              name: target.name,
-              username: target.username,
-              avatar,
-              isNINVerified: target.isNINVerified,
-              badges: target.badges,
-            }
-          : null,
+        target: target ? { _id: target._id, name: target.name, username: target.username, avatar, isNINVerified: target.isNINVerified, badges: target.badges } : null,
       });
     }
     return results;
@@ -174,105 +115,75 @@ export const get = query({
   handler: async (ctx, args) => {
     const request = await ctx.db.get(args.requestId);
     if (!request) return null;
-    const sender: any = request.fromUserId
-      ? await ctx.db.get(request.fromUserId)
-      : null;
+    const sender: any = request.fromUserId ? await ctx.db.get(request.fromUserId) : null;
     let avatar = sender?.avatar || "";
     if (avatar && !avatar.startsWith("http")) {
-      try {
-        avatar = (await ctx.storage.getUrl(avatar)) ?? "";
-      } catch {
-        avatar = "";
-      }
+      try { avatar = (await ctx.storage.getUrl(avatar)) ?? ""; } catch { avatar = ""; }
     }
     return {
       ...request,
-      sender: sender
-        ? {
-            _id: sender._id,
-            name: sender.name,
-            username: sender.username,
-            avatar,
-            isNINVerified: sender.isNINVerified,
-            badges: sender.badges,
-          }
-        : null,
+      sender: sender ? { _id: sender._id, name: sender.name, username: sender.username, avatar, isNINVerified: sender.isNINVerified, badges: sender.badges } : null,
     };
   },
 });
 
+// ---------------------------------------------------------------------------
+// Mutations — all secured with getAuthenticatedUser
+// ---------------------------------------------------------------------------
+
 /**
- * Direct message initiation:
- *  - If the two users mutually follow each other, NO request is created —
- *    the direct conversation is opened and the initial message sent
- *    immediately (spec #11).
- *  - Otherwise a message request is created (spec #12), limited to 3 active
- *    outgoing requests server-side (spec #13), with dedupe while pending
- *    (spec #37).
+ * Send a direct message or chat request.
+ * Caller must be the sender (fromUserId).
  */
 export const sendDirect = mutation({
   args: {
-    fromUserId: v.id("users"),
+    fromUserId: v.id("users"), // verified against auth
     toUserId: v.id("users"),
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    if (id(args.fromUserId) === id(args.toUserId)) {
-      throw new Error("Cannot message yourself");
+    const caller = await getAuthenticatedUser(ctx);
+    if (id(caller._id) !== id(args.fromUserId)) {
+      throw new Error("Forbidden: you can only send messages as yourself.");
     }
-    if (await isBlockedBetween(ctx, args.fromUserId, args.toUserId)) {
-      throw new Error("You cannot message this user");
-    }
+    if (id(caller._id) === id(args.toUserId)) throw new Error("Cannot message yourself");
+    if (await isBlockedBetween(ctx, caller._id, args.toUserId)) throw new Error("You cannot message this user");
 
     const text = args.message.trim();
     if (!text) throw new Error("Message cannot be empty");
 
-    // Mutual follow -> instant chat, no request.
-    if (await isMutualFollow(ctx, args.fromUserId, args.toUserId)) {
+    if (await isMutualFollow(ctx, caller._id, args.toUserId)) {
       const conv = await ctx.runMutation(api.messages.getOrOpenDirect, {
-        userIdA: args.fromUserId,
+        userIdA: caller._id,
         userIdB: args.toUserId,
       });
       await ctx.runMutation(api.messages.sendToConversation, {
         conversationId: conv,
-        senderId: args.fromUserId,
+        senderId: caller._id,
         text,
       });
-      return {
-        type: "direct",
-        conversationId: conv,
-      };
+      return { type: "direct", conversationId: conv };
     }
 
-    // Dedupe: no two identical pending requests between the same user pair.
     const existingPending = await ctx.db
       .query("chatRequests")
-      .withIndex("by_pair", (q) =>
-        q
-          .eq("fromUserId", args.fromUserId)
-          .eq("toUserId", args.toUserId)
-      )
+      .withIndex("by_pair", (q) => q.eq("fromUserId", caller._id).eq("toUserId", args.toUserId))
       .filter((q) => q.eq(q.field("status"), "PENDING"))
       .first();
-    if (existingPending) {
-      return { type: "request", requestId: existingPending._id };
-    }
+    if (existingPending) return { type: "request", requestId: existingPending._id };
 
-    // Enforce 3 active outgoing requests (server-side authority).
     const active = await ctx.db
       .query("chatRequests")
-      .withIndex("by_fromUser", (q) => q.eq("fromUserId", args.fromUserId))
+      .withIndex("by_fromUser", (q) => q.eq("fromUserId", caller._id))
       .filter((q) => q.eq(q.field("status"), "PENDING"))
       .collect();
     if (active.length >= MAX_ACTIVE_OUTGOING) {
-      throw new Error(
-        `You can have up to ${MAX_ACTIVE_OUTGOING} active message requests.`
-      );
+      throw new Error(`You can have up to ${MAX_ACTIVE_OUTGOING} active message requests.`);
     }
 
     const now = Date.now();
     const requestId = await ctx.db.insert("chatRequests", {
-      fromUserId: args.fromUserId,
+      fromUserId: caller._id,
       toUserId: args.toUserId,
       rallyId: undefined,
       type: "direct",
@@ -282,13 +193,11 @@ export const sendDirect = mutation({
       updatedAt: now,
     });
 
-    // In-app notification for the recipient
-    const fromUser: any = await ctx.db.get(args.fromUserId);
     await ctx.runMutation(api.notifications.create, {
       userId: args.toUserId,
       type: "message_request",
       title: "New message request",
-      body: `${fromUser?.name || "Someone"} wants to message you.`,
+      body: `${caller.name || "Someone"} wants to message you.`,
     });
 
     return { type: "request", requestId };
@@ -296,20 +205,20 @@ export const sendDirect = mutation({
 });
 
 /**
- * Accept a message request -> turn it into a normal direct conversation
- * (spec #14). Only the recipient may accept.
+ * Accept a message request.
+ * Only the recipient may accept — verified server-side via auth.
  */
 export const accept = mutation({
   args: { requestId: v.id("chatRequests"), userId: v.id("users") },
   handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
     const request = await ctx.db.get(args.requestId);
     if (!request) throw new Error("Request not found");
-    if (id(request.toUserId) !== id(args.userId)) {
+    // Server verifies caller is the recipient — not just args.userId.
+    if (id(request.toUserId) !== id(caller._id)) {
       throw new Error("Only the recipient can accept this request");
     }
-    if (request.status !== "PENDING") {
-      throw new Error("This request is no longer pending");
-    }
+    if (request.status !== "PENDING") throw new Error("This request is no longer pending");
     if (await isBlockedBetween(ctx, request.fromUserId, request.toUserId)) {
       throw new Error("Cannot accept: messaging is blocked");
     }
@@ -322,19 +231,11 @@ export const accept = mutation({
     });
 
     await ctx.db.patch(conv, {
-      lastMessage: {
-        senderId: "system",
-        text: "Message request accepted. Say hello!",
-        timestamp: Date.now(),
-      },
+      lastMessage: { senderId: "system", text: "Message request accepted. Say hello!", timestamp: Date.now() },
       unreadCount: 1,
-      unreadByUser: {
-        [id(request.fromUserId)]: 1,
-        [id(request.toUserId)]: 0,
-      },
+      unreadByUser: { [id(request.fromUserId)]: 1, [id(request.toUserId)]: 0 },
     });
 
-    // Notify the requester that their request was accepted.
     await ctx.runMutation(api.notifications.create, {
       userId: request.fromUserId,
       type: "message_request_accepted",
@@ -347,14 +248,16 @@ export const accept = mutation({
 });
 
 /**
- * Decline an incoming request. Only the recipient may decline.
+ * Decline an incoming request.
+ * Only the recipient may decline — verified server-side via auth.
  */
 export const decline = mutation({
   args: { requestId: v.id("chatRequests"), userId: v.id("users") },
   handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
     const request = await ctx.db.get(args.requestId);
     if (!request) throw new Error("Request not found");
-    if (id(request.toUserId) !== id(args.userId)) {
+    if (id(request.toUserId) !== id(caller._id)) {
       throw new Error("Only the recipient can decline this request");
     }
     await ctx.db.patch(request._id, { status: "DECLINED", updatedAt: Date.now() });
@@ -362,15 +265,16 @@ export const decline = mutation({
 });
 
 /**
- * Cancel a pending request you sent (frees an active-request slot).
- * Only the sender may cancel.
+ * Cancel a pending request the caller sent.
+ * Only the sender may cancel — verified server-side via auth.
  */
 export const cancel = mutation({
   args: { requestId: v.id("chatRequests"), userId: v.id("users") },
   handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
     const request = await ctx.db.get(args.requestId);
     if (!request) throw new Error("Request not found");
-    if (id(request.fromUserId) !== id(args.userId)) {
+    if (id(request.fromUserId) !== id(caller._id)) {
       throw new Error("Only the sender can cancel this request");
     }
     await ctx.db.patch(request._id, { status: "CANCELLED", updatedAt: Date.now() });
@@ -378,8 +282,8 @@ export const cancel = mutation({
 });
 
 /**
- * Legacy rally-scoped request flow (kept for compatibility). Creates or reuses
- * a direct conversation between two users who already share a rally context.
+ * Legacy rally-scoped request.
+ * Caller must be the sender.
  */
 export const send = mutation({
   args: {
@@ -389,27 +293,24 @@ export const send = mutation({
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    if (id(args.fromUserId) === id(args.toUserId)) {
-      throw new Error("Cannot message yourself");
+    const caller = await getAuthenticatedUser(ctx);
+    if (id(caller._id) !== id(args.fromUserId)) {
+      throw new Error("Forbidden: you can only send messages as yourself.");
     }
-    if (await isBlockedBetween(ctx, args.fromUserId, args.toUserId)) {
-      throw new Error("You cannot message this user");
-    }
+    if (id(caller._id) === id(args.toUserId)) throw new Error("Cannot message yourself");
+    if (await isBlockedBetween(ctx, caller._id, args.toUserId)) throw new Error("You cannot message this user");
+
     const existing = await ctx.db
       .query("chatRequests")
       .withIndex("by_pair_rally", (q) =>
-        q
-          .eq("fromUserId", args.fromUserId)
-          .eq("toUserId", args.toUserId)
-          .eq("rallyId", args.rallyId)
+        q.eq("fromUserId", caller._id).eq("toUserId", args.toUserId).eq("rallyId", args.rallyId)
       )
       .first();
-    if (existing && existing.status === "PENDING") {
-      return { type: "request", requestId: existing._id };
-    }
+    if (existing && existing.status === "PENDING") return { type: "request", requestId: existing._id };
+
     const now = Date.now();
     const requestId = await ctx.db.insert("chatRequests", {
-      fromUserId: args.fromUserId,
+      fromUserId: caller._id,
       toUserId: args.toUserId,
       rallyId: args.rallyId,
       type: "rally",
