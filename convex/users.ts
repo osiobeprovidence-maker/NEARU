@@ -620,6 +620,8 @@ export const update = mutation({
     interests: v.optional(v.array(v.string())),
     publicInterests: v.optional(v.array(v.string())),
     showInterests: v.optional(v.boolean()),
+    pronouns: v.optional(v.string()),
+    showPronouns: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { userId, ...fields } = args;
@@ -862,6 +864,43 @@ export const syncLocation = mutation({
 // ---------------------------------------------------------------------------
 // Account types & lalao Pro
 // ---------------------------------------------------------------------------
+
+/**
+ * Mark onboarding as complete. Called at the end of the onboarding wizard.
+ * Persists all profile fields collected during onboarding in one atomic write.
+ */
+export const completeOnboarding = mutation({
+  args: {
+    userId: v.id("users"),
+    name: v.optional(v.string()),
+    username: v.optional(v.string()),
+    avatar: v.optional(v.string()),
+    interests: v.optional(v.array(v.string())),
+    pronouns: v.optional(v.string()),
+    showPronouns: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { userId, ...fields } = args;
+    const patch: Record<string, unknown> = { onboardingCompleted: true };
+    if (fields.name) patch.name = fields.name;
+    if (fields.username) patch.username = fields.username;
+    if (fields.avatar) patch.avatar = fields.avatar;
+    if (fields.interests && fields.interests.length > 0) {
+      patch.interests = fields.interests;
+      patch.publicInterests = fields.interests.slice(0, 3);
+      patch.showInterests = true;
+    }
+    // Store pronouns as undefined (not null) when empty/skipped
+    if (fields.pronouns !== undefined) patch.pronouns = fields.pronouns || undefined;
+    if (fields.showPronouns !== undefined) patch.showPronouns = fields.showPronouns;
+    try {
+      await ctx.db.patch(userId, patch);
+    } catch {
+      // Stale ID — silent fail, re-syncs on next login.
+    }
+    return { ok: true };
+  },
+});
 
 /**
  * Grant or revoke lalao Pro. Billing is deferred to a later Paystack phase;

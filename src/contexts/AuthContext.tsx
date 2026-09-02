@@ -74,6 +74,14 @@ interface AuthContextType {
     type: 'personal' | 'organization' | 'business',
     organizationName?: string
   ) => Promise<void>;
+  completeOnboarding: (data: {
+    name?: string;
+    username?: string;
+    avatar?: string;
+    interests?: string[];
+    pronouns?: string;
+    showPronouns?: boolean;
+  }) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +161,7 @@ const AuthContext = createContext<AuthContextType>({
   persistProfile: async () => {},
   grantPro: async () => {},
   setAccountType: async () => {},
+  completeOnboarding: async () => {},
 });
 
 const STORAGE_KEY = 'rally_user_profile_v1';
@@ -188,6 +197,11 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
     category: cu.category,
     socialLinks: cu.socialLinks,
     showInterests: cu.showInterests,
+    pronouns: cu.pronouns,
+    showPronouns: cu.showPronouns,
+    // Existing accounts without this field are treated as completed so they
+    // are never re-routed to onboarding. New accounts start with it false/unset.
+    onboardingCompleted: cu.onboardingCompleted ?? true,
     stats: cu.rallies != null ? {
       rallies: cu.rallies ?? 0,
       completed: cu.completed ?? 0,
@@ -269,6 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const convexUpdateUser = useMutation(api.users.update);
   const convexSetPro = useMutation(api.users.setPro);
   const convexSetAccountType = useMutation(api.users.setAccountType);
+  const convexCompleteOnboarding = useMutation(api.users.completeOnboarding);
 
   // ---------------------------------------------------------------------------
   // Firebase auth state listener
@@ -761,6 +776,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const completeOnboarding = async (data: {
+    name?: string;
+    username?: string;
+    avatar?: string;
+    interests?: string[];
+    pronouns?: string;
+    showPronouns?: boolean;
+  }) => {
+    if (!convexUserId) throw new Error('Not logged in');
+    await convexCompleteOnboarding({
+      userId: convexUserId as any,
+      ...data,
+    });
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        ...data,
+        onboardingCompleted: true,
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
   const isPro = !!user.isPro;
 
   return (
@@ -799,6 +838,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         persistProfile,
         grantPro,
         setAccountType,
+        completeOnboarding,
       }}
     >
       {children}

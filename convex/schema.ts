@@ -75,6 +75,17 @@ export default defineSchema({
     // Cover photo for the profile header (Convex storage id or URL).
     // Available to every account type, not just professional pages.
     coverImage: v.optional(v.string()),
+    // Pronouns — user's self-selected pronoun set, stored as a free-form
+    // string (e.g. "He/Him", "She/Her", "They/Them", or custom text).
+    // Optional and never inferred from any other field. Defaults to not shown.
+    pronouns: v.optional(v.string()),
+    // Whether the pronoun is shown publicly on the profile. Defaults to false
+    // so pronouns are private unless the user explicitly opts in.
+    showPronouns: v.optional(v.boolean()),
+    // True once the user has completed the initial onboarding wizard.
+    // New accounts start with this unset (falsy). Existing accounts without
+    // this field are treated as completed so they are not re-onboarded.
+    onboardingCompleted: v.optional(v.boolean()),
     // Phase 2: whether this user is okay with their interest tags shown on
     // their public profile. Defaults to true. Interests always remain usable
     // for recommendations regardless of this flag.

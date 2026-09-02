@@ -73,6 +73,14 @@ export interface User {
   category?: string;
   socialLinks?: { platform: string; url: string }[];
   showInterests?: boolean;
+  /** User's self-selected pronoun (e.g. "He/Him", "She/Her", "They/Them", custom).
+   *  Never inferred from any other field. Optional — absence means not disclosed. */
+  pronouns?: string;
+  /** Whether the pronoun is shown publicly on the profile. Defaults to false. */
+  showPronouns?: boolean;
+  /** True once the user has finished the onboarding wizard.
+   *  Existing accounts without this field are treated as completed. */
+  onboardingCompleted?: boolean;
   stats?: {
     rallies: number;
     completed: number;

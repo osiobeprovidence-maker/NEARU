@@ -65,16 +65,24 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppRoutes = () => {
-  const { isLoggedIn, isAuthLoading, isProfileLoading, hasConvexProfile } = useAuth();
-  
-  if (isAuthLoading) {
-    return <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+  const { isLoggedIn, isAuthLoading, isProfileLoading, hasConvexProfile, user } = useAuth();
+
+  // Onboarding is required when the user has a Convex profile but has NOT
+  // completed onboarding yet (new accounts). Existing accounts without the
+  // field are treated as completed (onboardingCompleted defaults to true in
+  // convexUserToUser for existing records).
+  const needsOnboarding = hasConvexProfile && user.onboardingCompleted === false;
+
+  const Spinner = () => (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
       <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
         <span className="text-white font-black text-lg tracking-tighter">L</span>
       </div>
-    </div>;
-  }
-  
+    </div>
+  );
+
+  if (isAuthLoading) return <Spinner />;
+
   if (!isLoggedIn) {
     return (
       <Routes>
@@ -86,15 +94,10 @@ const AppRoutes = () => {
     );
   }
 
-  if (isProfileLoading) {
-    return <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-      <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
-        <span className="text-white font-black text-lg tracking-tighter">L</span>
-      </div>
-    </div>;
-  }
+  if (isProfileLoading) return <Spinner />;
 
-  if (!hasConvexProfile) {
+  // No Convex profile yet (mid-onboarding, or getOrCreateByFirebaseUid still running)
+  if (!hasConvexProfile || needsOnboarding) {
     return (
       <Routes>
         <Route path="/onboarding" element={<Onboarding />} />
