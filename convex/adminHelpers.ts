@@ -9,7 +9,7 @@ import { type QueryCtx, type MutationCtx } from "./_generated/server";
 // a `requestingAdminId` that must resolve to an actual admin role. Both gates
 // must pass before any admin function runs.
 
-const SUPER_ADMIN_EMAIL = "riderezzy@gmail.com";
+const SUPER_ADMIN_EMAIL = "osiobeprovidence@gmail.com";
 
 /** True when the user document is the super admin or has an admin role. */
 export function isAdminUser(user: any): boolean {

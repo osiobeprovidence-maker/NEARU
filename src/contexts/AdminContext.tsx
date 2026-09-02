@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useConvex } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import {
   getAdminStats,
   getAdminAnalytics,
@@ -389,6 +391,7 @@ function backendAuditToEntry(e: {
 }
 
 export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const convex = useConvex();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [rallies, setRallies] = useState<AdminRally[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
@@ -438,27 +441,48 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refresh = useCallback(async () => {
     setError('');
     try {
-      const [statsRes, usersRes, ralliesRes, reportsRes, broadcastsRes, logsRes, settingsRes, countsRes, analyticsRes] =
-        await Promise.allSettled([
-          getAdminStats(),
-          getAdminUsers(),
-          getAdminRallies(),
-          getAdminReports(),
-          listBroadcasts(),
-          getAuditLogs(),
-          getSettings(),
-          getAudienceCounts(),
-          getAdminAnalytics(),
-        ]);
-      if (statsRes.status === 'fulfilled') setStats(statsRes.value.stats);
-      if (usersRes.status === 'fulfilled') setUsers(usersRes.value.users.map(userCardToAdminUser));
-      if (ralliesRes.status === 'fulfilled') setRallies(ralliesRes.value.rallies.map(backendRallyToAdminRally));
-      if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.reports.map(backendReportToAdminReport));
-      if (broadcastsRes.status === 'fulfilled')
-        setNotifications(broadcastsRes.value.broadcasts.map(backendBroadcastToNotification));
-      if (logsRes.status === 'fulfilled') setAuditLogs(logsRes.value.logs.map(backendAuditToEntry));
-      if (settingsRes.status === 'fulfilled') {
-        const s = settingsRes.value.settings as BackendSettings;
+      const [
+        statsRes,
+        usersRes,
+        ralliesRes,
+        reportsRes,
+        broadcastsRes,
+        logsRes,
+        settingsRes,
+        countsRes,
+        analyticsRes,
+      ] = await Promise.allSettled([
+        convex.query(api.admin.getDashboardStats, {}),
+        convex.query(api.admin.listUsers, {}),
+        convex.query(api.admin.listRallies, {}),
+        convex.query(api.admin.listReports, {}),
+        convex.query(api.admin.listBroadcasts, {}),
+        convex.query(api.admin.listAuditLogs, {}),
+        convex.query(api.admin.getSystemSettings, {}),
+        convex.query(api.admin.getAudienceCounts, {}),
+        convex.query(api.admin.getAnalytics, {}),
+      ]);
+
+      if (statsRes.status === 'fulfilled' && statsRes.value) {
+        setStats(statsRes.value as any);
+      }
+      if (usersRes.status === 'fulfilled' && Array.isArray(usersRes.value)) {
+        setUsers((usersRes.value as any[]).map(userCardToAdminUser));
+      }
+      if (ralliesRes.status === 'fulfilled' && Array.isArray(ralliesRes.value)) {
+        setRallies((ralliesRes.value as any[]).map(backendRallyToAdminRally));
+      }
+      if (reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value)) {
+        setReports((reportsRes.value as any[]).map(backendReportToAdminReport));
+      }
+      if (broadcastsRes.status === 'fulfilled' && Array.isArray(broadcastsRes.value)) {
+        setNotifications((broadcastsRes.value as any[]).map(backendBroadcastToNotification));
+      }
+      if (logsRes.status === 'fulfilled' && Array.isArray(logsRes.value)) {
+        setAuditLogs((logsRes.value as any[]).map(backendAuditToEntry));
+      }
+      if (settingsRes.status === 'fulfilled' && settingsRes.value) {
+        const s = settingsRes.value as BackendSettings;
         setSystemSettings((prev) => ({
           ...prev,
           platformName: s.platformName,
@@ -471,17 +495,25 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           primaryColor: s.primaryColor,
         }));
       }
-      if (countsRes.status === 'fulfilled') setAudienceCounts(countsRes.value.counts);
-      if (analyticsRes.status === 'fulfilled') setAnalytics(analyticsRes.value.analytics);
+      if (countsRes.status === 'fulfilled' && countsRes.value) {
+        setAudienceCounts(countsRes.value);
+      }
+      if (analyticsRes.status === 'fulfilled' && analyticsRes.value) {
+        setAnalytics(analyticsRes.value as any);
+      }
+
       const rejected = [statsRes, usersRes, ralliesRes, reportsRes, broadcastsRes, logsRes, settingsRes, countsRes, analyticsRes]
         .filter((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (rejected.length > 0) {
-        setError('Something went wrong. Please try again.');
+        console.warn('[AdminContext] Some admin queries failed:', rejected.map(r => r.reason));
       }
+    } catch (err) {
+      console.error('[AdminContext] refresh error:', err);
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [convex]);
 
   useEffect(() => {
     refresh();
@@ -490,8 +522,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const loadUserDetail = useCallback(async (userId: string) => {
     if (userDetails[userId]) return;
     try {
-      const res = await getUserDetail(userId);
-      const d = res.user;
+      const d = (await convex.query(api.admin.getUserDetail, { userId: userId as any })) as any;
+      if (!d) return;
       setUserDetails((prev) => ({ ...prev, [userId]: d }));
       setUsers((prev) =>
         prev.map((u) =>
@@ -510,7 +542,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {
       // keep whatever we have
     }
-  }, [userDetails]);
+  }, [userDetails, convex]);
 
   const metrics: AdminContextType['metrics'] = {
     totalUsers: stats?.totalUsers ?? 0,
@@ -553,15 +585,13 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         'primaryColor',
       ];
       const payload: Partial<BackendSettings> = {};
-      const backendToSocial: Record<string, keyof BackendSettings> = {};
       for (const f of allowedFields) {
         if (newSettings[f as keyof SystemSettings] !== undefined) {
           payload[f] = newSettings[f as keyof SystemSettings] as never;
-          backendToSocial[f] = f;
         }
       }
       try {
-        await updateSettingsApi(payload);
+        await convex.mutation(api.admin.updateSystemSettings, payload as any);
         setSystemSettings((prev) => ({ ...prev, ...newSettings }));
         showToast('Settings saved.', 'success');
         refresh();
@@ -569,7 +599,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         showToast((err as Error).message || 'Failed to save settings.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const verifyUser = useCallback(
@@ -583,40 +613,51 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const suspendUser = useCallback(
     async (userId: string, reason: string) => {
       try {
-        await setUserStatus(userId, 'suspend', reason);
+        await convex.mutation(api.admin.setUserStatus, {
+          userId: userId as any,
+          status: 'SUSPENDED',
+          reason,
+        });
         showToast('User suspended.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Failed to suspend user.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const banUser = useCallback(
     async (userId: string, reason: string) => {
       try {
-        await setUserStatus(userId, 'ban', reason);
+        await convex.mutation(api.admin.setUserStatus, {
+          userId: userId as any,
+          status: 'BANNED',
+          reason,
+        });
         showToast('User banned.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Failed to ban user.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const unbanUser = useCallback(
     async (userId: string) => {
       try {
-        await setUserStatus(userId, 'activate');
+        await convex.mutation(api.admin.setUserStatus, {
+          userId: userId as any,
+          status: 'ACTIVE',
+        });
         showToast('User restored.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Failed to restore user.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const updateUserRole = useCallback(
@@ -627,14 +668,17 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return;
       }
       try {
-        await setUserRole(userId, realRole as 'admin' | 'moderator' | 'user');
+        await convex.mutation(api.admin.setUserRole, {
+          userId: userId as any,
+          role: realRole as any,
+        });
         showToast('Role updated.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Failed to update role.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const addUser = useCallback(
@@ -648,119 +692,151 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const approveRally = useCallback(
     async (rallyId: string) => {
       try {
-        await setRallyModeration(rallyId, 'APPROVE');
+        await convex.mutation(api.admin.setRallyModeration, {
+          rallyId: rallyId as any,
+          action: 'APPROVE',
+        });
         showToast('RALLY approved.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const hideRally = useCallback(
     async (rallyId: string, reason?: string) => {
       try {
-        await setRallyModeration(rallyId, 'HIDE', reason);
+        await convex.mutation(api.admin.setRallyModeration, {
+          rallyId: rallyId as any,
+          action: 'HIDE',
+          reason,
+        });
         showToast('RALLY hidden from feeds.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const removeRally = useCallback(
     async (rallyId: string, reason?: string) => {
       try {
-        await setRallyModeration(rallyId, 'REMOVE', reason);
+        await convex.mutation(api.admin.setRallyModeration, {
+          rallyId: rallyId as any,
+          action: 'REMOVE',
+          reason,
+        });
         showToast('RALLY removed.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const flagRally = useCallback(
     async (rallyId: string, reason: string) => {
       try {
-        await setRallyModeration(rallyId, 'FLAG', reason);
+        await convex.mutation(api.admin.setRallyModeration, {
+          rallyId: rallyId as any,
+          action: 'FLAG',
+          reason,
+        });
         showToast('RALLY flagged for review.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const resolveReport = useCallback(
     async (reportId: string, resolutionNote?: string) => {
       try {
-        await actOnReport(reportId, 'resolve', { note: resolutionNote });
+        await convex.mutation(api.admin.actOnReport, {
+          reportId: reportId as any,
+          action: 'resolve',
+          note: resolutionNote,
+        });
         showToast('Report resolved.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const escalateReport = useCallback(
     async (reportId: string) => {
       try {
-        await actOnReport(reportId, 'escalate');
+        await convex.mutation(api.admin.actOnReport, {
+          reportId: reportId as any,
+          action: 'escalate',
+        });
         showToast('Report escalated.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const dismissReport = useCallback(
     async (reportId: string) => {
       try {
-        await actOnReport(reportId, 'dismiss');
+        await convex.mutation(api.admin.actOnReport, {
+          reportId: reportId as any,
+          action: 'dismiss',
+        });
         showToast('Report dismissed.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const assignReport = useCallback(
     async (reportId: string, adminRef: string) => {
-      const assigneeId = adminRef.startsWith('users:') ? adminRef : adminRef;
       try {
-        await actOnReport(reportId, 'assign', { assigneeId });
+        await convex.mutation(api.admin.actOnReport, {
+          reportId: reportId as any,
+          action: 'assign',
+          assigneeId: adminRef as any,
+        });
         showToast('Report assigned.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const addReportNote = useCallback(
     async (reportId: string, note: string) => {
       try {
-        await actOnReport(reportId, 'note', { note });
+        await convex.mutation(api.admin.actOnReport, {
+          reportId: reportId as any,
+          action: 'note',
+          note,
+        });
         showToast('Note added.', 'success');
         refresh();
       } catch (err) {
         showToast((err as Error).message || 'Action failed.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   // NIN verification actions are intentionally inert: real verification runs
@@ -800,14 +876,18 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       targetUserId?: string;
       sentBy?: string;
     }) => {
-      const audience = notification.targetUserId ? 'SPECIFIC' : notification.audience === 'LOCATION' ? 'ALL' : notification.audience;
+      const audience = notification.targetUserId
+        ? 'SPECIFIC'
+        : notification.audience === 'LOCATION'
+        ? 'ALL'
+        : notification.audience;
       try {
-        const res = await sendBroadcastApi({
+        const res = await convex.mutation(api.admin.sendBroadcast, {
           title: notification.title,
           body: notification.message,
           type: notification.type || 'SYSTEM',
           audience: (audience as 'ALL' | 'VERIFIED' | 'PLUS' | 'SPECIFIC') || 'ALL',
-          targetUserIds: notification.targetUserId ? [notification.targetUserId] : undefined,
+          targetUserIds: notification.targetUserId ? [notification.targetUserId as any] : undefined,
         });
         showToast(`Broadcast sent to ${res.recipientCount} user${res.recipientCount === 1 ? '' : 's'}.`, 'success');
         refresh();
@@ -815,7 +895,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         showToast((err as Error).message || 'Failed to send broadcast.', 'danger');
       }
     },
-    [refresh, showToast]
+    [convex, refresh, showToast]
   );
 
   const markNotificationRead = useCallback((id: string) => {

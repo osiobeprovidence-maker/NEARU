@@ -7,9 +7,12 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { BrandProvider } from './contexts/BrandContext.tsx';
 import { useConvexAuth } from './hooks/useConvexAuth.ts';
 
-const convex = new ConvexReactClient(
-  import.meta.env.VITE_CONVEX_URL ?? 'https://rare-rooster-878.eu-west-1.convex.cloud'
-);
+const convexUrl = import.meta.env.VITE_CONVEX_URL;
+if (!convexUrl) {
+  throw new Error('Missing VITE_CONVEX_URL. Set it to the Convex deployment URL for this environment.');
+}
+
+const convex = new ConvexReactClient(convexUrl);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -7,7 +7,7 @@ import admin from "firebase-admin";
 import { callConvexQuery } from "./convexClient.js";
 import { authError } from "./errors.js";
 
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "riderezzy@gmail.com";
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "osiobeprovidence@gmail.com";
 
 let appInit = false;
 function getFirebaseApp() {
@@ -136,7 +136,12 @@ export async function resolveConvexUser(firebaseClaims) {
 export async function requireSuperAdmin(req) {
   const firebaseClaims = await requireFirebaseUser(req);
   const convexUser = await resolveConvexUser(firebaseClaims);
-  if (!convexUser || convexUser.email !== SUPER_ADMIN_EMAIL) {
+  if (
+    !convexUser ||
+    (convexUser.email !== SUPER_ADMIN_EMAIL &&
+      convexUser.role !== "super_admin" &&
+      convexUser.role !== "admin")
+  ) {
     throw authError("Admin access required.");
   }
   return { firebaseClaims, convexUser };

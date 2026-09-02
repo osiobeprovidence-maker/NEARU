@@ -54,12 +54,16 @@ const AdminAnalytics = React.lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
 const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
 
-const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
+const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthLoading, isProfileLoading } = useAuth();
   if (isAuthLoading || isProfileLoading) return null;
-  if (user.email !== SUPER_ADMIN_EMAIL) {
+  const isAdmin =
+    user.email === SUPER_ADMIN_EMAIL ||
+    (user as any).role === 'super_admin' ||
+    (user as any).role === 'admin';
+  if (!isAdmin) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;

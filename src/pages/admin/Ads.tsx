@@ -83,7 +83,8 @@ export default function AdminAds() {
       const storageId = await upRes.json();
       if (!storageId) throw new Error('Upload failed');
       setForm((prev) => ({ ...prev, [key]: storageId }));
-      const convexSite = import.meta.env.VITE_CONVEX_SITE_URL ?? 'https://rare-rooster-878.eu-west-1.convex.site';
+      const convexSite = import.meta.env.VITE_CONVEX_SITE_URL;
+      if (!convexSite) throw new Error('Missing VITE_CONVEX_SITE_URL');
       setPreviews((prev) => ({ ...prev, [key]: `${convexSite}/api/storage/${storageId}` }));
     } catch {
       alert('Image upload failed. Please try again.');

@@ -22,11 +22,14 @@ import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 
-const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
+const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
 export default function Settings() {
   const { logout, user } = useAuth();
-  const isAdmin = user.email === SUPER_ADMIN_EMAIL;
+  const isAdmin =
+    user.email === SUPER_ADMIN_EMAIL ||
+    (user as any).role === 'super_admin' ||
+    (user as any).role === 'admin';
   const { isInstallable, install } = usePwaInstall();
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
 

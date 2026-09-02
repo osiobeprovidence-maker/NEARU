@@ -2,7 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthenticatedUser, getAuthenticatedUserOrNull } from "./lib/auth";
 
-const SUPER_ADMIN_EMAIL = "riderezzy@gmail.com";
+const SUPER_ADMIN_EMAIL = "osiobeprovidence@gmail.com";
 
 // Never send auth secrets (password hash, TOTP secret) to the browser, from
 // any query that returns a user document. These are only written server-side.
@@ -207,30 +207,36 @@ export const getProfile = query({
 export const getByFirebaseUid = query({
   args: { firebaseUid: v.string() },
   handler: async (ctx, args) => {
-    if (!args.firebaseUid) return null;
-    let user: any;
     try {
-      user = await ctx.db
-        .query("users")
-        .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
-        .first();
-    } catch {
+      if (!args.firebaseUid) return null;
+      let user: any;
+      try {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+          .first();
+      } catch (err) {
+        console.error("Error in db.query:", err);
+        return null;
+      }
+      if (!user) return null;
+      if (user.avatar && !user.avatar.startsWith("http")) {
+        try {
+          const url = await ctx.storage.getUrl(user.avatar);
+          if (url) user.avatar = url;
+        } catch { user.avatar = ""; }
+      }
+      if (user.coverImage && !user.coverImage.startsWith("http")) {
+        try {
+          const url = await ctx.storage.getUrl(user.coverImage);
+          if (url) user.coverImage = url;
+        } catch { user.coverImage = undefined; }
+      }
+      return redact(user);
+    } catch (err) {
+      console.error("Unhandled error in getByFirebaseUid:", err);
       return null;
     }
-    if (!user) return null;
-    if (user.avatar && !user.avatar.startsWith("http")) {
-      try {
-        const url = await ctx.storage.getUrl(user.avatar);
-        if (url) user.avatar = url;
-      } catch { user.avatar = ""; }
-    }
-    if (user.coverImage && !user.coverImage.startsWith("http")) {
-      try {
-        const url = await ctx.storage.getUrl(user.coverImage);
-        if (url) user.coverImage = url;
-      } catch { user.coverImage = undefined; }
-    }
-    return redact(user);
   },
 });
 
@@ -483,6 +489,7 @@ export const getOrCreateByFirebaseUid = mutation({
       rating: 0,
       accountType: "personal",
       isPro: false,
+      onboardingCompleted: false,
       createdAt: Date.now(),
       moderationStatus: "ACTIVE",
       role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
@@ -553,6 +560,7 @@ export const create = mutation({
       rating: 0,
       accountType: "personal",
       isPro: false,
+      onboardingCompleted: false,
       createdAt: Date.now(),
       moderationStatus: "ACTIVE",
       role: args.email === SUPER_ADMIN_EMAIL ? "super_admin" : "user",
@@ -886,6 +894,12 @@ export const completeOnboarding = mutation({
     }
     if (fields.pronouns !== undefined) patch.pronouns = fields.pronouns || undefined;
     if (fields.showPronouns !== undefined) patch.showPronouns = fields.showPronouns;
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity?.subject && (!caller || !caller.firebaseUid)) {
+      patch.firebaseUid = identity.subject;
+    }
+
     try {
       await ctx.db.patch(targetId, patch);
     } catch {

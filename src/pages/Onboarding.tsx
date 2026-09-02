@@ -247,6 +247,7 @@ export default function Onboarding() {
       // Single atomic write: set all onboarding fields + mark complete.
       if (userId) {
         await completeOnboarding({
+          userId,
           name: effectiveName,
           username: effectiveUsername,
           avatar,

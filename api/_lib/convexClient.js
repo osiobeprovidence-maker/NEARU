@@ -13,17 +13,19 @@
 // Using /api/v1/ or wrapping args inside another object are both wrong and will
 // cause every Convex call to fail silently or with an opaque error.
 
-const CONVEX_URL =
-  process.env.CONVEX_URL ||
-  process.env.NEXT_PUBLIC_CONVEX_URL ||
-  "https://rare-rooster-878.eu-west-1.convex.cloud";
-
 export function convexEnv() {
   const deployKey = process.env.CONVEX_DEPLOY_KEY;
   if (!deployKey) {
     throw new Error("CONVEX_DEPLOY_KEY is not configured");
   }
-  return { url: CONVEX_URL.replace(/\/$/, ""), deployKey };
+  const convexUrl =
+    process.env.CONVEX_URL ||
+    process.env.NEXT_PUBLIC_CONVEX_URL ||
+    process.env.VITE_CONVEX_URL;
+  if (!convexUrl) {
+    throw new Error("CONVEX_URL is not configured");
+  }
+  return { url: convexUrl.replace(/\/$/, ""), deployKey };
 }
 
 /**

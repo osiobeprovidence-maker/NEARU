@@ -105,7 +105,7 @@ export async function getAuthenticatedUserOrNull(ctx: MutationCtx | QueryCtx) {
 // Admin guard — wraps getAuthenticatedUser and enforces admin role
 // ---------------------------------------------------------------------------
 
-const SUPER_ADMIN_EMAIL = "riderezzy@gmail.com";
+const SUPER_ADMIN_EMAIL = "osiobeprovidence@gmail.com";
 
 /**
  * Verify the caller is an authenticated admin.

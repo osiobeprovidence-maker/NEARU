@@ -54,8 +54,11 @@ export default function AppShell() {
     updateLocation 
   } = useLocationContext();
   
-  const SUPER_ADMIN_EMAIL = 'riderezzy@gmail.com';
-  const isAdmin = user.email === SUPER_ADMIN_EMAIL;
+  const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
+  const isAdmin =
+    user.email === SUPER_ADMIN_EMAIL ||
+    (user as any).role === 'super_admin' ||
+    (user as any).role === 'admin';
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createInitialType, setCreateInitialType] = useState<'POST' | 'EVENT' | undefined>(undefined);

@@ -104,7 +104,8 @@ export default function AdminSettings() {
       const storageId = await upRes.json();
       if (!storageId) throw new Error('Upload failed');
       setFormData((prev) => ({ ...prev, [key]: storageId }));
-      const convexSite = import.meta.env.VITE_CONVEX_SITE_URL ?? 'https://rare-rooster-878.eu-west-1.convex.site';
+      const convexSite = import.meta.env.VITE_CONVEX_SITE_URL;
+      if (!convexSite) throw new Error('Missing VITE_CONVEX_SITE_URL');
       setBrandPreviews((prev) => ({ ...prev, [key]: `${convexSite}/api/storage/${storageId}` }));
       showToast('Asset uploaded — remember to save branding.', 'success');
     } catch (err) {

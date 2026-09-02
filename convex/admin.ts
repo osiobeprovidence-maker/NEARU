@@ -1,17 +1,17 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAdmin } from "./adminHelpers";
+import { getAuthenticatedAdmin } from "./lib/auth";
 
 // ---------------------------------------------------------------------------
 // lalao Admin / CRM backend.
 //
-// SECURITY MODEL (mirrors convex/verifications.ts):
-// Every admin function requires a `serverSecret` that matches
-// VERIFICATION_SERVER_SECRET (only the serverless backend holds it) AND a
-// `requestingAdminId` that must resolve to a super-admin/admin role. Browsers
-// hold neither, so the admin surfaces cannot be called directly from the
-// client. The browser reaches these only through the api/admin/* routes which
-// verify the Firebase token server-side.
+// SECURITY MODEL:
+// Admin functions support two execution paths:
+//  1. Direct browser client: authenticated via Firebase JWT (ctx.auth), verified
+//     by getAuthenticatedAdmin(ctx) to enforce super_admin/admin role.
+//  2. Legacy serverless backend: authorized via VERIFICATION_SERVER_SECRET and
+//     requestingAdminId verified by requireAdmin.
 // ---------------------------------------------------------------------------
 
 function assertServerSecret(provided: string | undefined) {
@@ -24,9 +24,16 @@ function assertServerSecret(provided: string | undefined) {
   }
 }
 
-async function gate(ctx: any, args: { requestingAdminId: any; serverSecret: string }) {
-  assertServerSecret(args.serverSecret);
-  return requireAdmin(ctx, args.requestingAdminId);
+async function gate(
+  ctx: any,
+  args?: { requestingAdminId?: any; serverSecret?: string }
+) {
+  if (args?.serverSecret) {
+    assertServerSecret(args.serverSecret);
+    if (!args.requestingAdminId) throw new Error("Missing requestingAdminId");
+    return requireAdmin(ctx, args.requestingAdminId);
+  }
+  return await getAuthenticatedAdmin(ctx);
 }
 
 async function resolveUserCard(ctx: any, user: any) {
@@ -136,7 +143,7 @@ async function resolveReportCard(ctx: any, report: any) {
 // ---------------------------------------------------------------------------
 
 export const getDashboardStats = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const [users, rallies, verifications, reports, ads] = await Promise.all([
@@ -179,7 +186,7 @@ export const getDashboardStats = query({
 });
 
 export const getAnalytics = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const [users, rallies, verifications] = await Promise.all([
@@ -263,8 +270,8 @@ export const getAnalytics = query({
 
 export const listUsers = query({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     query: v.optional(v.string()),
     limit: v.optional(v.number()),
     status: v.optional(
@@ -299,7 +306,7 @@ export const listUsers = query({
 });
 
 export const getUserDetail = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string(), userId: v.id("users") },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()), userId: v.id("users") },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const user = await ctx.db.get(args.userId);
@@ -339,8 +346,8 @@ export const getUserDetail = query({
 
 export const setUserStatus = mutation({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     userId: v.id("users"),
     status: v.union(v.literal("ACTIVE"), v.literal("SUSPENDED"), v.literal("BANNED")),
     reason: v.optional(v.string()),
@@ -363,8 +370,8 @@ export const setUserStatus = mutation({
 
 export const setUserRole = mutation({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     userId: v.id("users"),
     role: v.union(v.literal("admin"), v.literal("moderator"), v.literal("user")),
   },
@@ -390,8 +397,8 @@ export const setUserRole = mutation({
 
 export const listRallies = query({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     query: v.optional(v.string()),
     limit: v.optional(v.number()),
     status: v.optional(v.string()),
@@ -423,8 +430,8 @@ export const listRallies = query({
 
 export const setRallyModeration = mutation({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     rallyId: v.id("rallies"),
     action: v.union(
       v.literal("APPROVE"),
@@ -508,8 +515,8 @@ export const submitReport = mutation({
 
 export const listReports = query({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     status: v.optional(
       v.union(
         v.literal("PENDING"),
@@ -533,8 +540,8 @@ export const listReports = query({
 
 export const actOnReport = mutation({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     reportId: v.id("reports"),
     action: v.union(
       v.literal("resolve"),
@@ -630,7 +637,7 @@ async function resolveBrandAsset(ctx: any, value: string | undefined): Promise<s
 }
 
 export const getSystemSettings = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const doc = await ctx.db.query("systemSettings").first();
@@ -661,8 +668,8 @@ export const getPublicBranding = query({
 
 export const updateSystemSettings = mutation({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     platformName: v.optional(v.string()),
     defaultRadiusKm: v.optional(v.number()),
     supportedCities: v.optional(v.array(v.string())),
@@ -712,7 +719,7 @@ export const updateSystemSettings = mutation({
 // Admin-only signed upload URL for branding assets (logo, icon, favicon).
 // The URL is bound to this Convex deployment's storage bucket.
 export const generateBrandUploadUrl = mutation({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     return await ctx.storage.generateUploadUrl();
@@ -720,7 +727,7 @@ export const generateBrandUploadUrl = mutation({
 });
 
 export const listAuditLogs = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string(), limit: v.optional(v.number()) },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const rows = await ctx.db.query("auditLogs").order("desc").take(args.limit || 100);
@@ -751,7 +758,7 @@ export const listAuditLogs = query({
 // ---------------------------------------------------------------------------
 
 export const getAudienceCounts = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string() },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const all = await ctx.db.query("users").collect();
@@ -765,8 +772,8 @@ export const getAudienceCounts = query({
 
 export const sendBroadcast = mutation({
   args: {
-    requestingAdminId: v.id("users"),
-    serverSecret: v.string(),
+    requestingAdminId: v.optional(v.id("users")),
+    serverSecret: v.optional(v.string()),
     title: v.string(),
     body: v.string(),
     type: v.optional(v.string()),
@@ -841,7 +848,7 @@ export const sendBroadcast = mutation({
 });
 
 export const listBroadcasts = query({
-  args: { requestingAdminId: v.id("users"), serverSecret: v.string(), limit: v.optional(v.number()) },
+  args: { requestingAdminId: v.optional(v.id("users")), serverSecret: v.optional(v.string()), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     await gate(ctx, args);
     const rows = await ctx.db.query("broadcastBatches").order("desc").take(args.limit || 100);

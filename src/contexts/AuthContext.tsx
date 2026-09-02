@@ -75,6 +75,7 @@ interface AuthContextType {
     organizationName?: string
   ) => Promise<void>;
   completeOnboarding: (data: {
+    userId?: string;
     name?: string;
     username?: string;
     avatar?: string;
@@ -200,7 +201,7 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
     pronouns: cu.pronouns,
     showPronouns: cu.showPronouns,
     // Existing accounts without this field are treated as completed so they
-    // are never re-routed to onboarding. New accounts start with it false/unset.
+    // are never re-routed to onboarding. New accounts are written with false.
     onboardingCompleted: cu.onboardingCompleted ?? true,
     stats: cu.rallies != null ? {
       rallies: cu.rallies ?? 0,
@@ -536,10 +537,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     totpEnabled?: boolean;
     isEmailVerified: boolean;
   }) => {
+    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=6366f1&color=fff&bold=true&size=200`;
     const userId = await convexCreateUser({
       name: data.name,
       username: data.username,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=6366f1&color=fff&bold=true&size=200`,
+      avatar,
       email: data.email,
       isNINVerified: false,
       isPhoneVerified: false,
@@ -554,6 +556,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUid: firebaseUser.uid,
       }).catch(() => {});
     }
+    setConvexUserId(userId);
+    setHasConvexProfile(true);
+    localStorage.setItem('rally_convex_user_id', userId);
+    setUser((prev) => ({
+      ...prev,
+      id: userId,
+      name: data.name,
+      username: data.username,
+      avatar,
+      email: data.email,
+      onboardingCompleted: false,
+    }));
     if (data.totpSecret || data.totpEnabled) {
       await convexUpdateAuth({
         userId: userId as any,
@@ -784,6 +798,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const completeOnboarding = async (data: {
+    userId?: string;
     name?: string;
     username?: string;
     avatar?: string;
@@ -791,15 +806,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pronouns?: string;
     showPronouns?: boolean;
   }) => {
-    if (!convexUserId) throw new Error('Not logged in');
+    const targetUserId = data.userId || convexUserId;
+    if (!targetUserId) throw new Error('Not logged in');
+    const { userId: _userId, ...updates } = data;
+    void _userId;
     await convexCompleteOnboarding({
-      userId: convexUserId as any,
-      ...data,
+      userId: targetUserId as any,
+      ...updates,
     });
+    setConvexUserId(targetUserId);
+    setHasConvexProfile(true);
+    localStorage.setItem('rally_convex_user_id', targetUserId);
     setUser((prev) => {
       const updated = {
         ...prev,
-        ...data,
+        ...updates,
         onboardingCompleted: true,
       };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}

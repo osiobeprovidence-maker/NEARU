@@ -21,7 +21,21 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (event.request.url.includes('convex.cloud') || event.request.url.includes('convex.site')) return;
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+
+      if (event.request.mode === 'navigate') {
+        const shell = await caches.match('/index.html');
+        if (shell) return shell;
+      }
+
+      return new Response('Offline', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    })
   );
 });
 
