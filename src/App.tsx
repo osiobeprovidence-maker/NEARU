@@ -9,6 +9,7 @@ import AppShell from './layouts/AppShell';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LocationProvider } from './contexts/LocationContext';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
+import AuthErrorBoundary from './components/AuthErrorBoundary';
 import Landing from './pages/Landing';
 import LoginPage from './pages/LoginPage';
 import Onboarding from './pages/Onboarding';
@@ -162,13 +163,15 @@ const AppRoutes = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <LocationProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </LocationProvider>
-    </AuthProvider>
+    <AuthErrorBoundary>
+      <AuthProvider>
+        <LocationProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </LocationProvider>
+      </AuthProvider>
+    </AuthErrorBoundary>
   );
 }
 

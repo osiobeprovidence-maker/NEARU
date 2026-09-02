@@ -237,25 +237,31 @@ export const getProfile = query({
 export const getByFirebaseUid = query({
   args: { firebaseUid: v.string() },
   handler: async (ctx, args) => {
-    // Empty string is not a valid Firebase UID — return null rather than
-    // scanning the index with a blank key.
+    // Empty string is not a valid Firebase UID.
     if (!args.firebaseUid) return null;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
-      .unique();
+    let user: any;
+    try {
+      // Use .first() instead of .unique() — if a race condition created two
+      // records with the same firebaseUid, .unique() throws; .first() is safe.
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+        .first();
+    } catch {
+      return null;
+    }
     if (!user) return null;
     if (user.avatar && !user.avatar.startsWith("http")) {
       try {
         const url = await ctx.storage.getUrl(user.avatar);
         if (url) user.avatar = url;
-      } catch {}
+      } catch { user.avatar = ""; }
     }
     if (user.coverImage && !user.coverImage.startsWith("http")) {
       try {
         const url = await ctx.storage.getUrl(user.coverImage);
         if (url) user.coverImage = url;
-      } catch {}
+      } catch { user.coverImage = undefined; }
     }
     return redact(user);
   },
@@ -290,7 +296,7 @@ export const getOrCreateByFirebaseUid = mutation({
     const byUid = await ctx.db
       .query("users")
       .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
-      .unique();
+      .first(); // .first() is safe even if duplicates exist; .unique() would throw
     if (byUid) return { userId: byUid._id, isNew: false };
 
     // 2. Migration path — legacy record exists only by email
