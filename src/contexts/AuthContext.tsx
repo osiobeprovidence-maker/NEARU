@@ -259,12 +259,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---------------------------------------------------------------------------
   // Primary Convex lookup — keyed on Firebase UID (fast, stable, no duplicates)
-  // Falls back to email lookup for legacy users via getOrCreateByFirebaseUid.
+  // Only enabled after Firebase auth state has been confirmed (isAuthLoading=false).
+  // This prevents the query from firing with a stale UID before Firebase has
+  // initialised, which was causing the useQuery to throw during the first render.
   // ---------------------------------------------------------------------------
-  // Guard: never pass an empty string to the query — Convex will reject it.
-  const queryUid = (firebaseUser?.uid && firebaseUser.uid.length > 0)
-    ? firebaseUser.uid
-    : undefined;
+  // Guard: skip query until Firebase has confirmed auth state AND there is a
+  // real non-empty UID. This prevents the "Server Error" that occurred when the
+  // query was called before onAuthStateChanged had fired.
+  const queryUid =
+    !isAuthLoading && firebaseUser?.uid && firebaseUser.uid.length > 0
+      ? firebaseUser.uid
+      : undefined;
   const uidQueryResult = useQuery(
     api.users.getByFirebaseUid,
     queryUid !== undefined ? { firebaseUid: queryUid } : 'skip'
@@ -309,6 +314,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sync Convex profile whenever the UID-based query result changes
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    // Don't process query results until Firebase has confirmed auth state.
+    if (isAuthLoading) return;
     if (firebaseUser === null) return;
 
     if (uidQueryResult === undefined) {
@@ -345,7 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUid: firebaseUser.uid,
       }).catch(() => {});
     }
-  }, [firebaseUser, uidQueryResult]);
+  }, [isAuthLoading, firebaseUser, uidQueryResult]);
 
   // ---------------------------------------------------------------------------
   // Auto-create or migrate a Convex record for a Firebase user with no profile.

@@ -1,24 +1,25 @@
+// POST /api/save-user
+// Legacy endpoint — creates a Convex user record from the serverless layer.
+// NOTE: The preferred path is AuthContext.saveUserToConvex() which calls
+// users:create directly from the browser via the Convex WebSocket client.
+// This endpoint exists as a fallback and is kept aligned with the correct
+// Convex HTTP API format (/api/mutation with args: [argsObject]).
+
+import { callConvexMutation } from "./_lib/convexClient.js";
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
-
   try {
-    const { email, username, name, passwordHash, totpSecret, totpEnabled, isEmailVerified } = req.body;
+    const { email, username, name, passwordHash, totpSecret, totpEnabled, isEmailVerified } =
+      req.body || {};
 
     if (!email || !username || !name) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: "Missing required fields: email, username, name" });
     }
 
-    const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL || "https://rare-rooster-878.eu-west-1.convex.cloud";
-    const DEPLOY_KEY = process.env.CONVEX_DEPLOY_KEY;
-
-    if (!DEPLOY_KEY) {
-      return res.status(500).json({ error: "Server configuration error" });
-    }
-
-    const functionPath = "users:create";
-    const args = {
+    const userId = await callConvexMutation("users:create", {
       name,
       username,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&bold=true&size=200`,
@@ -27,49 +28,19 @@ export default async function handler(req, res) {
       isPhoneVerified: false,
       isEmailVerified: isEmailVerified || false,
       passwordHash: passwordHash || undefined,
-    };
-
-    const response = await fetch(`${CONVEX_URL}/api/v1/mutation`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Convex ${DEPLOY_KEY}`,
-      },
-      body: JSON.stringify({
-        path: functionPath,
-        args: { args },
-      }),
     });
 
-    const result = await response.json();
-
-    if (!response.ok || result.status === "error") {
-      return res.status(500).json({ error: result.result || "Failed to save user" });
-    }
-
-    if (totpSecret || totpEnabled) {
-      await fetch(`${CONVEX_URL}/api/v1/mutation`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Convex ${DEPLOY_KEY}`,
-        },
-        body: JSON.stringify({
-          path: "users:updateAuth",
-          args: {
-            args: {
-              userId: result.result,
-              totpSecret: totpSecret || undefined,
-              totpEnabled: totpEnabled || false,
-            },
-          },
-        }),
+    if ((totpSecret || totpEnabled) && userId) {
+      await callConvexMutation("users:updateAuth", {
+        userId,
+        totpSecret: totpSecret || undefined,
+        totpEnabled: totpEnabled || false,
       });
     }
 
-    return res.status(200).json({ userId: result.result });
+    return res.status(200).json({ userId });
   } catch (error) {
-    console.error("Save user error:", error);
+    console.error("[save-user] error:", error?.message || error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
