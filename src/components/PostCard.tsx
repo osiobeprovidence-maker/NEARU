@@ -12,10 +12,12 @@ import {
   Loader2,
   BadgeCheck,
   Users,
+  User,
   CheckCircle2,
   HelpingHand,
   X,
   ChevronRight,
+  Repeat2,
 } from 'lucide-react';
 import { Rally } from '../types';
 import { rallyAccess } from '../lib/rallyPricing';
@@ -179,9 +181,14 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   // Optimistic like state
   const [localLiked, setLocalLiked] = useState(post.isLiked ?? false);
   const [localLikeCount, setLocalLikeCount] = useState(post.likesCount ?? 0);
-  // Optimistic RSVP state
+  // Optimistic RSVP / Rally Request state
   const [localRsvpd, setLocalRsvpd] = useState(post.isRsvpd ?? false);
   const [localRsvpCount, setLocalRsvpCount] = useState(post.rsvpsCount ?? 0);
+  // Optimistic Repost state
+  const [localReposted, setLocalReposted] = useState(false);
+  const [localRepostCount, setLocalRepostCount] = useState(
+    (post as any).repostsCount ?? 0
+  );
 
   const [imgError, setImgError] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -267,13 +274,28 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
     try {
       await toggleRsvpMut({ rallyId: post.id as any, userId: convexUserId as any });
       showToast(
-        !wasRsvpd ? "You're interested!" : 'Removed interest',
-        !wasRsvpd ? 'The organizer will be notified.' : ''
+        !wasRsvpd ? "Joined Rally" : 'Left Rally',
+        !wasRsvpd ? 'Your request has been sent to the organizer.' : ''
       );
     } catch {
       setLocalRsvpd(wasRsvpd);
       setLocalRsvpCount((c) => (wasRsvpd ? c + 1 : Math.max(0, c - 1)));
     }
+  };
+
+  const handleRepost = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!convexUserId) {
+      showToast('Not logged in', 'Please log in to repost.');
+      return;
+    }
+    const wasReposted = localReposted;
+    setLocalReposted(!wasReposted);
+    setLocalRepostCount((c) => (wasReposted ? Math.max(0, c - 1) : c + 1));
+    showToast(
+      !wasReposted ? 'Reposted' : 'Removed repost',
+      !wasReposted ? 'Post shared to your network.' : ''
+    );
   };
 
   const handleComment = async () => {
@@ -504,8 +526,8 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         </div>
       </div>
 
-      {/* ── 2. POST CONTENT (rendered exactly once) ───────────────────── */}
-      {content && (
+      {/* ── 2. POST CONTENT with small RALLY tag ──────────────────────── */}
+      {content ? (
         <p className="mt-2.5 text-[15px] leading-relaxed text-zinc-900 whitespace-pre-wrap break-words">
           {content}
           {hashtags.map((tag) => (
@@ -514,6 +536,20 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
               #{tag}
             </span>
           ))}
+          {isRally && (
+            <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200/80 align-middle">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-600 animate-pulse" />
+              Rally
+            </span>
+          )}
+        </p>
+      ) : isRally && (
+        <p className="mt-2.5 text-[15px] leading-relaxed text-zinc-900 font-semibold flex items-center gap-2">
+          <span>{post.title}</span>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200/80 align-middle">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-600 animate-pulse" />
+            Rally
+          </span>
         </p>
       )}
 
@@ -539,156 +575,121 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         </div>
       )}
 
-      {/* ── 4. OPTIONAL CONTEXT: Event-post association (POST linked to a RALLY) ── */}
+      {/* ── OPTIONAL CONTEXT: Event-post association (POST linked to a RALLY) ── */}
       {post.rallyLinkId && post.linkedEvent && (
         <Link
           to={`/rally/${post.rallyLinkId}`}
           onClick={(e) => e.stopPropagation()}
-          className="mt-3 flex items-center gap-2 p-3 rounded-xl bg-violet-50 border border-violet-100 hover:bg-violet-100 transition-colors"
+          className="mt-3 flex items-center gap-2 p-2.5 rounded-xl bg-violet-50/70 border border-violet-100 hover:bg-violet-100 transition-colors"
         >
           <Calendar className="w-4 h-4 text-violet-600 shrink-0" />
-          <span className="text-sm font-semibold text-violet-700 truncate">
+          <span className="text-xs font-semibold text-violet-700 truncate">
             Part of a RALLY · {post.linkedEvent}
           </span>
-          <ChevronRight className="w-4 h-4 text-violet-400 ml-auto shrink-0" />
+          <ChevronRight className="w-3.5 h-3.5 text-violet-400 ml-auto shrink-0" />
         </Link>
       )}
 
-      {/* ── 5. ACTIONABLE RALLY CARD ──────────────────────────────────── */}
-      {isRally && (
-        <div className="mt-3.5 rounded-2xl sm:rounded-3xl border border-zinc-200/90 bg-gradient-to-b from-white to-zinc-50/70 p-4 sm:p-5 shadow-xs transition-all hover:border-zinc-300 relative overflow-hidden space-y-3">
-          {/* Subtle top accent border */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 opacity-70" />
-
-          {/* Header row: RALLY pill + Details link */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-700 border border-zinc-200/60">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
-              Rally
-            </span>
-            <Link
-              to={`/rally/${post.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-xs font-bold text-zinc-400 hover:text-indigo-600 transition-colors flex items-center gap-0.5"
-            >
-              <span>Details</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* 1. Primary Title: WHAT IS HAPPENING */}
-          <div className="space-y-1">
-            <h3 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight flex items-center gap-2 leading-snug">
-              <span>{rallyMeta.categoryIcon}</span>
-              <span>{rallyMeta.primaryTitle}</span>
-            </h3>
-            {rallyMeta.subtitle && (
-              <p className="text-xs sm:text-sm font-medium text-zinc-600 leading-relaxed">
-                {rallyMeta.subtitle}
-              </p>
+      {/* ── 4. SOCIAL INTERACTION ROW: [ RALLY hand ] [ Like ] [ Comment ] [ Repost ] [ Share ] ── */}
+      <div className="mt-3 pt-2.5 flex items-center justify-between sm:justify-start sm:gap-6 border-t border-zinc-100/90 text-zinc-500 text-xs sm:text-sm">
+        {/* RALLY hand (distinctive action for joining Rally) */}
+        {isRally && (
+          <button
+            onClick={handleRsvp}
+            title={localRsvpd ? 'Leave Rally' : 'Join Rally'}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all active:scale-90 cursor-pointer',
+              localRsvpd
+                ? 'text-violet-600 bg-violet-50 font-bold'
+                : 'text-zinc-500 hover:text-violet-600 hover:bg-violet-50/60'
             )}
-          </div>
+          >
+            <HelpingHand className={cn('w-4 h-4 sm:w-4.5 sm:h-4.5', localRsvpd && 'text-violet-600 stroke-[2.5]')} />
+            <span>{localRsvpCount}</span>
+          </button>
+        )}
 
-          {/* 2. Secondary Metadata: WHERE / WHEN */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-zinc-500 pt-0.5">
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-              <span>{displayLocation || post.city || 'Nearby'}</span>
-            </span>
-            <span>·</span>
-            <span>{timeAgo(post.createdAt) || 'Soon'}</span>
-            {(post.eventDate || (post.time && post.time !== 'Soon')) && (
-              <>
-                <span>·</span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span>{post.eventDate || post.time}</span>
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* 3. Highly Visible VALUE / REWARD */}
-          {rallyMeta.rewardValue && (
-            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-950 font-black text-sm sm:text-base tracking-tight shadow-xs">
-              <span className="text-base">🎁</span>
-              <span className="font-extrabold text-amber-900">{rallyMeta.rewardValue}</span>
-            </div>
-          )}
-
-          {/* 4. Action Button: TAKE ACTION */}
-          <div className="pt-1">
-            <button
-              onClick={handleRsvp}
-              disabled={isFull}
-              className={cn(
-                'w-full py-3 px-5 rounded-2xl font-black text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]',
-                isFull
-                  ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                  : localRsvpd
-                  ? 'bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100/80'
-                  : 'bg-zinc-950 hover:bg-zinc-800 text-white shadow-zinc-900/10 hover:shadow-md'
-              )}
-            >
-              {localRsvpd ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>✓ Interested</span>
-                </>
-              ) : isFull ? (
-                <span>Event Full</span>
-              ) : (
-                <span>I'm Interested</span>
-              )}
-            </button>
-          </div>
-
-          {/* 5. SOCIAL PROOF */}
-          <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-zinc-500 pt-0.5">
-            <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-            <span>
-              {localRsvpCount > 0
-                ? `${localRsvpCount} ${localRsvpCount === 1 ? 'person' : 'people'} interested`
-                : 'Be the first to show interest'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── 6. ENGAGEMENT BAR ──────────────────────────────────────────── */}
-      <div className="mt-3 pt-2 flex flex-wrap items-center gap-1">
+        {/* Like */}
         <button
           onClick={handleLike}
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors hover:bg-zinc-100 active:scale-90 -ml-2',
-            localLiked ? 'text-rose-500' : 'text-zinc-500 hover:text-zinc-700'
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs sm:text-sm transition-colors hover:bg-zinc-100 active:scale-90 cursor-pointer',
+            localLiked ? 'text-rose-500 font-semibold' : 'text-zinc-500 hover:text-zinc-700'
           )}
         >
-          <Heart className={cn('w-5 h-5', localLiked && 'fill-current')} />
-          <span className="font-semibold">{localLikeCount}</span>
+          <Heart className={cn('w-4 h-4 sm:w-4.5 sm:h-4.5', localLiked && 'fill-current text-rose-500')} />
+          <span>{localLikeCount}</span>
         </button>
 
+        {/* Comment */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             setShowComments((v) => !v);
           }}
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors hover:bg-zinc-100',
-            showComments ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-700'
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs sm:text-sm transition-colors hover:bg-zinc-100 active:scale-90 cursor-pointer',
+            showComments ? 'text-indigo-600 font-semibold' : 'text-zinc-500 hover:text-zinc-700'
           )}
         >
-          <MessageCircle className="w-5 h-5" />
-          <span className="font-semibold">{post.commentsCount ?? 0}</span>
+          <MessageCircle className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+          <span>{post.commentsCount ?? 0}</span>
         </button>
 
+        {/* Repost */}
+        <button
+          onClick={handleRepost}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs sm:text-sm transition-colors hover:bg-zinc-100 active:scale-90 cursor-pointer',
+            localReposted ? 'text-emerald-600 font-semibold' : 'text-zinc-500 hover:text-zinc-700'
+          )}
+          title={localReposted ? 'Undo repost' : 'Repost'}
+        >
+          <Repeat2 className={cn('w-4 h-4 sm:w-4.5 sm:h-4.5', localReposted && 'text-emerald-600 stroke-[2.5]')} />
+          <span>{localRepostCount}</span>
+        </button>
+
+        {/* Share */}
         <button
           onClick={handleShare}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-zinc-500 hover:text-zinc-700 transition-colors hover:bg-zinc-100"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs sm:text-sm text-zinc-500 hover:text-zinc-700 transition-colors hover:bg-zinc-100 active:scale-90 cursor-pointer"
+          title="Share"
         >
-          <Share2 className="w-5 h-5" />
+          <Share2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+          <span className="hidden sm:inline text-xs font-medium">Share</span>
         </button>
       </div>
+
+      {/* ── 5. JOIN RALLY ACTION ───────────────────────────────────────── */}
+      {isRally && (
+        <div className="mt-2.5 flex items-center">
+          <button
+            onClick={handleRsvp}
+            disabled={isFull}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs active:scale-[0.97] cursor-pointer',
+              isFull
+                ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                : localRsvpd
+                ? 'bg-violet-100 text-violet-800 border border-violet-200/80 hover:bg-violet-200/70'
+                : 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-500/20'
+            )}
+          >
+            <HelpingHand className="w-3.5 h-3.5 shrink-0" />
+            <span>{localRsvpd ? '✓ Joined' : isFull ? 'Event full' : 'Join Rally'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── 6. REQUEST COUNT ───────────────────────────────────────────── */}
+      {isRally && localRsvpCount > 0 && (
+        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
+          <User className="w-3 h-3 text-zinc-400 shrink-0" />
+          <span>
+            {localRsvpCount} {localRsvpCount === 1 ? 'person requested' : 'people requested'}
+          </span>
+        </div>
+      )}
 
       {/* ── COMMENTS PANEL ─────────────────────────────────────────────── */}
       {showComments && (
