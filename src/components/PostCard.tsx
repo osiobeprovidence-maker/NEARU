@@ -12,7 +12,6 @@ import {
   Loader2,
   BadgeCheck,
   Users,
-  User,
   CheckCircle2,
   HelpingHand,
   X,
@@ -659,37 +658,6 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
           <span className="hidden sm:inline text-xs font-medium">Share</span>
         </button>
       </div>
-
-      {/* ── 5. JOIN RALLY ACTION ───────────────────────────────────────── */}
-      {isRally && (
-        <div className="mt-2.5 flex items-center">
-          <button
-            onClick={handleRsvp}
-            disabled={isFull}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs active:scale-[0.97] cursor-pointer',
-              isFull
-                ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                : localRsvpd
-                ? 'bg-violet-100 text-violet-800 border border-violet-200/80 hover:bg-violet-200/70'
-                : 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-500/20'
-            )}
-          >
-            <HelpingHand className="w-3.5 h-3.5 shrink-0" />
-            <span>{localRsvpd ? '✓ Joined' : isFull ? 'Event full' : 'Join Rally'}</span>
-          </button>
-        </div>
-      )}
-
-      {/* ── 6. REQUEST COUNT ───────────────────────────────────────────── */}
-      {isRally && localRsvpCount > 0 && (
-        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
-          <User className="w-3 h-3 text-zinc-400 shrink-0" />
-          <span>
-            {localRsvpCount} {localRsvpCount === 1 ? 'person requested' : 'people requested'}
-          </span>
-        </div>
-      )}
 
       {/* ── COMMENTS PANEL ─────────────────────────────────────────────── */}
       {showComments && (

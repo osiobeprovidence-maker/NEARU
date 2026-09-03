@@ -256,19 +256,6 @@ export default function Home() {
 
       {/* Main Feed Container */}
       <div className="px-0 md:px-6 pb-24 md:pb-6">
-        {/* Simple & Modern Header: Home + Location Selector */}
-        <div className="px-5 md:px-0 mb-3 flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">Home</h1>
-          <button
-            onClick={openLocationModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold active:scale-95 transition-all cursor-pointer"
-            title="Filter by city or radius"
-          >
-            <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-            <span>{city ? `${city} · ${radiusKm} km` : 'Set location'}</span>
-          </button>
-        </div>
-
         {/* Content Feed */}
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
           {!feedIsLoaded || isLoading ? (
