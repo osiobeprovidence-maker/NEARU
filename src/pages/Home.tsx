@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Users, Share2, Compass, Bell, X, MapPin, MapPinOff, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { Users, Share2, Compass, Bell, X, MapPin } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
 import { haversineDistance, formatDistance } from '../lib/geo';
 import { Rally } from '../types';
@@ -11,33 +10,27 @@ import AdCard from '../components/AdCard';
 import { useAuth } from '../contexts/AuthContext';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
-const EXPLAINER_DISMISSED_KEY = 'rally_explainer_dismissed';
 
 export default function Home() {
-  const [activeFilter, setActiveFilter] = useState('All');
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const {
     city,
     radiusKm,
     geoState,
     position,
-    error,
-    requestLocation,
     startWatching,
     openLocationModal,
   } = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
-  const [showExplainer, setShowExplainer] = useState(() => {
-    return !localStorage.getItem(EXPLAINER_DISMISSED_KEY);
-  });
 
-  const { firebaseUser, convexUserId, user } = useAuth();
+  const { convexUserId, user } = useAuth();
   const followingIds = useQuery(
     api.follows.listFollowingIds,
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
-  const convexRallies = useQuery(api.rallies.listWithCreators, 
+  const convexRallies = useQuery(
+    api.rallies.listWithCreators,
     convexUserId
       ? {
           userId: convexUserId as any,
@@ -66,9 +59,9 @@ export default function Home() {
 
   useEffect(() => {
     setIsLoading(true);
-    const timer = setTimeout(() => setIsLoading(false), 400);
+    const timer = setTimeout(() => setIsLoading(false), 300);
     return () => clearTimeout(timer);
-  }, [activeFilter, city, radiusKm, geoState]);
+  }, [city, radiusKm, geoState]);
 
   const openCreateModal = () => {
     window.dispatchEvent(new CustomEvent('open-create-rally'));
@@ -82,12 +75,14 @@ export default function Home() {
     if ('Notification' in window) {
       const result = await Notification.requestPermission();
       if (result === 'granted') {
-        window.dispatchEvent(new CustomEvent('show-toast', {
-          detail: {
-            title: 'Notifications enabled!',
-            subtitle: 'You\'ll get alerted when something new is posted near you.'
-          }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('show-toast', {
+            detail: {
+              title: 'Notifications enabled!',
+              subtitle: "You'll get alerted when something new is posted near you.",
+            },
+          })
+        );
       }
     }
     localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
@@ -97,11 +92,6 @@ export default function Home() {
   const handleDismissNotif = () => {
     localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
     setShowNotifPrompt(false);
-  };
-
-  const handleDismissExplainer = () => {
-    localStorage.setItem(EXPLAINER_DISMISSED_KEY, '1');
-    setShowExplainer(false);
   };
 
   const handleInvite = async () => {
@@ -126,21 +116,16 @@ export default function Home() {
         // Ignore clipboard failure
       }
     }
-    
-    window.dispatchEvent(new CustomEvent('show-toast', {
-      detail: {
-        title: 'Invite Link Copied!',
-        subtitle: `Share it with people around ${shareCity} to keep the community going.`
-      }
-    }));
+
+    window.dispatchEvent(
+      new CustomEvent('show-toast', {
+        detail: {
+          title: 'Invite Link Copied!',
+          subtitle: `Share it with people around ${shareCity} to keep the community going.`,
+        },
+      })
+    );
   };
-
-  const filters = ['All', 'Posts', 'Events', 'Help', 'Join', 'Free', 'Paid'];
-
-  const hasLocation = geoState === 'active' || geoState === 'manual' || geoState === 'updating';
-  const isLocating = geoState === 'requesting' || geoState === 'locating';
-  const isDenied = geoState === 'denied';
-  const isUnavailable = geoState === 'unavailable' || geoState === 'error';
 
   const computeDistance = useCallback(
     (rallyLat?: number, rallyLng?: number): number | null => {
@@ -167,24 +152,26 @@ export default function Home() {
         isPaid: r.isPaid,
         price: r.price,
         pricing: r.pricing,
-        creator: r.creator ? {
-          id: r.creator._id,
-          name: r.creator.name,
-          username: r.creator.username,
-          avatar: r.creator.avatar,
-          isNINVerified: r.creator.isNINVerified,
-          isPhoneVerified: false,
-          badges: r.creator.badges,
-          accountType: r.creator.accountType,
-          organizationName: r.creator.organizationName,
-        } : {
-          id: 'unknown',
-          name: 'Unknown',
-          username: '@unknown',
-          avatar: '',
-          isNINVerified: false,
-          isPhoneVerified: false,
-        },
+        creator: r.creator
+          ? {
+              id: r.creator._id,
+              name: r.creator.name,
+              username: r.creator.username,
+              avatar: r.creator.avatar,
+              isNINVerified: r.creator.isNINVerified,
+              isPhoneVerified: false,
+              badges: r.creator.badges,
+              accountType: r.creator.accountType,
+              organizationName: r.creator.organizationName,
+            }
+          : {
+              id: 'unknown',
+              name: 'Unknown',
+              username: '@unknown',
+              avatar: '',
+              isNINVerified: false,
+              isPhoneVerified: false,
+            },
         status: r.status,
         createdAt: new Date(r.createdAt).toISOString(),
         city: r.city,
@@ -211,9 +198,6 @@ export default function Home() {
     return [];
   }, [convexRallies]);
 
-  const hasRealPosts = allRallies.length > 0;
-  const showFilters = feedIsLoaded && !isLoading;
-
   const nearbyRallies = useMemo(() => {
     return allRallies
       .filter((rally) => !deletedIds.has(rally.id))
@@ -222,50 +206,18 @@ export default function Home() {
         return { ...rally, computedDistance: dist };
       })
       .filter((rally) => {
-        // --- Location filtering ---
+        // Radius filter if GPS coords available
         if (rally.computedDistance !== null) {
-          // We have GPS distance for this rally — apply radius filter.
           if (rally.computedDistance > radiusKm) return false;
-        } else {
-          // Rally has no stored coordinates.
-          // If the user also has no position yet, show everything (feed shouldn't be empty).
-          // If the user has a position but no coords on the rally, we can't filter by distance
-          // so we fall back to a loose city-name match — but we NEVER hide a rally just
-          // because the text cities don't match exactly. This prevents the bug where a valid
-          // rally is excluded because "Udu" != reverse-geocoded city name.
-          if (position) {
-            const rallyCity = (rally.city || '').toLowerCase().trim();
-            const rallyLabel = (rally.locationLabel || '').toLowerCase().trim();
-            const userCity = (city || '').toLowerCase().trim();
-
-            // Only exclude if we have a city for both and they clearly don't overlap.
-            if (userCity && rallyCity && !rallyCity.includes(userCity) && !userCity.includes(rallyCity) && !rallyLabel.includes(userCity)) {
-              // Soft exclude: still show if within a generous fallback radius of 50 km
-              // (we have user position but no rally coords — give it the benefit of the doubt)
-            }
-            // We deliberately do NOT return false here — rallies without coords always show
-            // when the user has a position, to avoid the empty-feed bug.
-          }
-          // When position is null (no location at all), always include.
         }
-
-        // --- Type / category filter ---
-        const matchesFilter =
-          activeFilter === 'All' ||
-          (activeFilter === 'Posts' && rally.type === 'POST') ||
-          (activeFilter === 'Events' && rally.type === 'EVENT') ||
-          (activeFilter === 'Help' && (rally.type === 'HELP' || rally.type === 'ASK')) ||
-          (activeFilter === 'Join' && rally.type === 'JOIN') ||
-          (activeFilter === 'Free' && !rally.isPaid) ||
-          (activeFilter === 'Paid' && rally.isPaid);
-
-        return matchesFilter;
+        return true;
       })
       .sort((a, b) => (a.computedDistance ?? Infinity) - (b.computedDistance ?? Infinity));
-  }, [radiusKm, activeFilter, computeDistance, allRallies, city, position]);
+  }, [radiusKm, computeDistance, allRallies]);
 
   return (
-    <div className="w-full pt-4 md:pt-6">
+    <div className="w-full pt-2 md:pt-4">
+      {/* Optional Notification Opt-in Prompt */}
       {showNotifPrompt && (
         <div className="px-4 md:px-6 mb-4">
           <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl p-4 flex items-start gap-3 shadow-lg shadow-indigo-500/20">
@@ -302,167 +254,29 @@ export default function Home() {
         </div>
       )}
 
-      {showExplainer && (
-        <div className="px-4 md:px-6 mb-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
-                  <MessageCircleQuestion className="w-5 h-5 text-indigo-600" />
-                </div>
-                <h3 className="text-base font-black text-zinc-900 tracking-tight">What's your Lalao?</h3>
-              </div>
-              <button
-                onClick={handleDismissExplainer}
-                className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors shrink-0"
-              >
-                <X className="w-4 h-4 text-zinc-400" />
-              </button>
-            </div>
-            <p className="text-xs text-zinc-500 leading-relaxed mb-4">
-              Lalao is where your neighborhood shares, asks and hangs out. Post something, or turn it into a RALLY so people nearby can join in.
-            </p>
-            <div className="space-y-2.5">
-              <div className="flex items-start gap-2.5">
-                <div className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-zinc-200 shrink-0 mt-0.5">POST</div>
-                <p className="text-xs text-zinc-600 leading-relaxed">"Anyone know a good plumber around here?"</p>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <div className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-emerald-200 shrink-0 mt-0.5">HELP</div>
-                <p className="text-xs text-zinc-600 leading-relaxed">"I can help move furniture this afternoon."</p>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <div className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ring-indigo-200 shrink-0 mt-0.5">JOIN</div>
-                <p className="text-xs text-zinc-600 leading-relaxed">"I have an extra ticket. Anyone want to come?"</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Main Feed Container */}
       <div className="px-0 md:px-6 pb-24 md:pb-6">
-        <div className="px-6 md:px-0">
-          <div className="flex items-end justify-between mb-1">
-            <h3 className="text-xl md:text-2xl font-bold text-zinc-900 tracking-tight">Home</h3>
-            {hasLocation && (
-              <button
-                onClick={openLocationModal}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 text-zinc-600 text-xs font-semibold hover:bg-zinc-200 active:scale-95 transition-all"
-              >
-                <MapPin className="w-3 h-3" />
-                {city || 'Set location'} · {radiusKm} km
-              </button>
-            )}
-          </div>
-          <p className="text-xs sm:text-sm text-zinc-500 mb-4">
-            {hasLocation
-              ? 'See what people near you are posting and doing.'
-              : isLocating
-                ? 'Finding your location...'
-                : 'Enable location to see posts and rallies near you.'}
-          </p>
-
-          {showFilters && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar mb-4">
-              {filters.map(filter => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setActiveFilter(filter)}
-                  className={cn(
-                    "px-4 py-1.5 rounded-full text-sm font-semibold transition-all shrink-0 active:scale-95",
-                    activeFilter === filter 
-                      ? "bg-zinc-900 text-white shadow-xs shadow-zinc-900/20 font-bold" 
-                      : "bg-white border border-zinc-200/80 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-300"
-                  )}
-                >
-                  {filter}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Simple & Modern Header: Home + Location Selector */}
+        <div className="px-5 md:px-0 mb-3 flex items-center justify-between">
+          <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">Home</h1>
+          <button
+            onClick={openLocationModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold active:scale-95 transition-all cursor-pointer"
+            title="Filter by city or radius"
+          >
+            <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+            <span>{city ? `${city} · ${radiusKm} km` : 'Set location'}</span>
+          </button>
         </div>
 
+        {/* Content Feed */}
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
-          {isLocating ? (
-            <div className="p-8 sm:p-10 text-center">
-              <Loader2 className="w-10 h-10 text-zinc-300 animate-spin mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-zinc-900 mb-1">Finding your location</h3>
-              <p className="text-xs text-zinc-500">Hang tight while we pinpoint where you are.</p>
-            </div>
-          ) : isDenied ? (
-            <div className="p-8 sm:p-10 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-rose-50 border border-rose-100 flex items-center justify-center mx-auto mb-5">
-                <MapPinOff className="w-8 h-8 text-rose-500" strokeWidth={1.75} />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
-                Location access is off
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
-                Turn on location permission in your browser settings to see posts and rallies near you.
-              </p>
-              <button
-                onClick={requestLocation}
-                className="px-6 py-3 bg-zinc-900 text-white rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all"
-              >
-                TRY AGAIN
-              </button>
-            </div>
-          ) : isUnavailable ? (
-            <div className="p-8 sm:p-10 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-5">
-                <MapPinOff className="w-8 h-8 text-amber-500" strokeWidth={1.75} />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
-                We need your location
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-2 leading-relaxed">
-                Lalao uses your location to show people and things happening near you.
-              </p>
-              {error && (
-                <p className="text-xs text-rose-500 font-medium mb-4">{error.message}</p>
-              )}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-sm mx-auto">
-                <button
-                  onClick={requestLocation}
-                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all"
-                >
-                  ENABLE LOCATION
-                </button>
-                <button
-                  onClick={openLocationModal}
-                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all border border-zinc-200/80"
-                >
-                  Set manually
-                </button>
-              </div>
-            </div>
-          ) : !feedIsLoaded || isLoading ? (
+          {!feedIsLoaded || isLoading ? (
             <>
               <PostSkeleton />
               <PostSkeleton />
               <PostSkeleton />
             </>
-          ) : !hasRealPosts ? (
-            <div className="p-8 sm:p-10 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-zinc-100 border border-zinc-200/80 flex items-center justify-center mx-auto mb-5 text-zinc-900 shadow-xs">
-                <Compass className="w-8 h-8 text-zinc-800" strokeWidth={1.75} />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
-                Nothing here yet — be the first to post
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto mb-7 leading-relaxed">
-                Share what's on your mind, ask for help, or rally people nearby to do something together.
-              </p>
-
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="px-8 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all"
-              >
-                Start posting
-              </button>
-            </div>
           ) : nearbyRallies.length > 0 ? (
             <>
               {nearbyRallies.flatMap((rally, index) => {
@@ -473,13 +287,15 @@ export default function Home() {
                     post={{
                       ...rally,
                       distance: rally.computedDistance ?? rally.distance,
-                      locationLabel: rally.computedDistance != null
-                        ? `${city || 'Nearby'} · ${formatDistance(rally.computedDistance)}`
-                        : rally.locationLabel,
+                      locationLabel:
+                        rally.computedDistance != null
+                          ? `${city || 'Nearby'} · ${formatDistance(rally.computedDistance)}`
+                          : rally.locationLabel,
                     }}
                     onDeleted={handleDeleted}
                   />
                 );
+
                 const adIndex = Math.floor(index / 3);
                 if (activeAds && activeAds.length > 0 && (index + 1) % 3 === 0) {
                   const ad = activeAds[adIndex % activeAds.length];
@@ -515,14 +331,14 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={openCreateModal}
-                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all"
+                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-xs sm:text-sm tracking-wide shadow-md shadow-zinc-200 active:scale-95 transition-all cursor-pointer"
                 >
                   Start posting
                 </button>
                 <button
                   type="button"
                   onClick={handleInvite}
-                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all flex items-center justify-center gap-2 border border-zinc-200/80"
+                  className="w-full sm:flex-1 py-3.5 px-6 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-bold text-xs sm:text-sm active:scale-95 transition-all flex items-center justify-center gap-2 border border-zinc-200/80 cursor-pointer"
                 >
                   <Share2 className="w-4 h-4 text-zinc-600" />
                   Invite people near you
@@ -532,18 +348,21 @@ export default function Home() {
           )}
         </div>
 
+        {/* Community Invite Footer Card */}
         <div className="mt-8 mb-4 px-4 md:px-0">
           <div className="bg-zinc-100 border border-zinc-200 rounded-2xl p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-zinc-200 flex-shrink-0 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-xl bg-zinc-200 shrink-0 flex items-center justify-center">
               <Users className="w-5 h-5 text-zinc-600" />
             </div>
             <div className="flex-1">
               <h4 className="font-bold text-zinc-900 text-sm">Grow your community</h4>
-              <p className="text-xs text-zinc-500 mt-0.5">Invite friends to Lalao and keep up with what's happening near you.</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Invite friends to Lalao and keep up with what's happening near you.
+              </p>
             </div>
             <button
               onClick={handleInvite}
-              className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 active:scale-95 transition-all shrink-0"
+              className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 active:scale-95 transition-all shrink-0 cursor-pointer"
             >
               Invite
             </button>
@@ -558,7 +377,7 @@ function PostSkeleton() {
   return (
     <div className="bg-white px-5 py-4 border-b border-zinc-100 animate-pulse">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-11 h-11 rounded-full bg-zinc-200 flex-shrink-0" />
+        <div className="w-11 h-11 rounded-full bg-zinc-200 shrink-0" />
         <div className="flex-1 space-y-2">
           <div className="h-3 w-40 bg-zinc-200 rounded" />
           <div className="h-2.5 w-24 bg-zinc-100 rounded" />

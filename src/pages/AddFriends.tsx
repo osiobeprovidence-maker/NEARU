@@ -15,7 +15,6 @@ import {
   BadgeCheck,
   Star,
   BookUser,
-  Sparkles,
   Search,
   Share2,
   RefreshCw,
@@ -386,7 +385,7 @@ export default function AddFriends() {
           <div className="p-5 sm:p-6 border-b border-zinc-100 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
-                <Sparkles className="w-4 h-4" />
+                <Search className="w-4 h-4" />
               </div>
               <div>
                 <h2 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight">
