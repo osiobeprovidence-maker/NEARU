@@ -60,6 +60,118 @@ const RALLY_ACTION: Record<string, { label: string; done: string }> = {
   EVENT: { label: "I'm coming", done: "You're coming" },
 };
 
+interface RallyCardMeta {
+  isGiveaway: boolean;
+  primaryTitle: string;
+  categoryIcon: string;
+  subtitle: string;
+  rewardValue: string | null;
+  secondaryMeta: string;
+}
+
+function getRallyDetails(post: Rally, displayLocation: string, formattedAge: string): RallyCardMeta {
+  const fullText = `${post.title || ''} ${post.description || ''}`.trim();
+  const lower = fullText.toLowerCase();
+
+  const isAirtime =
+    lower.includes('airtime') ||
+    lower.includes('recharge') ||
+    lower.includes('airtel') ||
+    lower.includes('mtn') ||
+    lower.includes('glo') ||
+    lower.includes('9mobile');
+
+  const isCash =
+    lower.includes('cash') ||
+    lower.includes('naira') ||
+    lower.includes('transfer') ||
+    lower.includes('credit alert');
+
+  const isGiveaway =
+    isAirtime ||
+    isCash ||
+    lower.includes('giveaway') ||
+    lower.includes('giving out') ||
+    lower.includes('give out');
+
+  // 1. Primary Title
+  let primaryTitle = 'RALLY';
+  let categoryIcon = '⚡';
+  if (isAirtime) {
+    primaryTitle = 'AIRTIME GIVEAWAY';
+    categoryIcon = '🎁';
+  } else if (isCash) {
+    primaryTitle = 'CASH GIVEAWAY';
+    categoryIcon = '🎁';
+  } else if (isGiveaway) {
+    primaryTitle = 'COMMUNITY GIVEAWAY';
+    categoryIcon = '🎁';
+  } else if (post.type === 'EVENT') {
+    primaryTitle = post.title && post.title.length <= 35 ? post.title.toUpperCase() : 'COMMUNITY EVENT';
+    categoryIcon = '📅';
+  } else if (post.type === 'HELP') {
+    primaryTitle = post.title && post.title.length <= 35 ? post.title.toUpperCase() : 'COMMUNITY HELP';
+    categoryIcon = '🤝';
+  } else if (post.type === 'ASK') {
+    primaryTitle = post.title && post.title.length <= 35 ? post.title.toUpperCase() : 'HELP REQUEST';
+    categoryIcon = '🙋';
+  } else if (post.type === 'JOIN') {
+    primaryTitle = post.title && post.title.length <= 35 ? post.title.toUpperCase() : 'MEETUP & HANGOUT';
+    categoryIcon = '👥';
+  }
+
+  // 2. Subtitle / What is happening
+  let subtitle = '';
+  if (post.description) {
+    const firstLine = post.description.split('\n')[0].trim();
+    subtitle = firstLine;
+  } else if (post.title) {
+    subtitle = post.title.trim();
+  }
+  if (subtitle.length > 95) {
+    subtitle = subtitle.slice(0, 95) + '…';
+  }
+
+  // 3. Value / Reward Extraction (Highly visible)
+  let rewardValue: string | null = null;
+  const nairaMatch = fullText.match(/(?:₦|N|NGN)\s*([0-9,]+(?:\.[0-9]+)?(?:\s*(?:k|thousand|m))?)/i);
+  const kMatch = fullText.match(/\b([0-9]+(?:\.[0-9]+)?k)\b/i);
+  const numberAirtimeMatch = fullText.match(/\b([0-9]+(?:,[0-9]+)?)\s*(?:airtime|cash|recharge|data)/i);
+
+  if (nairaMatch) {
+    const val = nairaMatch[1].trim();
+    rewardValue = `₦${val}${isAirtime && !val.toLowerCase().includes('airtime') ? ' Airtime' : ''}`;
+  } else if (kMatch) {
+    rewardValue = `₦${kMatch[1].toUpperCase()}${isAirtime ? ' Airtime' : ''}`;
+  } else if (numberAirtimeMatch) {
+    rewardValue = `₦${numberAirtimeMatch[1].trim()} Airtime`;
+  } else if (post.price && post.price > 0) {
+    rewardValue = `₦${post.price.toLocaleString()}${isAirtime ? ' Airtime' : ''}`;
+  } else if (isAirtime) {
+    rewardValue = '₦5,000 Airtime';
+  } else if (isGiveaway) {
+    rewardValue = 'Free Giveaway';
+  } else if (post.pricing === 'free' || post.price === 0) {
+    rewardValue = 'Free to Join';
+  } else if (post.isPaid && post.price) {
+    rewardValue = `₦${post.price.toLocaleString()} Entry`;
+  }
+
+  // 4. Secondary Metadata (Where / When)
+  const loc = displayLocation || post.city || 'Nearby';
+  const time = post.eventDate || post.time || formattedAge || 'Soon';
+  const secondaryMeta = `${loc} · ${time}`;
+
+  return {
+    isGiveaway,
+    primaryTitle,
+    categoryIcon,
+    subtitle,
+    rewardValue,
+    secondaryMeta,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -116,6 +228,9 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   // The location to display comes from the user's actual data (never hardcoded).
   const displayLocation = post.locationLabel || post.city || '';
 
+  const rallyMeta = getRallyDetails(post, displayLocation, timeAgo(post.createdAt));
+  const isRally = isRallyContent || rallyMeta.isGiveaway || Boolean(post.rallyLinkId);
+
   // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
@@ -138,7 +253,6 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
 
   const handleRsvp = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isPost) return;
     if (!convexUserId) {
       showToast('Not logged in', 'Please log in to respond.');
       return;
@@ -153,8 +267,8 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
     try {
       await toggleRsvpMut({ rallyId: post.id as any, userId: convexUserId as any });
       showToast(
-        !wasRsvpd ? action?.done || 'Joined' : 'Cancelled',
-        !wasRsvpd ? 'The creator will be notified.' : ''
+        !wasRsvpd ? "You're interested!" : 'Removed interest',
+        !wasRsvpd ? 'The organizer will be notified.' : ''
       );
     } catch {
       setLocalRsvpd(wasRsvpd);
@@ -440,76 +554,104 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         </Link>
       )}
 
-      {/* ── 5. OPTIONAL CONTEXT: Rally attachment (non-POST content) ───── */}
-      {isRallyContent && (
-        <div className="mt-3 rounded-xl border border-zinc-200 bg-white overflow-hidden">
-          <Link
-            to={`/rally/${post.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="flex flex-col"
-          >
-            <div className="px-3.5 py-2.5 space-y-1">
-              <div className="flex items-center gap-1.5">
-                <HelpingHand className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600">
-                  Rally
+      {/* ── 5. ACTIONABLE RALLY CARD ──────────────────────────────────── */}
+      {isRally && (
+        <div className="mt-3.5 rounded-2xl sm:rounded-3xl border border-zinc-200/90 bg-gradient-to-b from-white to-zinc-50/70 p-4 sm:p-5 shadow-xs transition-all hover:border-zinc-300 relative overflow-hidden space-y-3">
+          {/* Subtle top accent border */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 opacity-70" />
+
+          {/* Header row: RALLY pill + Details link */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-700 border border-zinc-200/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+              Rally
+            </span>
+            <Link
+              to={`/rally/${post.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-bold text-zinc-400 hover:text-indigo-600 transition-colors flex items-center gap-0.5"
+            >
+              <span>Details</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* 1. Primary Title: WHAT IS HAPPENING */}
+          <div className="space-y-1">
+            <h3 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight flex items-center gap-2 leading-snug">
+              <span>{rallyMeta.categoryIcon}</span>
+              <span>{rallyMeta.primaryTitle}</span>
+            </h3>
+            {rallyMeta.subtitle && (
+              <p className="text-xs sm:text-sm font-medium text-zinc-600 leading-relaxed">
+                {rallyMeta.subtitle}
+              </p>
+            )}
+          </div>
+
+          {/* 2. Secondary Metadata: WHERE / WHEN */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-zinc-500 pt-0.5">
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <span>{displayLocation || post.city || 'Nearby'}</span>
+            </span>
+            <span>·</span>
+            <span>{timeAgo(post.createdAt) || 'Soon'}</span>
+            {(post.eventDate || (post.time && post.time !== 'Soon')) && (
+              <>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  <span>{post.eventDate || post.time}</span>
                 </span>
-                {access.kind === 'paid' && (
-                  <span className="ml-auto text-[11px] font-bold text-amber-700">
-                    {access.label}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 font-medium">
-                {displayLocation && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {displayLocation}
-                  </span>
-                )}
-                {(post.eventDate || (post.time && post.time !== 'Soon')) && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {post.eventDate || post.time}
-                  </span>
-                )}
-                {post.type === 'EVENT' && post.capacity && post.capacity > 0 && (
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" />
-                    {isFull
-                      ? 'Full'
-                      : `${Math.max(0, (post.capacity as number) - localRsvpCount)} left`}
-                  </span>
-                )}
-              </div>
+              </>
+            )}
+          </div>
+
+          {/* 3. Highly Visible VALUE / REWARD */}
+          {rallyMeta.rewardValue && (
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-950 font-black text-sm sm:text-base tracking-tight shadow-xs">
+              <span className="text-base">🎁</span>
+              <span className="font-extrabold text-amber-900">{rallyMeta.rewardValue}</span>
             </div>
-            <div className="px-3.5 py-2 border-t border-zinc-100 flex items-center gap-2">
-              {action && (
-                <button
-                  onClick={handleRsvp}
-                  disabled={isFull}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors active:scale-[0.97]',
-                    isFull
-                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
-                      : localRsvpd
-                        ? 'bg-zinc-100 text-zinc-700'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                  )}
-                >
-                  {localRsvpd && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                  )}
-                  {isFull ? 'Event full' : localRsvpd ? action.done : action.label}
-                </button>
+          )}
+
+          {/* 4. Action Button: TAKE ACTION */}
+          <div className="pt-1">
+            <button
+              onClick={handleRsvp}
+              disabled={isFull}
+              className={cn(
+                'w-full py-3 px-5 rounded-2xl font-black text-xs sm:text-sm tracking-wide transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]',
+                isFull
+                  ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                  : localRsvpd
+                  ? 'bg-emerald-50 border border-emerald-300 text-emerald-800 hover:bg-emerald-100/80'
+                  : 'bg-zinc-950 hover:bg-zinc-800 text-white shadow-zinc-900/10 hover:shadow-md'
               )}
-              {localRsvpCount > 0 && (
-                <span className="text-xs text-zinc-400 font-medium">
-                  {localRsvpCount} {localRsvpCount === 1 ? 'person is' : 'people are'} going
-                </span>
+            >
+              {localRsvpd ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>✓ Interested</span>
+                </>
+              ) : isFull ? (
+                <span>Event Full</span>
+              ) : (
+                <span>I'm Interested</span>
               )}
-            </div>
-          </Link>
+            </button>
+          </div>
+
+          {/* 5. SOCIAL PROOF */}
+          <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-zinc-500 pt-0.5">
+            <Users className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+            <span>
+              {localRsvpCount > 0
+                ? `${localRsvpCount} ${localRsvpCount === 1 ? 'person' : 'people'} interested`
+                : 'Be the first to show interest'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -546,16 +688,6 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         >
           <Share2 className="w-5 h-5" />
         </button>
-
-        {isRallyContent && !action && (
-          <button
-            onClick={handleRsvp}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-zinc-500 hover:text-zinc-700 transition-colors hover:bg-zinc-100 ml-auto"
-          >
-            <Users className="w-5 h-5" />
-            <span className="font-semibold">{localRsvpCount}</span>
-          </button>
-        )}
       </div>
 
       {/* ── COMMENTS PANEL ─────────────────────────────────────────────── */}
