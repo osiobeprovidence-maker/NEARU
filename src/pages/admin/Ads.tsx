@@ -274,8 +274,12 @@ export default function AdminAds() {
               value={previews.imageUrl}
               previewHeightClass="h-48"
               description="Upload ad image (JPG, PNG, WebP) or video (MP4, WebM)"
-              onChange={(storageId, publicUrl) => {
-                const isVid = publicUrl.endsWith('.mp4') || publicUrl.endsWith('.webm') || publicUrl.endsWith('.mov');
+              onChange={(storageId, publicUrl, detectedType) => {
+                const isVid =
+                  detectedType === 'video' ||
+                  publicUrl.endsWith('.mp4') ||
+                  publicUrl.endsWith('.webm') ||
+                  publicUrl.endsWith('.mov');
                 setForm((prev) => ({
                   ...prev,
                   imageUrl: storageId,

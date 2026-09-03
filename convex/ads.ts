@@ -50,6 +50,22 @@ async function resolveAdUrls(ctx: any, ad: any) {
 
     resolved[key] = val;
   }
+
+  // Auto-detect mediaType if missing or unconfigured
+  if (!resolved.mediaType && typeof resolved.imageUrl === "string" && resolved.imageUrl.trim()) {
+    const lower = (resolved.imageUrl as string).toLowerCase();
+    if (
+      lower.includes(".mp4") ||
+      lower.includes(".webm") ||
+      lower.includes(".mov") ||
+      lower.includes("video")
+    ) {
+      resolved.mediaType = "video";
+    } else {
+      resolved.mediaType = "image";
+    }
+  }
+
   return resolved;
 }
 

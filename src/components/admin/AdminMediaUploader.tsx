@@ -24,7 +24,7 @@ export interface UploadedMediaItem {
 interface AdminMediaUploaderProps {
   mediaType: 'image' | 'video' | 'font' | 'all';
   value?: string | null;
-  onChange?: (storageId: string, publicUrl: string) => void;
+  onChange?: (storageId: string, publicUrl: string, detectedMediaType?: 'image' | 'video') => void;
   onRemove?: () => void;
   multiple?: boolean;
   onMultipleUpload?: (items: UploadedMediaItem[]) => void;
@@ -175,7 +175,7 @@ export function AdminMediaUploader({
     try {
       const { storageId } = await uploadSingleFile(file);
       if (onChange) {
-        onChange(storageId, localBlob);
+        onChange(storageId, localBlob, isVid ? 'video' : 'image');
       }
     } catch (err: any) {
       console.error('Upload failed:', err);
