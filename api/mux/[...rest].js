@@ -18,11 +18,21 @@ function notFound(res) {
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, "http://localhost");
-    const segments = url.pathname.split("/").filter(Boolean); // ["api", "mux", ...]
     const q = url.searchParams;
-    const route = q.get("r") || segments.slice(2).join("/");
-    const rest = route.split("/").filter(Boolean);
-    const [head] = rest;
+    let head = q.get("r") || "";
+    if (!head && req.query?.r) {
+      head = req.query.r;
+    }
+    if (!head && req.query?.rest) {
+      head = Array.isArray(req.query.rest) ? req.query.rest[0] : req.query.rest;
+    }
+    if (!head) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const last = parts[parts.length - 1];
+      if (last === "upload" || last === "status") {
+        head = last;
+      }
+    }
     const method = req.method;
 
     if (method !== "GET") return methodNotAllowed(req, res);
@@ -42,7 +52,7 @@ export default async function handler(req, res) {
 
     // -------- GET /api/mux/status?uploadId=<id> --------
     if (head === "status") {
-      const uploadId = url.searchParams.get("uploadId");
+      const uploadId = q.get("uploadId") || req.query?.uploadId;
       if (!uploadId || typeof uploadId !== "string") {
         throw new ApiError("VALIDATION_ERROR", "Missing uploadId.", 400);
       }

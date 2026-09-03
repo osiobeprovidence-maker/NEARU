@@ -20,6 +20,7 @@ import {
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { createMuxUpload, putFileToMux, waitForPlayback } from '../lib/mux';
+import { uploadToConvexStorage } from '../lib/storageUpload';
 import { ActivityType } from '../types';
 import { RallyPricing } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
@@ -202,28 +203,18 @@ export default function CreateRallyModal({
         // If Mux failed (401 token mismatch, 503 unconfigured), fallback to direct video storage so video always saves
         if (!muxSuccess) {
           const uploadUrl = await generateUploadUrl();
-          const res = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': file.type },
-            body: file,
-          });
-          if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-          const { storageId } = await res.json();
-          if (!storageId) throw new Error('No storage ID returned');
+          setUploadProgress(0);
+          const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => setUploadProgress(fraction));
+          setUploadProgress(1);
           setMediaStorageId(storageId);
           uploadedRef.current = true;
         }
       } else {
         // Image → Convex storage (unchanged).
         const uploadUrl = await generateUploadUrl();
-        const res = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': file.type },
-          body: file,
-        });
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-        const { storageId } = await res.json();
-        if (!storageId) throw new Error('No storage ID returned');
+        setUploadProgress(0);
+        const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => setUploadProgress(fraction));
+        setUploadProgress(1);
         setMediaStorageId(storageId);
         uploadedRef.current = true;
       }

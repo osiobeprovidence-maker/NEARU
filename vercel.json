@@ -34,6 +34,8 @@
     { "source": "/api/admin/verifications/report", "destination": "/api/admin/[...rest]?r=verifications/report" },
     { "source": "/api/verifications/nin/payment", "destination": "/api/verifications/[...rest]?r=nin/payment" },
     { "source": "/api/verifications/:id/status", "destination": "/api/verifications/[...rest]?r=:id/status" },
+    { "source": "/api/mux/upload", "destination": "/api/mux/[...rest]?r=upload" },
+    { "source": "/api/mux/status", "destination": "/api/mux/[...rest]?r=status" },
     { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
   ]
 }

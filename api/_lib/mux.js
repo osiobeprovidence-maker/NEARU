@@ -6,8 +6,8 @@ const MUX_API_BASE = "https://api.mux.com";
 const MUX_PLAYBACK_BASE = "https://stream.mux.com";
 
 function muxAuthHeader() {
-  const id = process.env.MUX_TOKEN_ID;
-  const secret = process.env.MUX_TOKEN_SECRET;
+  const id = (process.env.MUX_TOKEN_ID || "").trim();
+  const secret = (process.env.MUX_TOKEN_SECRET || "").trim();
   if (!id || !secret) {
     // Distinct 503 so the UI can explain video uploads are unavailable instead
     // of showing a generic 500. The site owner must set these in Vercel.
@@ -32,7 +32,12 @@ async function muxFetch(path, options = {}) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(body.error?.message || `Mux API request failed (${res.status})`);
+    const msg = body.error?.message || `Mux API request failed (${res.status})`;
+    console.error(`[Mux API ${res.status}]`, msg, JSON.stringify(body));
+    const err = new Error(msg);
+    err.statusCode = res.status;
+    err.code = "MUX_API_ERROR";
+    throw err;
   }
   return body.data;
 }
@@ -50,8 +55,6 @@ export async function createDirectUpload(corsOrigin) {
       cors_origin: corsOrigin || "*",
       new_asset_settings: {
         playback_policies: ["public"],
-        video_quality: "basic",
-        mp4_support: "standard",
       },
     }),
   });
