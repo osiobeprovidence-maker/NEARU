@@ -265,9 +265,130 @@ export const getProfileStats = query({
   handler: async (ctx, args) => {
     const allCreated = await ctx.db.query("rallies").withIndex("by_creator", (q) => q.eq("creatorId", args.userId)).collect();
     const posted = allCreated.length;
-    const completed = allCreated.filter((r) => r.status === "COMPLETED").length;
-    const ratingsGiven = await ctx.db.query("ratings").withIndex("by_rater", (q) => q.eq("raterId", args.userId)).collect();
-    return { posted, completed, rated: ratingsGiven.length };
+    const completedCreated = allCreated.filter((r) => r.status === "COMPLETED").length;
+    const userRsvps = await ctx.db.query("rsvps").withIndex("by_user_rally", (q) => q.eq("userId", args.userId)).collect();
+    let completedRsvps = 0;
+    for (const r of userRsvps) {
+      const rally = (await ctx.db.get(r.rallyId)) as any;
+      if (rally && rally.status === "COMPLETED" && rally.creatorId !== args.userId) {
+        completedRsvps++;
+      }
+    }
+    const completed = completedCreated + completedRsvps;
+    const ratingsReceived = await ctx.db.query("ratings").withIndex("by_rated_user", (q) => q.eq("ratedUserId", args.userId)).collect();
+    return { posted, completed, rated: ratingsReceived.length };
+  },
+});
+
+export const listRatingsForUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const ratings = await ctx.db
+      .query("ratings")
+      .withIndex("by_rated_user", (q) => q.eq("ratedUserId", args.userId))
+      .order("desc")
+      .collect();
+
+    const avatarCache: Record<string, string | undefined> = {};
+    const populated = await Promise.all(
+      ratings.map(async (r) => {
+        const rater = (await ctx.db.get(r.raterId)) as any;
+        let avatar = rater?.avatar || "";
+        if (avatar && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        return {
+          _id: r._id,
+          raterId: r.raterId,
+          ratedUserId: r.ratedUserId,
+          rallyId: r.rallyId,
+          score: r.score,
+          review: r.review,
+          createdAt: r.createdAt,
+          rater: rater
+            ? {
+                _id: rater._id,
+                name: rater.name,
+                username: rater.username,
+                avatar,
+                isNINVerified: rater.isNINVerified,
+                badges: rater.badges,
+              }
+            : null,
+        };
+      })
+    );
+
+    const total = populated.length;
+    const avgScore = total > 0 ? populated.reduce((sum, r) => sum + r.score, 0) / total : 0;
+    return {
+      ratings: populated,
+      averageScore: Number(avgScore.toFixed(1)),
+      totalCount: total,
+    };
+  },
+});
+
+export const listCompletedByUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const created = await ctx.db
+      .query("rallies")
+      .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+      .filter((q) => q.eq(q.field("status"), "COMPLETED"))
+      .collect();
+
+    const rsvps = await ctx.db
+      .query("rsvps")
+      .withIndex("by_user_rally", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const rsvpdCompleted: any[] = [];
+    for (const r of rsvps) {
+      const rally = (await ctx.db.get(r.rallyId)) as any;
+      if (rally && rally.status === "COMPLETED" && rally.creatorId !== args.userId) {
+        rsvpdCompleted.push(rally);
+      }
+    }
+
+    const all = [...created, ...rsvpdCompleted].sort((a, b) => b.createdAt - a.createdAt);
+
+    const mediaCache: Record<string, string | undefined> = {};
+    const avatarCache: Record<string, string | undefined> = {};
+
+    return await Promise.all(
+      all.map(async (rally) => {
+        const creator = (await ctx.db.get(rally.creatorId)) as any;
+        let avatar = creator?.avatar || "";
+        if (creator && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+        const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+        const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
+        const rsvpList = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+
+        return {
+          ...rally,
+          mediaUrl,
+          creator: creator
+            ? {
+                _id: creator._id,
+                name: creator.name,
+                username: creator.username,
+                avatar,
+                isNINVerified: creator.isNINVerified,
+                badges: creator.badges,
+              }
+            : null,
+          likesCount: likes.length,
+          commentsCount,
+          rsvpsCount: rsvpList.length,
+          isLiked: likes.some((l) => l.userId === args.userId),
+          isRsvpd: rsvpList.some((r) => r.userId === args.userId),
+        };
+      })
+    );
   },
 });
 

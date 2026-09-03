@@ -72,6 +72,112 @@ export const getFollowingCount = query({
   },
 });
 
+function isStorageId(id?: string | null): boolean {
+  return Boolean(id && !id.startsWith("http"));
+}
+
+async function resolveStorageUrl(
+  ctx: any,
+  cache: Record<string, string | undefined>,
+  id: string
+): Promise<string | undefined> {
+  if (!(id in cache)) {
+    try { cache[id] = (await ctx.storage.getUrl(id)) ?? undefined; }
+    catch { cache[id] = undefined; }
+  }
+  return cache[id];
+}
+
+export const listFollowersWithProfiles = query({
+  args: { userId: v.id("users"), viewerId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    const follows = await ctx.db
+      .query("follows")
+      .withIndex("by_following", (q) => q.eq("followingId", args.userId))
+      .order("desc")
+      .collect();
+
+    const avatarCache: Record<string, string | undefined> = {};
+    const results = await Promise.all(
+      follows.map(async (f) => {
+        const follower = await ctx.db.get(f.followerId);
+        if (!follower) return null;
+        let avatar = follower.avatar || "";
+        if (avatar && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        let isFollowing = false;
+        if (args.viewerId) {
+          const pair = await ctx.db
+            .query("follows")
+            .withIndex("by_pair", (q) =>
+              q.eq("followerId", args.viewerId!).eq("followingId", follower._id)
+            )
+            .unique();
+          isFollowing = pair !== null;
+        }
+        return {
+          _id: follower._id,
+          name: follower.name,
+          username: follower.username,
+          avatar,
+          bio: follower.bio,
+          isNINVerified: follower.isNINVerified,
+          badges: follower.badges,
+          isFollowing,
+          followedAt: f.createdAt,
+        };
+      })
+    );
+    return results.filter((u): u is NonNullable<typeof u> => u !== null);
+  },
+});
+
+export const listFollowingWithProfiles = query({
+  args: { userId: v.id("users"), viewerId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    const follows = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .order("desc")
+      .collect();
+
+    const avatarCache: Record<string, string | undefined> = {};
+    const results = await Promise.all(
+      follows.map(async (f) => {
+        const following = await ctx.db.get(f.followingId);
+        if (!following) return null;
+        let avatar = following.avatar || "";
+        if (avatar && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        let isFollowing = false;
+        if (args.viewerId) {
+          const pair = await ctx.db
+            .query("follows")
+            .withIndex("by_pair", (q) =>
+              q.eq("followerId", args.viewerId!).eq("followingId", following._id)
+            )
+            .unique();
+          isFollowing = pair !== null;
+        }
+        return {
+          _id: following._id,
+          name: following.name,
+          username: following.username,
+          avatar,
+          bio: following.bio,
+          isNINVerified: following.isNINVerified,
+          badges: following.badges,
+          isFollowing,
+          followedAt: f.createdAt,
+        };
+      })
+    );
+    return results.filter((u): u is NonNullable<typeof u> => u !== null);
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Mutations — secured: caller must be the follower
 // ---------------------------------------------------------------------------
