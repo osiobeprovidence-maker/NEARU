@@ -5,13 +5,16 @@ interface AdCardProps {
   title: string;
   description: string;
   imageUrl?: string;
+  mediaType?: 'image' | 'video';
   linkUrl?: string;
   ctaText?: string;
   brandName?: string;
   brandLogoUrl?: string;
 }
 
-export default function AdCard({ title, description, imageUrl, linkUrl, ctaText = 'Learn More', brandName, brandLogoUrl }: AdCardProps) {
+export default function AdCard({ title, description, imageUrl, mediaType, linkUrl, ctaText = 'Learn More', brandName, brandLogoUrl }: AdCardProps) {
+  const isVideo = mediaType === 'video' || (imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.mov')));
+
   return (
     <div className="bg-white overflow-hidden flex flex-col sm:flex-row relative">
       <div className="absolute top-4 left-4 z-10 bg-zinc-900/80 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded shadow-sm">
@@ -19,8 +22,12 @@ export default function AdCard({ title, description, imageUrl, linkUrl, ctaText 
       </div>
 
       {imageUrl ? (
-        <div className="h-48 sm:h-auto sm:w-[40%] bg-zinc-50 relative overflow-hidden border-b sm:border-b-0 sm:border-r border-zinc-100">
-          <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+        <div className="h-48 sm:h-auto sm:w-[40%] bg-zinc-900 relative overflow-hidden border-b sm:border-b-0 sm:border-r border-zinc-100 flex items-center justify-center">
+          {isVideo ? (
+            <video src={imageUrl} controls className="w-full h-full object-cover" />
+          ) : (
+            <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+          )}
         </div>
       ) : (
         <div className="h-48 sm:h-auto sm:w-[40%] bg-zinc-50 relative overflow-hidden flex items-center justify-center border-b sm:border-b-0 sm:border-r border-zinc-100">

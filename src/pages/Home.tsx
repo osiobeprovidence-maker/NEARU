@@ -305,6 +305,7 @@ export default function Home() {
                       title={ad.title}
                       description={ad.description}
                       imageUrl={ad.imageUrl}
+                      mediaType={ad.mediaType}
                       linkUrl={ad.linkUrl}
                       ctaText={ad.ctaText}
                       brandName={ad.brandName}

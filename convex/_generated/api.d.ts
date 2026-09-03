@@ -16,6 +16,7 @@ import type * as eventHub from "../eventHub.js";
 import type * as follows from "../follows.js";
 import type * as friends from "../friends.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as media from "../media.js";
 import type * as messages from "../messages.js";
 import type * as messagingHelpers from "../messagingHelpers.js";
 import type * as notifications from "../notifications.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   follows: typeof follows;
   friends: typeof friends;
   "lib/auth": typeof lib_auth;
+  media: typeof media;
   messages: typeof messages;
   messagingHelpers: typeof messagingHelpers;
   notifications: typeof notifications;

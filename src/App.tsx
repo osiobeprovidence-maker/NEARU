@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import AppShell from './layouts/AppShell';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LocationProvider } from './contexts/LocationContext';
@@ -54,6 +56,7 @@ const AdminNotifications = React.lazy(() => import('./pages/admin/Notifications'
 const AdminAnalytics = React.lazy(() => import('./pages/admin/Analytics'));
 const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
 const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
+const AdminMediaManagement = React.lazy(() => import('./pages/admin/MediaManagement'));
 
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
@@ -72,6 +75,52 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
 
 const AppRoutes = () => {
   const { isLoggedIn, isAuthLoading, isProfileLoading, hasConvexProfile, user } = useAuth();
+  const branding = useQuery(api.media.getBranding);
+
+  // Dynamic branding & typography injection
+  useEffect(() => {
+    if (!branding) return;
+
+    // Dynamic Favicon / App Icon
+    const iconUrl = branding.appIconUrl || branding.faviconUrl || branding.brandIconUrl;
+    if (iconUrl) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = iconUrl;
+    }
+
+    // Dynamic Typography
+    if (branding.typography?.fontFamily && branding.typography.fontFamily !== 'Inter') {
+      let fontStyle: HTMLStyleElement | null = document.getElementById('custom-typography') as HTMLStyleElement;
+      if (!fontStyle) {
+        fontStyle = document.createElement('style');
+        fontStyle.id = 'custom-typography';
+        document.head.appendChild(fontStyle);
+      }
+
+      let fontFace = '';
+      if (branding.typography.customFontUrl) {
+        fontFace = `
+          @font-face {
+            font-family: '${branding.typography.fontFamily}';
+            src: url('${branding.typography.customFontUrl}') format('woff2');
+            font-display: swap;
+          }
+        `;
+      }
+
+      fontStyle.innerHTML = `
+        ${fontFace}
+        body, input, button, select, textarea {
+          font-family: '${branding.typography.fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+      `;
+    }
+  }, [branding]);
 
   // Onboarding is required when the user has a Convex profile but has NOT
   // completed onboarding yet (new accounts). Existing accounts without the
@@ -80,10 +129,21 @@ const AppRoutes = () => {
   const needsOnboarding = hasConvexProfile && user.onboardingCompleted === false;
 
   const Spinner = () => (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
-      <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
-        <span className="text-white font-black text-lg tracking-tighter">L</span>
-      </div>
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
+      {branding?.splashScreenUrl ? (
+        <div className="flex flex-col items-center gap-4 max-w-xs text-center animate-fade-in">
+          <img
+            src={branding.splashScreenUrl}
+            alt="Splash"
+            className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl object-contain shadow-md bg-white p-2"
+          />
+          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
+          <span className="text-white font-black text-lg tracking-tighter">L</span>
+        </div>
+      )}
     </div>
   );
 
@@ -126,6 +186,7 @@ const AppRoutes = () => {
           <Route path="notifications" element={<AdminNotifications />} />
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="ads" element={<AdminAds />} />
+          <Route path="media" element={<AdminMediaManagement />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
 

@@ -392,6 +392,7 @@ export default defineSchema({
     title: v.string(),
     description: v.string(),
     imageUrl: v.optional(v.string()),
+    mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
     linkUrl: v.optional(v.string()),
     ctaText: v.optional(v.string()),
     brandName: v.optional(v.string()),
@@ -565,11 +566,54 @@ export default defineSchema({
     brandLogoUrl: v.optional(v.string()),
     brandIconUrl: v.optional(v.string()),
     faviconUrl: v.optional(v.string()),
+    appIconUrl: v.optional(v.string()),
+    splashScreenUrl: v.optional(v.string()),
     brandFont: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
+    typography: v.optional(
+      v.object({
+        fontFamily: v.string(),
+        headingWeight: v.string(),
+        bodyWeight: v.string(),
+        customFontUrl: v.optional(v.string()),
+      })
+    ),
     updatedAt: v.number(),
-    updatedBy: v.id("users"),
+    updatedBy: v.optional(v.id("users")),
   }),
+
+  // Messaging Emoji / Sticker Packs
+  emojiPacks: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    iconUrl: v.string(),
+    category: v.optional(v.string()),
+    isActive: v.boolean(),
+    displayOrder: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_active", ["isActive"])
+    .index("by_order", ["displayOrder"]),
+
+  // Emoji / Sticker items in packs
+  emojiItems: defineTable({
+    packId: v.id("emojiPacks"),
+    name: v.string(),
+    mediaUrl: v.string(),
+    mediaType: v.union(v.literal("image"), v.literal("animated")),
+    displayOrder: v.number(),
+    createdAt: v.number(),
+  }).index("by_pack", ["packId", "displayOrder"]),
+
+  // Custom typography fonts
+  customFonts: defineTable({
+    fontFamily: v.string(),
+    fileUrl: v.string(),
+    format: v.union(v.literal("woff2"), v.literal("woff"), v.literal("ttf"), v.literal("otf")),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_active", ["isActive"]),
 
   // Admin broadcast log: one row per send, with the fan-out count.
   broadcastBatches: defineTable({

@@ -24,7 +24,8 @@ import {
   Sparkles,
   Sliders,
   Send,
-  Megaphone
+  Megaphone,
+  Palette
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +41,7 @@ const navItems = [
   { icon: Bell, label: 'Notifications', path: '/admin/notifications' },
   { icon: BarChart3, label: 'Analytics', path: '/admin/analytics' },
   { icon: Megaphone, label: 'Ads', path: '/admin/ads' },
+  { icon: Palette, label: 'Media & Branding', path: '/admin/media' },
   { icon: Settings, label: 'System Settings', path: '/admin/settings' },
 ];
 

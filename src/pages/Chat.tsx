@@ -5,8 +5,9 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
+import { cn } from '../lib/utils';
 
-const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀'];
+const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀', '❤️', '😭', '😎', '🥳', '🚀', '👏'];
 
 function formatDuration(sec: number) {
   const s = Math.max(0, Math.round(sec || 0));
@@ -22,6 +23,7 @@ export default function Chat() {
   const [message, setMessage] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [selectedEmojiTab, setSelectedEmojiTab] = useState<string>('default');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -46,6 +48,8 @@ export default function Chat() {
     api.messages.listByConversation,
     id ? { conversationId: id as any } : 'skip'
   );
+
+  const activeEmojiPacks = useQuery(api.media.listActiveEmojiPacks);
 
   const otherUser = conversation?.otherParticipant;
   const isRally = conversation?.type === 'rally';
@@ -340,7 +344,15 @@ export default function Chat() {
                       : 'bg-zinc-100 text-zinc-900 rounded-bl-sm font-medium'
                   }`}
                 >
-                  {msg.text && <div className="mb-1.5">{msg.text}</div>}
+                  {msg.text && (
+                    msg.text.startsWith('http') && (msg.text.includes('/api/storage/') || msg.text.match(/\.(png|jpe?g|webp|gif|svg)($|\?)/i)) ? (
+                      <div className="my-1 max-w-xs rounded-xl overflow-hidden">
+                        <img src={msg.text} alt="Sticker" className="max-h-44 max-w-full rounded-xl object-contain bg-white/10 p-1" />
+                      </div>
+                    ) : (
+                      <div className="mb-1.5 break-words">{msg.text}</div>
+                    )
+                  )}
                   {msg.audioUrl && (
                     <div className="flex flex-col gap-1 min-w-[200px]">
                       <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
@@ -372,17 +384,88 @@ export default function Chat() {
       {/* Input Area */}
       <div className="p-2 border-t border-zinc-100 bg-zinc-50 shrink-0 relative">
         {showEmojis && (
-          <div className="absolute bottom-full left-2 mb-2 bg-white rounded-2xl shadow-xl border border-zinc-100 p-2 grid grid-cols-6 gap-1 z-50">
-            {EMOJIS.map(e => (
-              <button 
-                key={e}
-                type="button" 
-                onClick={() => { setMessage(prev => prev + e); setShowEmojis(false); }} 
-                className="p-2 hover:bg-zinc-100 rounded-lg text-xl"
+          <div className="absolute bottom-full left-2 mb-2 bg-white rounded-2xl shadow-xl border border-zinc-200 p-3 z-50 w-72 sm:w-80">
+            {/* Tab Bar */}
+            <div className="flex items-center gap-1.5 border-b border-zinc-100 pb-2 mb-2 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setSelectedEmojiTab('default')}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0',
+                  selectedEmojiTab === 'default'
+                    ? 'bg-zinc-900 text-white'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                )}
               >
-                {e}
+                😀 Default
               </button>
-            ))}
+              {activeEmojiPacks?.map((pack: any) => (
+                <button
+                  key={pack._id}
+                  type="button"
+                  onClick={() => setSelectedEmojiTab(pack._id)}
+                  className={cn(
+                    'px-2 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer',
+                    selectedEmojiTab === pack._id
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                  )}
+                >
+                  {pack.iconUrl && (
+                    <img src={pack.iconUrl} alt={pack.name} className="w-3.5 h-3.5 rounded object-cover" />
+                  )}
+                  <span>{pack.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            {selectedEmojiTab === 'default' ? (
+              <div className="grid grid-cols-6 gap-1 max-h-48 overflow-y-auto">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => {
+                      setMessage((prev) => prev + e);
+                      setShowEmojis(false);
+                    }}
+                    className="p-1.5 hover:bg-zinc-100 rounded-lg text-xl transition-colors cursor-pointer flex items-center justify-center"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto p-1">
+                {activeEmojiPacks
+                  ?.find((p: any) => p._id === selectedEmojiTab)
+                  ?.items?.map((item: any) => (
+                    <button
+                      key={item._id}
+                      type="button"
+                      onClick={async () => {
+                        if (item.mediaUrl && convexUserId && id) {
+                          await sendMessage({
+                            conversationId: id as any,
+                            senderId: convexUserId as any,
+                            text: item.mediaUrl,
+                          });
+                          setShowEmojis(false);
+                        }
+                      }}
+                      className="p-1 hover:bg-zinc-100 rounded-xl transition-all hover:scale-105 flex items-center justify-center cursor-pointer"
+                      title={item.name}
+                    >
+                      <img
+                        src={item.mediaUrl}
+                        alt={item.name}
+                        className="w-10 h-10 object-contain"
+                      />
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
         )}
         
