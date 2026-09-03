@@ -73,7 +73,7 @@ export const getFollowingCount = query({
 });
 
 function isStorageId(id?: string | null): boolean {
-  return Boolean(id && !id.startsWith("http"));
+  return Boolean(id && !id.startsWith("http") && !id.startsWith("data:") && !id.startsWith("blob:"));
 }
 
 async function resolveStorageUrl(
@@ -81,9 +81,13 @@ async function resolveStorageUrl(
   cache: Record<string, string | undefined>,
   id: string
 ): Promise<string | undefined> {
+  if (!id || !isStorageId(id)) return id || undefined;
   if (!(id in cache)) {
-    try { cache[id] = (await ctx.storage.getUrl(id)) ?? undefined; }
-    catch { cache[id] = undefined; }
+    try {
+      cache[id] = (await ctx.storage.getUrl(id as any)) ?? undefined;
+    } catch {
+      cache[id] = undefined;
+    }
   }
   return cache[id];
 }
