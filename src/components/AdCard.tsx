@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRight, Megaphone } from 'lucide-react';
 
 interface AdCardProps {
@@ -13,6 +13,7 @@ interface AdCardProps {
 }
 
 export default function AdCard({ title, description, imageUrl, mediaType, linkUrl, ctaText = 'Learn More', brandName, brandLogoUrl }: AdCardProps) {
+  const [mediaError, setMediaError] = useState(false);
   const isVideo = mediaType === 'video' || (imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.mov')));
 
   return (
@@ -21,12 +22,24 @@ export default function AdCard({ title, description, imageUrl, mediaType, linkUr
         Ad
       </div>
 
-      {imageUrl ? (
+      {imageUrl && !mediaError ? (
         <div className="h-48 sm:h-auto sm:w-[40%] bg-zinc-900 relative overflow-hidden border-b sm:border-b-0 sm:border-r border-zinc-100 flex items-center justify-center">
           {isVideo ? (
-            <video src={imageUrl} controls className="w-full h-full object-cover" />
+            <video
+              src={imageUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-cover"
+              onError={() => setMediaError(true)}
+            />
           ) : (
-            <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+            <img
+              src={imageUrl}
+              alt={title}
+              className="w-full h-full object-cover"
+              onError={() => setMediaError(true)}
+            />
           )}
         </div>
       ) : (

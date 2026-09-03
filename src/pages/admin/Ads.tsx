@@ -73,15 +73,28 @@ export default function AdminAds() {
 
   const handleSubmit = async () => {
     if (!form.title.trim() || !form.description.trim()) return;
+
+    let cleanImageUrl = form.imageUrl.trim() || undefined;
+    if (cleanImageUrl && cleanImageUrl.includes('/api/storage/')) {
+      const match = cleanImageUrl.match(/\/api\/storage\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) cleanImageUrl = match[1];
+    }
+
+    let cleanBrandLogoUrl = form.brandLogoUrl.trim() || undefined;
+    if (cleanBrandLogoUrl && cleanBrandLogoUrl.includes('/api/storage/')) {
+      const match = cleanBrandLogoUrl.match(/\/api\/storage\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) cleanBrandLogoUrl = match[1];
+    }
+
     const data = {
       title: form.title.trim(),
       description: form.description.trim(),
-      imageUrl: form.imageUrl.trim() || undefined,
+      imageUrl: cleanImageUrl,
       mediaType: form.mediaType,
       linkUrl: form.linkUrl.trim() || undefined,
       ctaText: form.ctaText.trim() || undefined,
       brandName: form.brandName.trim() || undefined,
-      brandLogoUrl: form.brandLogoUrl.trim() || undefined,
+      brandLogoUrl: cleanBrandLogoUrl,
       isActive: form.isActive,
       displayOrder: form.displayOrder,
     };

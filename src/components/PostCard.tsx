@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import {
@@ -190,6 +190,11 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   );
 
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [post.mediaUrl]);
+
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -554,13 +559,18 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
 
       {/* ── 3. MEDIA ───────────────────────────────────────────────────── */}
       {post.mediaUrl && !imgError && (
-        <div className="mt-3 rounded-2xl overflow-hidden bg-zinc-100">
-          {post.mediaType === 'video' ? (
+        <div className="mt-3 rounded-2xl overflow-hidden bg-zinc-950/5 relative">
+          {post.mediaType === 'video' ||
+          post.mediaUrl.endsWith('.mp4') ||
+          post.mediaUrl.endsWith('.webm') ||
+          post.mediaUrl.endsWith('.mov') ||
+          post.mediaUrl.includes('stream.mux.com') ? (
             <video
               src={post.mediaUrl}
-              className="w-full max-h-[480px] object-cover"
+              className="w-full max-h-[480px] object-cover bg-black"
               controls
               playsInline
+              preload="metadata"
               onError={() => setImgError(true)}
             />
           ) : (

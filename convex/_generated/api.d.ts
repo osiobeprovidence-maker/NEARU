@@ -15,6 +15,7 @@ import type * as chatRequests from "../chatRequests.js";
 import type * as eventHub from "../eventHub.js";
 import type * as follows from "../follows.js";
 import type * as friends from "../friends.js";
+import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as media from "../media.js";
 import type * as messages from "../messages.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   eventHub: typeof eventHub;
   follows: typeof follows;
   friends: typeof friends;
+  http: typeof http;
   "lib/auth": typeof lib_auth;
   media: typeof media;
   messages: typeof messages;

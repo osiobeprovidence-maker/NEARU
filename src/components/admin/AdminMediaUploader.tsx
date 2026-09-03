@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { uploadToConvexStorage } from '../../lib/storageUpload';
 import {
   Upload,
   Image as ImageIcon,
@@ -34,6 +35,17 @@ interface AdminMediaUploaderProps {
   previewHeightClass?: string;
 }
 
+function isCleanStorageId(id?: string | null): boolean {
+  return Boolean(
+    id &&
+      typeof id === 'string' &&
+      !id.startsWith('http') &&
+      !id.startsWith('/') &&
+      !id.startsWith('blob:') &&
+      !id.startsWith('data:')
+  );
+}
+
 export function AdminMediaUploader({
   mediaType,
   value,
@@ -50,28 +62,37 @@ export function AdminMediaUploader({
   const genUploadUrl = useMutation(api.media.generateUploadUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // If value is a storage ID, resolve it to a public URL for preview
+  const needsResolving = isCleanStorageId(value);
+  const resolvedUrl = useQuery(
+    api.media.getMediaUrl,
+    needsResolving ? { storageId: value as string } : 'skip'
+  );
+
   const [previewUrl, setPreviewUrl] = useState<string>(value || '');
   const [isVideo, setIsVideo] = useState<boolean>(mediaType === 'video');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Sync preview if external value changes (and no active local upload)
+  // Sync preview if external value or resolved URL changes (and no active local upload)
   useEffect(() => {
-    if (value && !isUploading) {
-      setPreviewUrl(value);
+    if (isUploading) return;
+    const effectiveUrl = resolvedUrl || value || '';
+    if (effectiveUrl) {
+      setPreviewUrl(effectiveUrl);
       if (
-        value.endsWith('.mp4') ||
-        value.endsWith('.webm') ||
-        value.endsWith('.mov') ||
+        effectiveUrl.endsWith('.mp4') ||
+        effectiveUrl.endsWith('.webm') ||
+        effectiveUrl.endsWith('.mov') ||
         mediaType === 'video'
       ) {
         setIsVideo(true);
       }
-    } else if (!value && !isUploading) {
+    } else {
       setPreviewUrl('');
     }
-  }, [value, isUploading, mediaType]);
+  }, [value, resolvedUrl, isUploading, mediaType]);
 
   // Determine accept attribute
   const getAccept = () => {
@@ -89,27 +110,10 @@ export function AdminMediaUploader({
 
   const uploadSingleFile = async (file: File): Promise<{ storageId: string; publicUrl: string }> => {
     const uploadUrl = await genUploadUrl();
-    const upRes = await fetch(uploadUrl, {
-      method: 'POST',
-      body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => {
+      setUploadProgress(`Uploading ${Math.round(fraction * 100)}%...`);
     });
-
-    if (!upRes.ok) {
-      throw new Error(`Upload failed with status ${upRes.status}`);
-    }
-
-    const data = await upRes.json();
-    const storageId = data.storageId || data;
-    if (!storageId || typeof storageId !== 'string') {
-      throw new Error('Convex storage failed to return a valid storage ID');
-    }
-
-    // Resolve public URL via Convex site URL
-    const convexSite = import.meta.env.VITE_CONVEX_SITE_URL || '';
-    const publicUrl = convexSite ? `${convexSite}/api/storage/${storageId}` : storageId;
-
-    return { storageId, publicUrl };
+    return { storageId, publicUrl: storageId };
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,10 +132,10 @@ export function AdminMediaUploader({
         for (let i = 0; i < total; i++) {
           const file = files[i];
           setUploadProgress(`Uploading ${i + 1} of ${total}...`);
-          const { storageId, publicUrl } = await uploadSingleFile(file);
+          const { storageId } = await uploadSingleFile(file);
           results.push({
             storageId,
-            publicUrl,
+            publicUrl: storageId,
             name: file.name.replace(/\.[^/.]+$/, ''),
           });
         }
@@ -169,19 +173,18 @@ export function AdminMediaUploader({
     setUploadProgress('Uploading to permanent storage...');
 
     try {
-      const { storageId, publicUrl } = await uploadSingleFile(file);
-      setPreviewUrl(publicUrl);
+      const { storageId } = await uploadSingleFile(file);
       if (onChange) {
-        onChange(storageId, publicUrl);
+        onChange(storageId, localBlob);
       }
     } catch (err: any) {
       console.error('Upload failed:', err);
       setError(err.message || 'File upload failed. Please try again.');
       setPreviewUrl('');
+      URL.revokeObjectURL(localBlob);
     } finally {
       setIsUploading(false);
       setUploadProgress('');
-      URL.revokeObjectURL(localBlob);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };

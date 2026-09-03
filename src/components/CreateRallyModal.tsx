@@ -186,34 +186,31 @@ export default function CreateRallyModal({
     setIsUploading(true);
     try {
       if (isVideo) {
-        let muxSuccess = false;
-        try {
-          // Mux direct upload: browser PUTs raw bytes straight to Mux.
-          const { uploadId, url } = await createMuxUpload();
-          setUploadProgress(0);
-          await putFileToMux(url, file, (fraction) => setUploadProgress(fraction));
-          setUploadProgress(1);
-          setMuxUploadId(uploadId);
-          uploadedRef.current = true;
-          muxSuccess = true;
-        } catch (muxErr) {
-          console.warn('[CreateRallyModal] Mux upload failed or unconfigured, falling back to direct video storage:', muxErr);
-        }
-
-        // If Mux failed (401 token mismatch, 503 unconfigured), fallback to direct video storage so video always saves
-        if (!muxSuccess) {
-          const uploadUrl = await generateUploadUrl();
-          setUploadProgress(0);
-          const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => setUploadProgress(fraction));
-          setUploadProgress(1);
-          setMediaStorageId(storageId);
-          uploadedRef.current = true;
-        }
-      } else {
-        // Image → Convex storage (unchanged).
+        // Direct permanent storage upload so the video is immediately and permanently saved with the post
         const uploadUrl = await generateUploadUrl();
         setUploadProgress(0);
-        const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => setUploadProgress(fraction));
+        const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => {
+          setUploadProgress(fraction);
+        });
+        setUploadProgress(1);
+        setMediaStorageId(storageId);
+        uploadedRef.current = true;
+
+        // Optionally kick off Mux direct upload in background for transcoded HLS playback if available
+        try {
+          const { uploadId, url } = await createMuxUpload();
+          putFileToMux(url, file).catch(() => {});
+          setMuxUploadId(uploadId);
+        } catch (muxErr) {
+          console.warn('[CreateRallyModal] Mux upload optional enhancement skipped:', muxErr);
+        }
+      } else {
+        // Image → Convex storage
+        const uploadUrl = await generateUploadUrl();
+        setUploadProgress(0);
+        const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => {
+          setUploadProgress(fraction);
+        });
         setUploadProgress(1);
         setMediaStorageId(storageId);
         uploadedRef.current = true;
@@ -222,10 +219,9 @@ export default function CreateRallyModal({
       const msg =
         err instanceof Error ? err.message : 'Upload failed. Please try again.';
       setUploadError(msg);
-      // Keep the local preview so the user can see what they picked,
-      // but clear the upload refs so we don't save a broken reference.
       setMediaStorageId('');
       setMuxUploadId('');
+      uploadedRef.current = false;
     } finally {
       setIsUploading(false);
     }
@@ -273,6 +269,30 @@ export default function CreateRallyModal({
     if (!type || !description.trim()) return;
     // For non-POST types, the admission model must be chosen
     if (!POST_ONLY_TYPES.includes(type) && pricing === null) return;
+
+    // Guard: if media was chosen, ensure it has successfully uploaded before posting
+    if (localPreview && !mediaStorageId) {
+      if (isUploading) {
+        window.dispatchEvent(
+          new CustomEvent('show-toast', {
+            detail: {
+              title: 'Upload in progress',
+              subtitle: 'Please wait for your media to finish uploading before publishing.',
+            },
+          })
+        );
+        return;
+      }
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: {
+            title: 'Media upload required',
+            subtitle: 'Media upload was not completed. Please re-select your file or remove it.',
+          },
+        })
+      );
+      return;
+    }
 
     setIsPosting(true);
     try {
@@ -379,6 +399,7 @@ export default function CreateRallyModal({
   const canReview =
     !!description.trim() &&
     !isUploading &&
+    (!localPreview || !!mediaStorageId) &&
     (isPost || (pricing !== null && (pricing !== 'paid' || !!price)));
 
   // -------------------------------------------------------------------------
@@ -1051,10 +1072,10 @@ export default function CreateRallyModal({
                             className="w-full h-full object-cover"
                           />
                         )}
-                        {!mediaStorageId && !muxUploadId && (
+                        {!mediaStorageId && (
                           <div className="absolute inset-0 bg-amber-900/40 flex items-center justify-center">
                             <span className="text-white text-xs font-bold bg-amber-700 px-3 py-1 rounded-full">
-                              Upload incomplete — remove and retry
+                              Upload incomplete — please wait or re-select
                             </span>
                           </div>
                         )}
@@ -1120,8 +1141,7 @@ export default function CreateRallyModal({
                       isPosting ||
                       isUploading ||
                       isProcessingVideo ||
-                      // Block if media was selected but upload failed
-                      (!!localPreview && !mediaStorageId && !muxUploadId && !uploadError)
+                      (Boolean(localPreview) && !mediaStorageId)
                     }
                     className="flex-1 py-4 bg-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500 text-white rounded-2xl font-bold text-sm hover:bg-zinc-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                   >

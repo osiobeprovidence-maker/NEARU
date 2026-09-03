@@ -8,7 +8,24 @@ import { getAuthenticatedUser } from "./lib/auth";
 // ---------------------------------------------------------------------------
 
 function isStorageId(id?: string | null): boolean {
-  return Boolean(id && !id.startsWith("http") && !id.startsWith("data:") && !id.startsWith("blob:"));
+  return Boolean(
+    id &&
+      typeof id === "string" &&
+      !id.startsWith("http") &&
+      !id.startsWith("/") &&
+      !id.startsWith("data:") &&
+      !id.startsWith("blob:")
+  );
+}
+
+function extractStorageId(val?: string | null): string | null {
+  if (!val || typeof val !== "string") return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  if (isStorageId(trimmed)) return trimmed;
+  const match = trimmed.match(/\/api\/storage\/([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) return match[1];
+  return null;
 }
 
 async function resolveStorageUrl(
@@ -16,15 +33,16 @@ async function resolveStorageUrl(
   cache: Record<string, string | undefined>,
   id: string
 ): Promise<string | undefined> {
-  if (!id || !isStorageId(id)) return id || undefined;
-  if (!(id in cache)) {
+  const sid = extractStorageId(id);
+  if (!sid) return id || undefined;
+  if (!(sid in cache)) {
     try {
-      cache[id] = (await ctx.storage.getUrl(id as any)) ?? undefined;
+      cache[sid] = (await ctx.storage.getUrl(sid as any)) ?? undefined;
     } catch {
-      cache[id] = undefined;
+      cache[sid] = undefined;
     }
   }
-  return cache[id];
+  return cache[sid];
 }
 
 async function resolveMediaUrl(
@@ -32,13 +50,21 @@ async function resolveMediaUrl(
   cache: Record<string, string | undefined>,
   rally: any
 ): Promise<string | undefined> {
+  // 1. Mux playback ID if transcoded
   if (rally.muxPlaybackId) {
     return `https://stream.mux.com/${rally.muxPlaybackId}/high.mp4`;
   }
-  if (isStorageId(rally.mediaStorageId)) {
-    return await resolveStorageUrl(ctx, cache, rally.mediaStorageId);
+  // 2. Direct Convex storage ID
+  if (rally.mediaStorageId) {
+    const url = await resolveStorageUrl(ctx, cache, rally.mediaStorageId);
+    if (url) return url;
   }
-  return rally.mediaUrl;
+  // 3. Fallback to mediaUrl
+  if (rally.mediaUrl) {
+    const url = await resolveStorageUrl(ctx, cache, rally.mediaUrl);
+    if (url) return url;
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------

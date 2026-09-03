@@ -1,16 +1,54 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+function extractStorageId(val?: string | null): string | null {
+  if (!val || typeof val !== "string") return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  // If it's already a clean storageId (not a URL)
+  if (
+    !trimmed.startsWith("http") &&
+    !trimmed.startsWith("/") &&
+    !trimmed.startsWith("blob:") &&
+    !trimmed.startsWith("data:")
+  ) {
+    return trimmed;
+  }
+  // If it's a URL containing /api/storage/<storageId>
+  const match = trimmed.match(/\/api\/storage\/([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return null;
+}
+
+function sanitizeMediaReference(val?: string): string | undefined {
+  if (!val) return undefined;
+  const trimmed = val.trim();
+  if (!trimmed) return undefined;
+  const storageId = extractStorageId(trimmed);
+  if (storageId) return storageId;
+  return trimmed;
+}
+
 async function resolveAdUrls(ctx: any, ad: any) {
   const resolved: Record<string, unknown> = { ...ad };
   for (const key of ["imageUrl", "brandLogoUrl"]) {
     const val = ad[key];
-    if (val && typeof val === "string" && !val.startsWith("http")) {
+    if (!val || typeof val !== "string") continue;
+
+    const storageId = extractStorageId(val);
+    if (storageId) {
       try {
-        const url = await ctx.storage.getUrl(val);
-        if (url) resolved[key] = url;
+        const url = await ctx.storage.getUrl(storageId as any);
+        if (url) {
+          resolved[key] = url;
+          continue;
+        }
       } catch {}
     }
+
+    resolved[key] = val;
   }
   return resolved;
 }
@@ -58,6 +96,8 @@ export const create = mutation({
     const now = Date.now();
     return await ctx.db.insert("ads", {
       ...args,
+      imageUrl: sanitizeMediaReference(args.imageUrl),
+      brandLogoUrl: sanitizeMediaReference(args.brandLogoUrl),
       createdAt: now,
       updatedAt: now,
     });
@@ -83,7 +123,11 @@ export const update = mutation({
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) {
-        updates[key] = value;
+        if (key === "imageUrl" || key === "brandLogoUrl") {
+          updates[key] = sanitizeMediaReference(value as string);
+        } else {
+          updates[key] = value;
+        }
       }
     }
     await ctx.db.patch(id, updates);
