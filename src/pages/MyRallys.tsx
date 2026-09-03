@@ -61,7 +61,7 @@ export default function MyRallys() {
             isPhoneVerified: false,
           },
       status: r.status,
-      createdAt: new Date(r.createdAt).toISOString(),
+      createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
       city: r.city,
       locationLabel: r.locationLabel,
       rallyLatitude: r.rallyLatitude,

@@ -28,9 +28,9 @@ export default async function handler(req, res) {
     if (method !== "GET") return methodNotAllowed(req, res);
 
     const firebaseClaims = await requireFirebaseUser(req);
-    const convexUser = await resolveConvexUser(firebaseClaims);
-    if (!convexUser) {
-      throw new ApiError("AUTHENTICATION_ERROR", "Account not found.", 404);
+    const userId = firebaseClaims?.sub || firebaseClaims?.uid || firebaseClaims?.user_id;
+    if (!userId) {
+      throw new ApiError("AUTHENTICATION_ERROR", "Unauthorized", 401);
     }
 
     // -------- GET /api/mux/upload --------

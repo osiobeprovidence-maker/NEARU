@@ -185,13 +185,34 @@ export default function CreateRallyModal({
     setIsUploading(true);
     try {
       if (isVideo) {
-        // Mux direct upload: browser PUTs raw bytes straight to Mux.
-        const { uploadId, url } = await createMuxUpload();
-        setUploadProgress(0);
-        await putFileToMux(url, file, (fraction) => setUploadProgress(fraction));
-        setUploadProgress(1);
-        setMuxUploadId(uploadId);
-        uploadedRef.current = true;
+        let muxSuccess = false;
+        try {
+          // Mux direct upload: browser PUTs raw bytes straight to Mux.
+          const { uploadId, url } = await createMuxUpload();
+          setUploadProgress(0);
+          await putFileToMux(url, file, (fraction) => setUploadProgress(fraction));
+          setUploadProgress(1);
+          setMuxUploadId(uploadId);
+          uploadedRef.current = true;
+          muxSuccess = true;
+        } catch (muxErr) {
+          console.warn('[CreateRallyModal] Mux upload failed or unconfigured, falling back to direct video storage:', muxErr);
+        }
+
+        // If Mux failed (401 token mismatch, 503 unconfigured), fallback to direct video storage so video always saves
+        if (!muxSuccess) {
+          const uploadUrl = await generateUploadUrl();
+          const res = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          });
+          if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+          const { storageId } = await res.json();
+          if (!storageId) throw new Error('No storage ID returned');
+          setMediaStorageId(storageId);
+          uploadedRef.current = true;
+        }
       } else {
         // Image → Convex storage (unchanged).
         const uploadUrl = await generateUploadUrl();

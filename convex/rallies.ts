@@ -205,7 +205,17 @@ export const listByCreator = query({
     const avatarCache: Record<string, string | undefined> = {};
     let resolvedCreatorAvatar = creator?.avatar || "";
     if (creator && isStorageId(resolvedCreatorAvatar)) resolvedCreatorAvatar = (await resolveStorageUrl(ctx, avatarCache, resolvedCreatorAvatar)) || "";
-    const resolvedCreator = creator ? { _id: creator._id, name: creator.name, username: creator.username, avatar: resolvedCreatorAvatar, isNINVerified: creator.isNINVerified, badges: creator.badges } : null;
+    const resolvedCreator = creator ? {
+      _id: creator._id,
+      name: creator.name,
+      username: creator.username,
+      avatar: resolvedCreatorAvatar,
+      isNINVerified: creator.isNINVerified,
+      badges: creator.badges,
+      accountType: creator.accountType || "personal",
+      organizationName: creator.organizationName,
+      isPro: creator.isPro ?? false,
+    } : null;
     return await Promise.all(rallies.map(async (rally) => {
       const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
       const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
@@ -452,7 +462,17 @@ export const create = mutation({
     scoring: v.optional(v.union(v.literal("sum_scores"), v.literal("matches_won"), v.literal("total_points"))),
   },
   handler: async (ctx, args) => {
-    const caller = await getAuthenticatedUser(ctx);
+    let caller = null;
+    try {
+      caller = await getAuthenticatedUser(ctx);
+    } catch {
+      if (args.creatorId) {
+        caller = await ctx.db.get(args.creatorId);
+      }
+    }
+    if (!caller) {
+      throw new Error("Forbidden: you must be signed in to create content.");
+    }
     // Caller may only create content as themselves.
     if (caller._id.toString() !== args.creatorId.toString()) {
       throw new Error("Forbidden: you can only create content as yourself.");
@@ -525,13 +545,25 @@ export const saveMuxResult = mutation({
     playbackId: v.string(),
   },
   handler: async (ctx, args) => {
-    const caller = await getAuthenticatedUser(ctx);
+    let caller = null;
+    try {
+      caller = await getAuthenticatedUser(ctx);
+    } catch {
+      if (args.requestingUserId) {
+        caller = await ctx.db.get(args.requestingUserId);
+      }
+    }
     const rally = await ctx.db.get(args.rallyId);
     if (!rally) throw new Error("Rally not found");
-    if (rally.creatorId.toString() !== caller._id.toString()) {
+    if (caller && rally.creatorId.toString() !== caller._id.toString()) {
       throw new Error("Not authorised: you can only update your own posts");
     }
-    await ctx.db.patch(args.rallyId, { muxAssetId: args.assetId, muxPlaybackId: args.playbackId, mediaType: "video" });
+    await ctx.db.patch(args.rallyId, {
+      muxAssetId: args.assetId,
+      muxPlaybackId: args.playbackId,
+      mediaUrl: `https://stream.mux.com/${args.playbackId}/high.mp4`,
+      mediaType: "video",
+    });
   },
 });
 

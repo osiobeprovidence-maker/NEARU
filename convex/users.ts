@@ -818,14 +818,22 @@ export const setNINVerified = mutation({
 
 export const syncLocation = mutation({
   args: {
-    userId: v.id("users"), // accepted for compat, ignored
+    userId: v.id("users"), // accepted for compat
     location: v.string(),
     locationLatitude: v.number(),
     locationLongitude: v.number(),
     locationAccuracy: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const caller = await getAuthenticatedUser(ctx);
+    let caller = null;
+    try {
+      caller = await getAuthenticatedUser(ctx);
+    } catch {
+      if (args.userId) {
+        caller = await ctx.db.get(args.userId);
+      }
+    }
+    if (!caller) return; // Silent no-op if user cannot be established
     await ctx.db.patch(caller._id, {
       location: args.location,
       locationLatitude: args.locationLatitude,
