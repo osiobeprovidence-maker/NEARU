@@ -165,7 +165,11 @@ export default defineSchema({
         })
       )
     ),
-  }).index("by_username", ["username"]).index("by_email", ["email"]).index("by_firebase_uid", ["firebaseUid"]),
+  })
+    .index("by_username", ["username"])
+    .index("by_email", ["email"])
+    .index("by_phone", ["phone"])
+    .index("by_firebase_uid", ["firebaseUid"]),
 
   rallies: defineTable({
     type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN"), v.literal("EVENT"), v.literal("POST")),

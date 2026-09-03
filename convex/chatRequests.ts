@@ -225,13 +225,42 @@ export const accept = mutation({
 
     await ctx.db.patch(request._id, { status: "ACCEPTED", updatedAt: Date.now() });
 
+    // Establish reciprocal follow relationship in follows table if not already present
+    const fwdFollow = await ctx.db
+      .query("follows")
+      .withIndex("by_pair", (q) =>
+        q.eq("followerId", request.fromUserId).eq("followingId", request.toUserId)
+      )
+      .unique();
+    if (!fwdFollow) {
+      await ctx.db.insert("follows", {
+        followerId: request.fromUserId,
+        followingId: request.toUserId,
+        createdAt: Date.now(),
+      });
+    }
+
+    const revFollow = await ctx.db
+      .query("follows")
+      .withIndex("by_pair", (q) =>
+        q.eq("followerId", request.toUserId).eq("followingId", request.fromUserId)
+      )
+      .unique();
+    if (!revFollow) {
+      await ctx.db.insert("follows", {
+        followerId: request.toUserId,
+        followingId: request.fromUserId,
+        createdAt: Date.now(),
+      });
+    }
+
     const conv = await ctx.runMutation(api.messages.getOrOpenDirect, {
       userIdA: request.fromUserId,
       userIdB: request.toUserId,
     });
 
     await ctx.db.patch(conv, {
-      lastMessage: { senderId: "system", text: "Message request accepted. Say hello!", timestamp: Date.now() },
+      lastMessage: { senderId: "system", text: "Friend request accepted. Say hello!", timestamp: Date.now() },
       unreadCount: 1,
       unreadByUser: { [id(request.fromUserId)]: 1, [id(request.toUserId)]: 0 },
     });
@@ -239,8 +268,8 @@ export const accept = mutation({
     await ctx.runMutation(api.notifications.create, {
       userId: request.fromUserId,
       type: "message_request_accepted",
-      title: "Message request accepted",
-      body: "You can now chat.",
+      title: "Friend request accepted",
+      body: `${caller.name || "Someone"} accepted your friend request.`,
     });
 
     return { conversationId: conv };

@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import PageShell from '../components/PageShell';
-import { ShieldAlert, BadgeCheck, Star, Send, Users, MessageCircle, Inbox } from 'lucide-react';
+import { ShieldAlert, BadgeCheck, Star, Send, Users, MessageCircle, Inbox, UserPlus } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -232,7 +232,18 @@ export default function Messages() {
   );
 
   return (
-    <PageShell title="Messages">
+    <PageShell
+      title="Messages"
+      headerAction={
+        <button
+          onClick={() => navigate('/messages/add-friends')}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>Add Friends</span>
+        </button>
+      }
+    >
       {loading ? (
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
           <div className="h-20 bg-zinc-50 animate-pulse" />
@@ -248,11 +259,17 @@ export default function Messages() {
             <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight mb-2">
               Your inbox is empty
             </h3>
-            <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-sm mx-auto leading-relaxed mb-6">
               Messages from people you talk to and message requests will show up here. Start a
-              direct chat with someone you mutually follow, or join a RALLY to chat with its
-              participants.
+              direct chat with someone you mutually follow, or find friends to connect with.
             </p>
+            <button
+              onClick={() => navigate('/messages/add-friends')}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Find & Add Friends</span>
+            </button>
           </div>
         </div>
       ) : (
