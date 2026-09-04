@@ -568,6 +568,7 @@ export default defineSchema({
     faviconUrl: v.optional(v.string()),
     appIconUrl: v.optional(v.string()),
     splashScreenUrl: v.optional(v.string()),
+    splashBgColor: v.optional(v.string()),
     brandFont: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
     typography: v.optional(

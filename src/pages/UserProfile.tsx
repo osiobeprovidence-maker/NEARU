@@ -24,12 +24,18 @@ import {
   Check,
   Share2,
   ShieldAlert,
+  Loader2,
   User as UserIcon,
 } from 'lucide-react';
 import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
+import {
+  processAndCompressImage,
+  uploadToConvexStorage,
+  logUploadStage,
+} from '../utils/imageUpload';
 
 export default function UserProfile() {
   const { id } = useParams();
@@ -82,6 +88,10 @@ export default function UserProfile() {
   const openDirectMut = useMutation(api.messages.getOrOpenDirect);
   const sendDirectMut = useMutation(api.chatRequests.sendDirect);
   const updateUserMutation = useMutation(api.users.update);
+  const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [isFollowBusy, setIsFollowBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'rallies' | 'media'>('posts');
@@ -154,6 +164,44 @@ export default function UserProfile() {
       showToast('Cover photo updated', '');
     } catch {
       showToast('Error', 'Could not save cover photo.');
+    }
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !convexUserId || !isSelf) return;
+    setAvatarUploading(true);
+    logUploadStage('SELECT', 'Avatar photo selected in UserProfile', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
+    try {
+      const compressedBlob = await processAndCompressImage(file, {
+        maxWidth: 800,
+        maxHeight: 800,
+        quality: 0.85,
+      });
+      const blobUrl = URL.createObjectURL(compressedBlob);
+      setAvatarPreview(blobUrl);
+      updateUser({ avatar: blobUrl });
+
+      const storageId = await uploadToConvexStorage(
+        compressedBlob,
+        generateAvatarUploadUrl
+      );
+      logUploadStage('SYNC', 'Updating user avatar in Convex from UserProfile', { storageId });
+      await updateUserMutation({
+        userId: convexUserId as any,
+        avatar: storageId,
+      });
+      showToast('Profile photo updated', 'Your new photo is live.');
+    } catch (err: any) {
+      logUploadStage('UPLOAD', 'Avatar upload failed in UserProfile', { error: err?.message || String(err) });
+      showToast('Error', err?.message || 'Could not save profile photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   };
 
@@ -343,20 +391,43 @@ export default function UserProfile() {
         {/* -------- IDENTITY (avatar overlaps cover, left-aligned) -------- */}
         <div className="px-4 sm:px-6 pb-2">
           <div className="relative -mt-10 sm:-mt-14 z-10 w-fit">
-            <Avatar
-              src={profile?.avatar || target?.avatar}
-              name={profile?.name || target?.name || 'User'}
-              size="xl"
-              className="border-4 border-white shadow-lg"
-            />
+            <div className="relative">
+              <Avatar
+                src={avatarPreview || profile?.avatar || target?.avatar}
+                name={profile?.name || target?.name || 'User'}
+                size="xl"
+                className="border-4 border-white shadow-lg"
+              />
+              {avatarUploading && (
+                <div className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
+                  <Loader2 className="w-7 h-7 text-white animate-spin" />
+                </div>
+              )}
+            </div>
             {isSelf && convexUserId && (
-              <Link
-                to="/settings/personal-info"
-                className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95"
-                title="Change Photo"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </Link>
+              <>
+                <label
+                  htmlFor="user-profile-avatar-input"
+                  className="absolute bottom-0 right-0 p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-all shadow-md active:scale-95 cursor-pointer z-20"
+                  title="Change Profile Photo"
+                >
+                  {avatarUploading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
+                </label>
+                <input
+                  id="user-profile-avatar-input"
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  tabIndex={-1}
+                  disabled={avatarUploading}
+                  onChange={handleAvatarChange}
+                />
+              </>
             )}
           </div>
 
@@ -379,7 +450,9 @@ export default function UserProfile() {
             )}
           </div>
           <p className="text-sm font-semibold text-zinc-400 mb-1">
-            {profile?.username || target?.username ? `@${profile?.username || target?.username}` : ''}
+            {(profile?.username || target?.username)
+              ? `@${(profile?.username || target?.username || '').replace(/^@+/, '')}`
+              : ''}
           </p>
 
           {/* Bio — directly under username */}

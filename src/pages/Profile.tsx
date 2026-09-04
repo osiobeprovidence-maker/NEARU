@@ -29,6 +29,11 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { cn, getPublicInterests } from '../lib/utils';
 import { Rally } from '../types';
+import {
+  processAndCompressImage,
+  uploadToConvexStorage,
+  logUploadStage,
+} from '../utils/imageUpload';
 
 type ProfileTab = 'posts' | 'followers' | 'following' | 'rated' | 'done';
 
@@ -42,6 +47,9 @@ export default function Profile() {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   const updateUserMutation = useMutation(api.users.update);
+  const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const rawTab = searchParams.get('tab');
   const activeTab: ProfileTab = VALID_TABS.includes(rawTab as ProfileTab)
@@ -54,6 +62,43 @@ export default function Profile() {
 
   const showToast = (t: string, s: string) =>
     window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: t, subtitle: s } }));
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !convexUserId) return;
+    setAvatarUploading(true);
+    logUploadStage('SELECT', 'Avatar photo selected from mobile/desktop picker', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
+    try {
+      const compressedBlob = await processAndCompressImage(file, {
+        maxWidth: 800,
+        maxHeight: 800,
+        quality: 0.85,
+      });
+      const blobUrl = URL.createObjectURL(compressedBlob);
+      updateUser({ avatar: blobUrl });
+
+      const storageId = await uploadToConvexStorage(
+        compressedBlob,
+        generateAvatarUploadUrl
+      );
+      logUploadStage('SYNC', 'Updating user avatar in Convex', { storageId });
+      await updateUserMutation({
+        userId: convexUserId as any,
+        avatar: storageId,
+      });
+      showToast('Profile photo updated', 'Your new photo is now live.');
+    } catch (err: any) {
+      logUploadStage('UPLOAD', 'Avatar upload failed', { error: err?.message || String(err) });
+      showToast('Error', err?.message || 'Could not save profile photo. Please try again.');
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // 1. Live Stats Queries
@@ -247,19 +292,43 @@ export default function Profile() {
             <div className="px-4 sm:px-6 pb-2">
               {/* Avatar overlapping cover */}
               <div className="relative -mt-10 sm:-mt-14 z-10 w-fit">
-                <Avatar
-                  src={user.avatar}
-                  name={user.name}
-                  size="xl"
-                  className="border-4 border-white shadow-lg"
-                />
-                <Link
-                  to="/settings/personal-info"
-                  className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95"
-                  title="Change Photo"
+                <div className="relative">
+                  <Avatar
+                    src={user.avatar}
+                    name={user.name}
+                    size="xl"
+                    className="border-4 border-white shadow-lg"
+                  />
+                  {avatarUploading && (
+                    <div className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
+                      <Loader2 className="w-7 h-7 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Direct Mobile/Desktop Avatar Picker Trigger */}
+                <label
+                  htmlFor="profile-avatar-input"
+                  className="absolute bottom-0 right-0 p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-all shadow-md active:scale-95 cursor-pointer z-20"
+                  title="Edit Profile Photo"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </Link>
+                  {avatarUploading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
+                </label>
+
+                <input
+                  id="profile-avatar-input"
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  tabIndex={-1}
+                  disabled={avatarUploading}
+                  onChange={handleAvatarChange}
+                />
               </div>
 
               {/* Name & Badges */}
@@ -272,7 +341,7 @@ export default function Profile() {
                 )}
               </div>
               <p className="text-sm font-semibold text-zinc-400 mb-1.5">
-                {user.username ? `@${user.username}` : ''}
+                {user.username ? `@${user.username.replace(/^@+/, '')}` : ''}
               </p>
 
               {/* Bio */}
@@ -562,7 +631,7 @@ export default function Profile() {
                                   )}
                                 </div>
                                 <p className="text-xs text-zinc-400 font-medium truncate">
-                                  {r.rater?.username ? `@${r.rater.username}` : ''}
+                                  {r.rater?.username ? `@${r.rater.username.replace(/^@+/, '')}` : ''}
                                 </p>
                               </div>
                             </div>
@@ -729,7 +798,7 @@ function UserRow({
             )}
           </div>
           <p className="text-xs text-zinc-400 font-medium truncate">
-            {targetUser.username ? `@${targetUser.username}` : ''}
+            {targetUser.username ? `@${targetUser.username.replace(/^@+/, '')}` : ''}
           </p>
           {targetUser.bio && (
             <p className="text-xs text-zinc-600 font-medium line-clamp-1 mt-0.5">

@@ -5,8 +5,10 @@ export interface Branding {
   brandLogoUrl: string | null;
   brandIconUrl: string | null;
   faviconUrl: string | null;
+  splashScreenUrl?: string | null;
   brandFont: string;
   primaryColor: string;
+  splashBgColor?: string | null;
 }
 
 const DEFAULT_BRANDING: Branding = {
@@ -14,8 +16,10 @@ const DEFAULT_BRANDING: Branding = {
   brandLogoUrl: null,
   brandIconUrl: null,
   faviconUrl: null,
+  splashScreenUrl: null,
   brandFont: 'system',
   primaryColor: '#4f46e5',
+  splashBgColor: '#4f46e5',
 };
 
 const FONT_MAP: Record<string, string> = {
@@ -41,7 +45,19 @@ export function useBrand() {
 }
 
 export function BrandProvider({ children }: { children: React.ReactNode }) {
-  const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING);
+  const [branding, setBranding] = useState<Branding>(() => {
+    try {
+      const cachedSplash = localStorage.getItem('lalao_splash_image');
+      const cachedBg = localStorage.getItem('lalao_splash_bg');
+      return {
+        ...DEFAULT_BRANDING,
+        splashScreenUrl: cachedSplash || null,
+        splashBgColor: cachedBg || DEFAULT_BRANDING.splashBgColor,
+      };
+    } catch {
+      return DEFAULT_BRANDING;
+    }
+  });
 
   // Load branding from the public endpoint and apply document-level overrides.
   useEffect(() => {
@@ -58,6 +74,18 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         };
         if (cancelled) return;
         setBranding(b);
+
+        // Cache active splash branding for instant subsequent page boots
+        try {
+          if (b.splashScreenUrl) {
+            localStorage.setItem('lalao_splash_image', b.splashScreenUrl);
+          } else {
+            localStorage.removeItem('lalao_splash_image');
+          }
+          if (b.splashBgColor) {
+            localStorage.setItem('lalao_splash_bg', b.splashBgColor);
+          }
+        } catch {}
 
         // 1. Favicon
         const favicon = b.faviconUrl || b.brandIconUrl;
@@ -76,14 +104,16 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         document.documentElement.style.setProperty('--brand-font', font);
         document.documentElement.style.setProperty('--brand-font-family', font);
 
-        // 3. Primary color (brand accent across buttons/backgrounds)
+        // 3. Primary & splash colors
+        const root = document.documentElement;
         if (b.primaryColor) {
-          const root = document.documentElement;
           root.style.setProperty('--brand-primary', b.primaryColor);
           root.style.setProperty('--rally-primary', b.primaryColor);
           root.style.setProperty('--rally-join', b.primaryColor);
           root.style.setProperty('--rally-primary-hover', b.primaryColor);
         }
+        const splashBg = b.splashBgColor || b.primaryColor || '#4f46e5';
+        root.style.setProperty('--brand-splash-bg', splashBg);
 
         // 4. Document title
         if (b.platformName) {

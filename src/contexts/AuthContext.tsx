@@ -175,7 +175,7 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
   return {
     id: cu._id,
     name: cu.name || '',
-    username: cu.username || '',
+    username: (cu.username || '').replace(/^@+/, ''),
     avatar: cu.avatar || '',
     email: cu.email || firebaseEmail,
     phone: cu.phone,
@@ -537,10 +537,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     totpEnabled?: boolean;
     isEmailVerified: boolean;
   }) => {
+    const cleanUsername = (data.username || '').trim().replace(/^@+/, '');
     const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=6366f1&color=fff&bold=true&size=200`;
     const userId = await convexCreateUser({
       name: data.name,
-      username: data.username,
+      username: cleanUsername,
       avatar,
       email: data.email,
       isNINVerified: false,
@@ -563,7 +564,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...prev,
       id: userId,
       name: data.name,
-      username: data.username,
+      username: cleanUsername,
       avatar,
       email: data.email,
       onboardingCompleted: false,

@@ -68,6 +68,7 @@ export default function AdminMediaManagement() {
   const [brandingForm, setBrandingForm] = useState({
     appIconUrl: '',
     splashScreenUrl: '',
+    splashBgColor: '#4f46e5',
     brandLogoUrl: '',
     faviconUrl: '',
     primaryColor: '#4f46e5',
@@ -101,6 +102,7 @@ export default function AdminMediaManagement() {
       setBrandingForm({
         appIconUrl: branding.appIconUrl || '',
         splashScreenUrl: branding.splashScreenUrl || '',
+        splashBgColor: (branding as any).splashBgColor || branding.primaryColor || '#4f46e5',
         brandLogoUrl: branding.brandLogoUrl || '',
         faviconUrl: branding.faviconUrl || '',
         primaryColor: branding.primaryColor || '#4f46e5',
@@ -123,7 +125,8 @@ export default function AdminMediaManagement() {
     try {
       await updateBrandingMutation({
         appIconUrl: brandingForm.appIconUrl || undefined,
-        splashScreenUrl: brandingForm.splashScreenUrl || undefined,
+        splashScreenUrl: brandingForm.splashScreenUrl ?? '',
+        splashBgColor: brandingForm.splashBgColor || undefined,
         brandLogoUrl: brandingForm.brandLogoUrl || undefined,
         faviconUrl: brandingForm.faviconUrl || undefined,
         primaryColor: brandingForm.primaryColor || undefined,
@@ -294,28 +297,140 @@ export default function AdminMediaManagement() {
               />
             </div>
 
-            {/* Splash Screen */}
-            <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
+            {/* App Splash Screen */}
+            <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-base font-black text-zinc-900">Splash Screen</h3>
+                  <h3 className="text-base font-black text-zinc-900">App Splash Screen</h3>
                   <p className="text-xs text-zinc-500">
-                    Visual splash displayed during initial application load.
+                    Upload any custom branding image to display prominently on the full-screen app loading screen.
                   </p>
+                </div>
+                {brandingForm.splashScreenUrl ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Custom Image Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 shrink-0 self-start sm:self-auto">
+                    Default Fallback Active
+                  </span>
+                )}
+              </div>
+
+              {/* 1. Dedicated Image Uploader */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-zinc-700 block">
+                  Splash Screen Image
+                </label>
+                <p className="text-[11px] text-zinc-400">
+                  Upload any aspect ratio (PNG, JPG, WebP, SVG). The uploaded image is displayed prominently on the app startup screen.
+                </p>
+                <AdminMediaUploader
+                  mediaType="image"
+                  value={brandingForm.splashScreenUrl}
+                  previewHeightClass="h-56 sm:h-64"
+                  maxSizeMB={20}
+                  onChange={(storageId) =>
+                    setBrandingForm((prev) => ({ ...prev, splashScreenUrl: storageId }))
+                  }
+                  onRemove={() =>
+                    setBrandingForm((prev) => ({ ...prev, splashScreenUrl: '' }))
+                  }
+                />
+              </div>
+
+              {/* 2. Solid Background Colour */}
+              <div className="space-y-3 pt-2 border-t border-zinc-100">
+                <div>
+                  <label className="text-xs font-bold text-zinc-700 block">
+                    Splash Background Colour
+                  </label>
+                  <p className="text-[11px] text-zinc-400">
+                    Solid background filling the viewport behind the splash image.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="color"
+                    value={brandingForm.splashBgColor || '#4f46e5'}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, splashBgColor: e.target.value }))
+                    }
+                    className="w-10 h-10 rounded-xl cursor-pointer border border-zinc-300 p-0.5 bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={brandingForm.splashBgColor || '#4f46e5'}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, splashBgColor: e.target.value }))
+                    }
+                    placeholder="#4f46e5"
+                    className="w-32 px-3 py-2 text-xs font-mono font-bold rounded-xl border border-zinc-300 focus:outline-none focus:border-indigo-600 uppercase"
+                  />
+                  {/* Preset quick colors */}
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { name: 'LALOA Purple', hex: '#4f46e5' },
+                      { name: 'Deep Violet', hex: '#4338ca' },
+                      { name: 'Midnight', hex: '#0f172a' },
+                      { name: 'Zinc Dark', hex: '#18181b' },
+                      { name: 'Ocean Blue', hex: '#0284c7' },
+                    ].map((c) => (
+                      <button
+                        key={c.hex}
+                        type="button"
+                        title={c.name}
+                        onClick={() =>
+                          setBrandingForm((prev) => ({ ...prev, splashBgColor: c.hex }))
+                        }
+                        className={`w-7 h-7 rounded-lg border-2 transition-all cursor-pointer ${
+                          brandingForm.splashBgColor?.toLowerCase() === c.hex.toLowerCase()
+                            ? 'border-indigo-600 scale-110 shadow-sm'
+                            : 'border-transparent hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: c.hex }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <AdminMediaUploader
-                mediaType="image"
-                value={brandingForm.splashScreenUrl}
-                previewHeightClass="h-44"
-                onChange={(storageId) =>
-                  setBrandingForm((prev) => ({ ...prev, splashScreenUrl: storageId }))
-                }
-                onRemove={() =>
-                  setBrandingForm((prev) => ({ ...prev, splashScreenUrl: '' }))
-                }
-              />
+              {/* 3. Live Viewport Preview */}
+              <div className="space-y-2 pt-2 border-t border-zinc-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                    Live Loading Screen Viewport Preview
+                  </span>
+                  <span className="text-[11px] text-zinc-400">
+                    Full-viewport centered with object-contain
+                  </span>
+                </div>
+                <div
+                  className="w-full h-52 sm:h-60 rounded-2xl flex items-center justify-center overflow-hidden border border-zinc-200/50 shadow-inner relative p-4"
+                  style={{ backgroundColor: brandingForm.splashBgColor || '#4f46e5' }}
+                >
+                  {brandingForm.splashScreenUrl ? (
+                    <img
+                      src={brandingForm.splashScreenUrl}
+                      alt="Active Splash Preview"
+                      className="max-w-[85%] max-h-[80%] w-auto h-auto object-contain pointer-events-none select-none drop-shadow-sm"
+                      crossOrigin="anonymous"
+                    />
+                  ) : (
+                    <img
+                      src={
+                        brandingForm.brandLogoUrl ||
+                        brandingForm.appIconUrl ||
+                        '/icon.svg'
+                      }
+                      alt="Fallback Splash Preview"
+                      className="w-16 h-16 sm:w-20 sm:h-20 object-contain aspect-square pointer-events-none select-none opacity-90"
+                      crossOrigin="anonymous"
+                    />
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Main Brand Logo */}

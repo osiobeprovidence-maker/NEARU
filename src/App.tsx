@@ -15,6 +15,7 @@ import AuthErrorBoundary from './components/AuthErrorBoundary';
 import Landing from './pages/Landing';
 import LoginPage from './pages/LoginPage';
 import Onboarding from './pages/Onboarding';
+import SplashScreen from './components/SplashScreen';
 
 // Lazy load pages for now
 const Home = React.lazy(() => import('./pages/Home'));
@@ -120,6 +121,21 @@ const AppRoutes = () => {
         }
       `;
     }
+    // Cache active splash branding
+    if (branding.splashScreenUrl) {
+      try {
+        localStorage.setItem('lalao_splash_image', branding.splashScreenUrl);
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem('lalao_splash_image');
+      } catch {}
+    }
+    if (branding.splashBgColor) {
+      try {
+        localStorage.setItem('lalao_splash_bg', branding.splashBgColor);
+      } catch {}
+    }
   }, [branding]);
 
   // Onboarding is required when the user has a Convex profile but has NOT
@@ -128,26 +144,14 @@ const AppRoutes = () => {
   // convexUserToUser for existing records).
   const needsOnboarding = hasConvexProfile && user.onboardingCompleted === false;
 
-  const Spinner = () => (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
-      {branding?.splashScreenUrl ? (
-        <div className="flex flex-col items-center gap-4 max-w-xs text-center animate-fade-in">
-          <img
-            src={branding.splashScreenUrl}
-            alt="Splash"
-            className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl object-contain shadow-md bg-white p-2"
-          />
-          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center animate-pulse">
-          <span className="text-white font-black text-lg tracking-tighter">L</span>
-        </div>
-      )}
-    </div>
-  );
-
-  if (isAuthLoading) return <Spinner />;
+  if (isAuthLoading) {
+    return (
+      <SplashScreen
+        splashScreenUrl={branding?.splashScreenUrl}
+        backgroundColor={branding?.splashBgColor}
+      />
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -160,7 +164,14 @@ const AppRoutes = () => {
     );
   }
 
-  if (isProfileLoading) return <Spinner />;
+  if (isProfileLoading) {
+    return (
+      <SplashScreen
+        splashScreenUrl={branding?.splashScreenUrl}
+        backgroundColor={branding?.splashBgColor}
+      />
+    );
+  }
 
   // No Convex profile yet (mid-onboarding, or getOrCreateByFirebaseUid still running)
   if (!hasConvexProfile || needsOnboarding) {
@@ -174,7 +185,14 @@ const AppRoutes = () => {
 
   return (
     <ChunkErrorBoundary>
-      <React.Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>
+      <React.Suspense
+        fallback={
+          <SplashScreen
+            splashScreenUrl={branding?.splashScreenUrl}
+            backgroundColor={branding?.splashBgColor}
+          />
+        }
+      >
         <Routes>
         {/* Admin CRM Routes */}
         <Route path="/admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>

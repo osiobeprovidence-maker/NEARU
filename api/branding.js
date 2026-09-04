@@ -13,8 +13,10 @@ const DEFAULT_BRANDING = {
   brandLogoUrl: null,
   brandIconUrl: null,
   faviconUrl: null,
+  splashScreenUrl: null,
   brandFont: "system",
   primaryColor: "#4f46e5",
+  splashBgColor: "#4f46e5",
 };
 
 export default async function handler(req, res) {

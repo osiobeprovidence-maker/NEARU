@@ -340,7 +340,7 @@ export default function AddFriends() {
                           ))}
                         </div>
                         <p className="text-xs text-zinc-500 font-medium truncate">
-                          @{sender.username || 'user'}
+                          @{sender.username ? sender.username.replace(/^@+/, '') : 'user'}
                         </p>
                         {req.message && req.message !== 'Friend request' && (
                           <p className="text-xs text-zinc-600 italic mt-0.5 truncate max-w-xs">
@@ -460,7 +460,7 @@ export default function AddFriends() {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-zinc-500 font-medium truncate">
-                            @{user.username || 'user'}
+                            @{user.username ? user.username.replace(/^@+/, '') : 'user'}
                           </span>
                           {user.mutualCount > 0 ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100 shrink-0">
@@ -682,7 +682,7 @@ export default function AddFriends() {
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs text-zinc-500 font-medium truncate">
-                              @{contact.username || 'user'}
+                              @{contact.username ? contact.username.replace(/^@+/, '') : 'user'}
                             </span>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
                               From your contacts

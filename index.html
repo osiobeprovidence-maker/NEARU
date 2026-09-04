@@ -18,7 +18,40 @@
     <meta name="twitter:description" content="Post, Rally, and connect with people around you on lalao." />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="initial-splash"
+        style="position: fixed; inset: 0; width: 100vw; height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; background-color: #4f46e5; overflow: hidden; margin: 0; padding: 1.5rem; user-select: none;"
+      >
+        <img
+          id="initial-splash-img"
+          src="/icon.svg"
+          alt="LALOA"
+          style="width: clamp(5rem, 16vw, 12rem); height: clamp(5rem, 16vw, 12rem); object-fit: contain; aspect-ratio: 1 / 1; pointer-events: none; user-select: none;"
+        />
+      </div>
+      <script>
+        (function() {
+          try {
+            var splashImg = localStorage.getItem('lalao_splash_image');
+            var splashBg = localStorage.getItem('lalao_splash_bg');
+            var container = document.getElementById('initial-splash');
+            var img = document.getElementById('initial-splash-img');
+            if (splashBg && container) {
+              container.style.backgroundColor = splashBg;
+            }
+            if (splashImg && img) {
+              img.src = splashImg;
+              img.style.width = 'auto';
+              img.style.height = 'auto';
+              img.style.maxWidth = '85vw';
+              img.style.maxHeight = '75vh';
+              img.style.aspectRatio = 'auto';
+            }
+          } catch(e) {}
+        })();
+      </script>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {

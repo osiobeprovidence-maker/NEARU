@@ -33,6 +33,11 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Rally } from '../types';
+import {
+  processAndCompressImage,
+  uploadToConvexStorage,
+  logUploadStage,
+} from '../utils/imageUpload';
 
 const ORG_CATEGORIES = [
   'Sports & Fitness',
@@ -259,7 +264,9 @@ export default function ManagePage() {
               )}
             </div>
 
-            <p className="text-xs font-bold text-zinc-400 mb-2.5">@{user.username}</p>
+            <p className="text-xs font-bold text-zinc-400 mb-2.5">
+              {user.username ? `@${user.username.replace(/^@+/, '')}` : ''}
+            </p>
 
             {(user.description || user.bio) && (
               <p className="text-sm text-zinc-700 font-medium max-w-md mx-auto leading-relaxed mb-3">
@@ -471,7 +478,7 @@ function EditPageSheet({
   const generateCoverUploadUrl = useMutation(api.users.generateCoverUploadUrl);
 
   const [orgName, setOrgName] = useState(user.organizationName || user.name || '');
-  const [username, setUsername] = useState(user.username || '');
+  const [username, setUsername] = useState((user.username || '').replace(/^@+/, ''));
   const [category, setCategory] = useState(user.category || '');
   const [bio, setBio] = useState(user.bio || '');
   const [description, setDescription] = useState(user.description || '');
@@ -493,34 +500,24 @@ function EditPageSheet({
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadImage = async (
-    file: File,
-    generateUrl: () => Promise<string>
-  ): Promise<string> => {
-    const uploadUrl = await generateUrl();
-    const result = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    });
-    const { storageId } = await result.json();
-    return storageId;
-  };
-
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setSaveError('Image must be under 5MB');
-      return;
-    }
     setAvatarUploading(true);
+    setSaveError(null);
+    logUploadStage('SELECT', 'Avatar selected in ManagePage', { name: file.name, size: file.size });
     try {
-      const storageId = await uploadImage(file, generateAvatarUploadUrl);
+      const compressedBlob = await processAndCompressImage(file, {
+        maxWidth: 800,
+        maxHeight: 800,
+        quality: 0.85,
+      });
+      const storageId = await uploadToConvexStorage(compressedBlob, generateAvatarUploadUrl);
       setAvatarStorageId(storageId);
-      setAvatar(URL.createObjectURL(file));
-    } catch {
-      setSaveError('Failed to upload image. Please try again.');
+      setAvatar(URL.createObjectURL(compressedBlob));
+    } catch (err: any) {
+      logUploadStage('UPLOAD', 'Avatar upload failed in ManagePage', { error: err?.message || String(err) });
+      setSaveError(err?.message || 'Failed to upload image. Please try again.');
     } finally {
       setAvatarUploading(false);
       if (avatarInputRef.current) avatarInputRef.current.value = '';
@@ -530,17 +527,21 @@ function EditPageSheet({
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setSaveError('Image must be under 5MB');
-      return;
-    }
     setCoverUploading(true);
+    setSaveError(null);
+    logUploadStage('SELECT', 'Cover selected in ManagePage', { name: file.name, size: file.size });
     try {
-      const storageId = await uploadImage(file, generateCoverUploadUrl);
+      const compressedBlob = await processAndCompressImage(file, {
+        maxWidth: 1920,
+        maxHeight: 1080,
+        quality: 0.85,
+      });
+      const storageId = await uploadToConvexStorage(compressedBlob, generateCoverUploadUrl);
       setCoverStorageId(storageId);
-      setCover(URL.createObjectURL(file));
-    } catch {
-      setSaveError('Failed to upload image. Please try again.');
+      setCover(URL.createObjectURL(compressedBlob));
+    } catch (err: any) {
+      logUploadStage('UPLOAD', 'Cover upload failed in ManagePage', { error: err?.message || String(err) });
+      setSaveError(err?.message || 'Failed to upload image. Please try again.');
     } finally {
       setCoverUploading(false);
       if (coverInputRef.current) coverInputRef.current.value = '';
@@ -555,6 +556,7 @@ function EditPageSheet({
     setIsSaving(true);
     setSaveError(null);
     try {
+      const cleanUsername = username.trim().replace(/^@+/, '');
       const trimmedWebsite = website.trim();
       const websiteValue = trimmedWebsite
         ? trimmedWebsite.includes('://')
@@ -570,7 +572,7 @@ function EditPageSheet({
 
       await updateUserMutation({
         userId: convexUserId as any,
-        username: username.trim(),
+        username: cleanUsername || undefined,
         organizationName: orgName.trim() || undefined,
         category: category || undefined,
         bio: bio.trim() || undefined,
@@ -685,20 +687,21 @@ function EditPageSheet({
                   <Loader2 className="w-6 h-6 text-white animate-spin" />
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => coverInputRef.current?.click()}
-                disabled={coverUploading}
-                className="absolute bottom-2 right-2 p-2 bg-zinc-900/80 hover:bg-zinc-900 text-white rounded-full transition-colors active:scale-95 disabled:opacity-50"
+              <label
+                htmlFor="manage-cover-input"
+                className="absolute bottom-2 right-2 p-2 bg-zinc-900/80 hover:bg-zinc-900 text-white rounded-full transition-colors active:scale-95 cursor-pointer shadow z-10"
                 title="Change Cover Photo"
               >
                 <Camera className="w-4 h-4" />
-              </button>
+              </label>
             </div>
             <input
+              id="manage-cover-input"
               type="file"
               accept="image/*"
-              hidden
+              className="sr-only"
+              tabIndex={-1}
+              disabled={coverUploading}
               ref={coverInputRef}
               onChange={handleCoverUpload}
             />
@@ -718,20 +721,21 @@ function EditPageSheet({
                   <Loader2 className="w-5 h-5 text-white animate-spin" />
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => avatarInputRef.current?.click()}
-                disabled={avatarUploading}
-                className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95 disabled:opacity-50"
+              <label
+                htmlFor="manage-avatar-input"
+                className="absolute bottom-0 right-0 p-1.5 bg-zinc-900 text-white rounded-full hover:bg-zinc-800 transition-all shadow-md active:scale-95 cursor-pointer z-10"
                 title="Change Profile Photo"
               >
                 <Camera className="w-3.5 h-3.5" />
-              </button>
+              </label>
             </div>
             <input
+              id="manage-avatar-input"
               type="file"
               accept="image/*"
-              hidden
+              className="sr-only"
+              tabIndex={-1}
+              disabled={avatarUploading}
               ref={avatarInputRef}
               onChange={handleAvatarUpload}
             />

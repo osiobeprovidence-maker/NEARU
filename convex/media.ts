@@ -62,6 +62,7 @@ export const getBranding = query({
         brandIconUrl: "",
         faviconUrl: "",
         primaryColor: "#4f46e5",
+        splashBgColor: "#4f46e5",
         typography: {
           fontFamily: "Inter",
           headingWeight: "700",
@@ -97,6 +98,7 @@ export const getBranding = query({
       brandIconUrl,
       faviconUrl,
       primaryColor: settings.primaryColor || "#4f46e5",
+      splashBgColor: settings.splashBgColor || settings.primaryColor || "#4f46e5",
       typography: settings.typography
         ? {
             ...settings.typography,
@@ -115,6 +117,7 @@ export const updateBranding = mutation({
   args: {
     appIconUrl: v.optional(v.string()),
     splashScreenUrl: v.optional(v.string()),
+    splashBgColor: v.optional(v.string()),
     brandLogoUrl: v.optional(v.string()),
     brandIconUrl: v.optional(v.string()),
     faviconUrl: v.optional(v.string()),

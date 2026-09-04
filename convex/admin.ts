@@ -619,8 +619,10 @@ const DEFAULT_SETTINGS = {
   brandLogoUrl: undefined,
   brandIconUrl: undefined,
   faviconUrl: undefined,
+  splashScreenUrl: undefined,
   brandFont: "system",
   primaryColor: "#4f46e5",
+  splashBgColor: "#4f46e5",
 };
 
 // Resolve a stored asset from a raw Convex storage id to a public URL.
@@ -645,6 +647,7 @@ export const getSystemSettings = query({
     merged.brandLogoUrl = await resolveBrandAsset(ctx, merged.brandLogoUrl);
     merged.brandIconUrl = await resolveBrandAsset(ctx, merged.brandIconUrl);
     merged.faviconUrl = await resolveBrandAsset(ctx, merged.faviconUrl);
+    merged.splashScreenUrl = await resolveBrandAsset(ctx, merged.splashScreenUrl);
     return merged;
   },
 });
@@ -660,8 +663,10 @@ export const getPublicBranding = query({
       brandLogoUrl: await resolveBrandAsset(ctx, doc?.brandLogoUrl),
       brandIconUrl: await resolveBrandAsset(ctx, doc?.brandIconUrl),
       faviconUrl: await resolveBrandAsset(ctx, doc?.faviconUrl),
+      splashScreenUrl: await resolveBrandAsset(ctx, doc?.splashScreenUrl),
       brandFont: doc?.brandFont ?? DEFAULT_SETTINGS.brandFont,
       primaryColor: doc?.primaryColor ?? DEFAULT_SETTINGS.primaryColor,
+      splashBgColor: doc?.splashBgColor ?? doc?.primaryColor ?? DEFAULT_SETTINGS.splashBgColor,
     };
   },
 });
@@ -680,8 +685,10 @@ export const updateSystemSettings = mutation({
     brandLogoUrl: v.optional(v.string()),
     brandIconUrl: v.optional(v.string()),
     faviconUrl: v.optional(v.string()),
+    splashScreenUrl: v.optional(v.string()),
     brandFont: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
+    splashBgColor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const admin = await gate(ctx, args);

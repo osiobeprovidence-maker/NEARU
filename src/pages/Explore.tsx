@@ -287,7 +287,7 @@ function PeoplePanel({ people, convexUserId, handleToggleFollow, handleBlock }: 
                 {p.isNINVerified && <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />}
               </div>
               <p className="text-xs text-zinc-500 font-medium truncate">
-                @{p.username} · {p.followersCount} followers
+                @{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers
               </p>
               {p.bio && <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">{p.bio}</p>}
             </Link>

@@ -21,8 +21,14 @@ import {
   Heart,
   Upload,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
+import {
+  processAndCompressImage,
+  uploadToConvexStorage,
+  logUploadStage,
+} from '../utils/imageUpload';
 
 const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=faces',
@@ -59,7 +65,7 @@ export default function EditProfile() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user.name || '');
-  const [username, setUsername] = useState(user.username || '');
+  const [username, setUsername] = useState((user.username || '').replace(/^@+/, ''));
   const [bio, setBio] = useState(user.bio || '');
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone || '');
@@ -88,6 +94,7 @@ export default function EditProfile() {
   const [avatar, setAvatar] = useState(user.avatar || '');
   const [avatarStorageId, setAvatarStorageId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [lastFailedFile, setLastFailedFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -98,31 +105,45 @@ export default function EditProfile() {
   const selectedStateData = NIGERIA_STATES.find((s) => s.name === selectedState);
   const availableCities = selectedStateData?.cities || [];
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setSaveError('Image must be under 5MB');
-      return;
-    }
+  const performAvatarUpload = async (file: File) => {
     setIsUploading(true);
+    setSaveError(null);
+    setLastFailedFile(null);
+    logUploadStage('SELECT', 'Avatar photo selected in EditProfile', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
     try {
-      const uploadUrl = await generateAvatarUploadUrl();
-      const result = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: file,
+      const compressedBlob = await processAndCompressImage(file, {
+        maxWidth: 800,
+        maxHeight: 800,
+        quality: 0.85,
       });
-      const { storageId } = await result.json();
+      const blobUrl = URL.createObjectURL(compressedBlob);
+      setAvatar(blobUrl);
+
+      const storageId = await uploadToConvexStorage(
+        compressedBlob,
+        generateAvatarUploadUrl
+      );
       setAvatarStorageId(storageId);
-      setAvatar(URL.createObjectURL(file));
       setShowAvatarPicker(false);
-    } catch {
-      setSaveError('Failed to upload image. Please try again.');
+      logUploadStage('PROCESS', 'Avatar uploaded to storage in EditProfile', { storageId });
+    } catch (err: any) {
+      logUploadStage('UPLOAD', 'Avatar upload failed in EditProfile', { error: err?.message || String(err) });
+      setSaveError(err?.message || 'Failed to upload image. Please try again.');
+      setLastFailedFile(file);
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    performAvatarUpload(file);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -141,12 +162,13 @@ export default function EditProfile() {
         : user.location || '';
 
     const avatarToSave = avatarStorageId || avatar;
+    const cleanUsername = username.trim().replace(/^@+/, '');
 
     try {
       await updateUserMutation({
         userId: convexUserId as any,
         name: name || undefined,
-        username: username ? (username.startsWith('@') ? username : `@${username}`) : undefined,
+        username: cleanUsername || undefined,
         avatar: avatarToSave || undefined,
         bio: bio || undefined,
         phone: phone || undefined,
@@ -163,7 +185,7 @@ export default function EditProfile() {
 
       updateUser({
         name,
-        username: username.startsWith('@') ? username : `@${username}`,
+        username: cleanUsername,
         bio,
         email,
         phone,
@@ -281,24 +303,39 @@ export default function EditProfile() {
             {showAvatarPicker && (
               <div className="mt-3 pt-3 border-t border-zinc-100 animate-in fade-in duration-200">
                 <input
+                  id="edit-profile-avatar-input"
                   type="file"
                   ref={fileInputRef}
                   onChange={handleImageUpload}
-                  className="hidden"
-                  accept="image/jpeg,image/png,image/webp"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  className="sr-only"
+                  tabIndex={-1}
                   disabled={isUploading}
-                  className="w-full mb-3 py-3 border-2 border-dashed border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all disabled:opacity-50"
+                  accept="image/*"
+                />
+                <label
+                  htmlFor="edit-profile-avatar-input"
+                  className="w-full mb-3 py-3 border-2 border-dashed border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all cursor-pointer select-none"
                 >
                   {isUploading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Optimizing & uploading...</>
                   ) : (
                     <><Upload className="w-4 h-4" /> Upload your own photo</>
                   )}
-                </button>
+                </label>
+
+                {saveError && lastFailedFile && (
+                  <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2 text-xs text-rose-700">
+                    <span className="truncate">{saveError}</span>
+                    <button
+                      type="button"
+                      onClick={() => performAvatarUpload(lastFailedFile)}
+                      className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shrink-0 flex items-center gap-1 active:scale-95 transition-all"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Retry
+                    </button>
+                  </div>
+                )}
                 <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Or choose a preset</p>
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5 max-w-sm mx-auto">
                   {PRESET_AVATARS.map((presetUrl, idx) => (

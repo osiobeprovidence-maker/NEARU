@@ -162,7 +162,7 @@ export default function Settings() {
                     )}
                   </div>
                   <p className="text-xs text-zinc-400 font-semibold truncate">
-                    {user.username ? `@${user.username}` : ''} {user.location ? `· ${user.location}` : ''}
+                    {user.username ? `@${user.username.replace(/^@+/, '')}` : ''} {user.location ? `· ${user.location}` : ''}
                   </p>
                 </div>
               </div>

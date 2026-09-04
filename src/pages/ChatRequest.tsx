@@ -110,7 +110,7 @@ export default function ChatRequest() {
                 ))}
               </div>
               {sender?.username && (
-                <p className="text-xs font-semibold text-zinc-400 mb-1">@{sender.username}</p>
+                <p className="text-xs font-semibold text-zinc-400 mb-1">@{sender.username.replace(/^@+/, '')}</p>
               )}
               <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full mb-5">
                 Message request
