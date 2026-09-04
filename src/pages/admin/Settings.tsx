@@ -27,6 +27,7 @@ import { getBrandUploadUrl } from '../../lib/adminClient';
 import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
 import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
+import { toValidHexColor } from './MediaManagement';
 
 const BRAND_FONTS = [
   { value: 'system', label: 'System default' },
@@ -330,7 +331,7 @@ export default function AdminSettings() {
               <div className="flex items-center gap-3">
                 <input
                   type="color"
-                  value={formData.primaryColor || '#4f46e5'}
+                  value={toValidHexColor(formData.primaryColor, '#4f46e5')}
                   onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
                   className="w-12 h-12 rounded-xl border border-zinc-200 cursor-pointer bg-white"
                 />

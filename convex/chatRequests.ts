@@ -193,11 +193,26 @@ export const sendDirect = mutation({
       updatedAt: now,
     });
 
+    let senderAvatar: string | undefined = undefined;
+    if (caller?.avatar) {
+      if (caller.avatar.startsWith("http")) {
+        senderAvatar = caller.avatar;
+      } else {
+        try {
+          const url = await ctx.storage.getUrl(caller.avatar);
+          if (url) senderAvatar = url;
+        } catch {}
+      }
+    }
+
     await ctx.runMutation(api.notifications.create, {
       userId: args.toUserId,
       type: "message_request",
-      title: "New message request",
-      body: `${caller.name || "Someone"} wants to message you.`,
+      title: `${caller.name || "Someone"} sent a message request`,
+      body: `"${text.length > 80 ? text.slice(0, 80) + "…" : text}"`,
+      url: "/chat-requests",
+      senderId: caller._id,
+      icon: senderAvatar,
     });
 
     return { type: "request", requestId };

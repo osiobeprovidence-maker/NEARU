@@ -26,8 +26,18 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
 
       if (event.request.mode === 'navigate') {
-        const shell = await caches.match('/index.html');
+        const shell = (await caches.match('/index.html')) || (await caches.match('/'));
         if (shell) return shell;
+        try {
+          const fresh = await fetch('/index.html');
+          if (fresh.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put('/index.html', fresh.clone());
+            return fresh;
+          }
+        } catch {
+          // Continue to fallback
+        }
       }
 
       return new Response('Offline', {
@@ -40,7 +50,14 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'lalao', body: 'New activity nearby', url: '/' };
+  let data = {
+    title: 'Lalao',
+    body: 'New activity nearby',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    url: '/',
+  };
+
   if (event.data) {
     try {
       data = { ...data, ...event.data.json() };
@@ -48,29 +65,50 @@ self.addEventListener('push', (event) => {
       data.body = event.data.text();
     }
   }
+
+  const notificationOptions = {
+    body: data.body,
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/icon-192.png',
+    data: { url: data.url || '/' },
+    tag: data.tag || undefined,
+    renotify: Boolean(data.tag),
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      data: { url: data.url },
-      vibrate: [200, 100, 200],
-    })
+    self.registration.showNotification(data.title || 'Lalao', notificationOptions)
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
+  const rawUrl = event.notification.data?.url || '/';
+  const targetUrl = new URL(rawUrl, self.location.origin).href;
+
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // If a window is already at this exact target URL, just focus it
       for (const client of clients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(url);
+        if (client.url === targetUrl && 'focus' in client) {
           return client.focus();
         }
       }
-      return self.clients.openWindow(url);
+      // If an existing Lalao window is open, navigate it to targetUrl and focus
+      for (const client of clients) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      // Otherwise open a new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
     })
   );
 });
+

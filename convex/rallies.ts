@@ -670,7 +670,14 @@ export const toggleRsvp = mutation({
     if (existing) {
       await ctx.db.delete(existing._id);
       try {
-        await ctx.runMutation(api.notifications.create, { userId: rally.creatorId, type: "rally_participant_left", title: "Participant left", body: `${caller.name || "Someone"} left "${rally.title}".`, rallyId: args.rallyId });
+        await ctx.runMutation(api.notifications.create, {
+          userId: rally.creatorId,
+          type: "rally_participant_left",
+          title: "Participant left",
+          body: `${caller.name || "Someone"} left "${rally.title}".`,
+          rallyId: args.rallyId,
+          url: `/rally/${args.rallyId}`,
+        });
       } catch {}
       return { rsvpd: false };
     }
@@ -681,7 +688,14 @@ export const toggleRsvp = mutation({
     }
     await ctx.db.insert("rsvps", { userId: caller._id, rallyId: args.rallyId, createdAt: Date.now() });
     try {
-      await ctx.runMutation(api.notifications.create, { userId: rally.creatorId, type: "rally_participant_joined", title: "New participant", body: `${caller.name || "Someone"} joined "${rally.title}".`, rallyId: args.rallyId });
+      await ctx.runMutation(api.notifications.create, {
+        userId: rally.creatorId,
+        type: "rally_participant_joined",
+        title: "New participant",
+        body: `${caller.name || "Someone"} joined "${rally.title}".`,
+        rallyId: args.rallyId,
+        url: `/rally/${args.rallyId}`,
+      });
     } catch {}
     return { rsvpd: true };
   },

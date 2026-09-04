@@ -47,6 +47,18 @@ const BODY_WEIGHTS = [
   { value: '500', label: 'Medium (500)' },
 ];
 
+export function toValidHexColor(val?: string, fallback = '#4f46e5'): string {
+  if (!val) return fallback;
+  const trimmed = val.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
+  }
+  return fallback;
+}
+
 export default function AdminMediaManagement() {
   const [activeTab, setActiveTab] = useState<'branding' | 'emojis' | 'fonts' | 'ads'>('branding');
 
@@ -353,7 +365,7 @@ export default function AdminMediaManagement() {
                 <div className="flex flex-wrap items-center gap-3">
                   <input
                     type="color"
-                    value={brandingForm.splashBgColor || '#4f46e5'}
+                    value={toValidHexColor(brandingForm.splashBgColor, '#4f46e5')}
                     onChange={(e) =>
                       setBrandingForm((prev) => ({ ...prev, splashBgColor: e.target.value }))
                     }

@@ -16,6 +16,7 @@ import {
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { unsubscribeUserFromPush, syncPushSubscriptionSilently } from '../utils/pushManager';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -290,6 +291,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const convexSetPro = useMutation(api.users.setPro);
   const convexSetAccountType = useMutation(api.users.setAccountType);
   const convexCompleteOnboarding = useMutation(api.users.completeOnboarding);
+  const convexClearPushSubscriptions = useMutation(api.notifications.clearUserPushSubscriptions);
+  const convexSavePushSubscription = useMutation(api.notifications.savePushSubscription);
 
   // ---------------------------------------------------------------------------
   // Firebase auth state listener
@@ -352,6 +355,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId: uidQueryResult._id as any,
         firebaseUid: firebaseUser.uid,
       }).catch(() => {});
+    }
+
+    // Silently verify/refresh push subscription if user has push enabled
+    if (u.notificationSettings?.pushEnabled !== false) {
+      syncPushSubscriptionSilently(uidQueryResult._id, convexSavePushSubscription);
     }
   }, [isAuthLoading, firebaseUser, uidQueryResult]);
 
@@ -495,6 +503,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      if (convexUserId) {
+        await unsubscribeUserFromPush(convexUserId, convexClearPushSubscriptions);
+      }
+    } catch (e) {
+      console.warn('[AuthContext] Failed to clear push subscriptions on logout:', e);
+    }
     await signOut(auth);
   };
 

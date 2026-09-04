@@ -82,6 +82,7 @@ async function notify(ctx, userId, type, title, body, rallyId) {
       title,
       body,
       rallyId,
+      url: rallyId ? `/rally/${rallyId}` : "/notifications",
     });
   } catch {
     // best-effort

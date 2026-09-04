@@ -135,15 +135,15 @@ export const updateBranding = mutation({
     const existing = await ctx.db.query("systemSettings").first();
     const now = Date.now();
 
-    const updates: Record<string, any> = { updatedAt: now };
+    const cleanUpdates: Record<string, any> = { updatedAt: now };
     for (const [k, v] of Object.entries(args)) {
       if (v !== undefined) {
-        updates[k] = v;
+        cleanUpdates[k] = v;
       }
     }
 
     if (existing) {
-      await ctx.db.patch(existing._id, updates);
+      await ctx.db.patch(existing._id, cleanUpdates);
     } else {
       await ctx.db.insert("systemSettings", {
         platformName: "lalao",
@@ -153,9 +153,7 @@ export const updateBranding = mutation({
         requireEmailVerification: false,
         autoVerifyPhone: false,
         maintenanceMode: false,
-        ...updates,
-        updatedAt: now,
-        updatedBy: undefined as any,
+        ...cleanUpdates,
       });
     }
 

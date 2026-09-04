@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Users, Share2, Compass, Bell, X, MapPin } from 'lucide-react';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useLocation } from '../contexts/LocationContext';
 import { haversineDistance, formatDistance } from '../lib/geo';
@@ -8,6 +8,7 @@ import { Rally } from '../types';
 import PostCard from '../components/PostCard';
 import AdCard from '../components/AdCard';
 import { useAuth } from '../contexts/AuthContext';
+import { subscribeUserToPush } from '../utils/pushManager';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
 
@@ -71,19 +72,23 @@ export default function Home() {
     setDeletedIds((prev) => new Set([...prev, id]));
   };
 
+  const savePushSubscription = useMutation(api.notifications.savePushSubscription);
+
   const handleEnableNotifications = async () => {
-    if ('Notification' in window) {
-      const result = await Notification.requestPermission();
-      if (result === 'granted') {
+    if (convexUserId || user.id) {
+      const res = await subscribeUserToPush((convexUserId || user.id) as string, savePushSubscription);
+      if (res.success) {
         window.dispatchEvent(
           new CustomEvent('show-toast', {
             detail: {
-              title: 'Notifications enabled!',
-              subtitle: "You'll get alerted when something new is posted near you.",
+              title: 'Push notifications enabled!',
+              subtitle: "You'll get real OS alerts even when Lalao is minimized.",
             },
           })
         );
       }
+    } else if ('Notification' in window) {
+      await Notification.requestPermission();
     }
     localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
     setShowNotifPrompt(false);

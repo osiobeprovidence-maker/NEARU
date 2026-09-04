@@ -408,7 +408,12 @@ export default defineSchema({
     type: v.string(),
     title: v.string(),
     body: v.string(),
+    url: v.optional(v.string()),
     rallyId: v.optional(v.id("rallies")),
+    senderId: v.optional(v.id("users")),
+    conversationId: v.optional(v.id("conversations")),
+    icon: v.optional(v.string()),
+    data: v.optional(v.any()),
     read: v.boolean(),
     createdAt: v.number(),
   })
@@ -421,7 +426,10 @@ export default defineSchema({
     endpoint: v.string(),
     p256dh: v.string(),
     auth: v.string(),
+    platform: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]).index("by_endpoint", ["endpoint"]),
 
   verifications: defineTable({

@@ -193,14 +193,46 @@ async function sendToConversationImpl(ctx: any, args: any) {
   });
 
   const sender: any = caller;
+  let senderAvatar: string | undefined = undefined;
+  if (sender?.avatar) {
+    if (sender.avatar.startsWith("http")) {
+      senderAvatar = sender.avatar;
+    } else {
+      try {
+        const url = await ctx.storage.getUrl(sender.avatar);
+        if (url) senderAvatar = url;
+      } catch {}
+    }
+  }
+
+  const messagePreview = hasAudio
+    ? "🎤 Voice note"
+    : text.length > 80
+    ? text.slice(0, 80) + "…"
+    : text;
+
   for (const otherId of conv.participantIds) {
     if (id(otherId) === id(caller._id)) continue;
+    const notifTitle =
+      conv.type === "rally"
+        ? conv.rallyTitle || "RALLY Chat"
+        : sender?.name || "New Message";
+
+    const notifBody =
+      conv.type === "rally"
+        ? `${sender?.name || "Someone"}: ${messagePreview}`
+        : messagePreview;
+
     await ctx.runMutation(api.notifications.create, {
       userId: otherId,
       type: "new_message",
-      title: conv.type === "rally" ? "New message in RALLY chat" : "New message",
-      body: `${sender?.name || "Someone"}: ${hasAudio ? "🎤 Voice note" : text.length > 60 ? text.slice(0, 60) + "…" : text}`,
+      title: notifTitle,
+      body: notifBody,
+      url: `/chat/${conv._id}`,
       rallyId: conv.rallyId,
+      senderId: caller._id,
+      conversationId: conv._id,
+      icon: senderAvatar,
     });
   }
 
