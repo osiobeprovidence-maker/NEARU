@@ -336,8 +336,14 @@ export const clearUserPushSubscriptions = mutation({
       return;
     }
 
-    const caller = await getOptionalAuthenticatedUser(ctx);
-    const targetUserId = args.userId || caller?._id;
+    let targetUserId = args.userId;
+    if (!targetUserId) {
+      const identity = await ctx.auth.getUserIdentity();
+      if (identity?.subject) {
+        const caller = await getOptionalAuthenticatedUser(ctx);
+        if (caller) targetUserId = caller._id;
+      }
+    }
     if (!targetUserId) return;
 
     const subs = await ctx.db

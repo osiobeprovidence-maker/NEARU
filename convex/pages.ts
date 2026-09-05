@@ -110,8 +110,11 @@ export const getBySlug = query({
 
     let targetViewerId = args.viewerId;
     if (!targetViewerId) {
-      const viewer = await getOptionalAuthenticatedUser(ctx);
-      if (viewer) targetViewerId = viewer._id;
+      const identity = await ctx.auth.getUserIdentity();
+      if (identity?.subject) {
+        const viewer = await getOptionalAuthenticatedUser(ctx);
+        if (viewer) targetViewerId = viewer._id;
+      }
     }
 
     if (targetViewerId) {
@@ -168,8 +171,11 @@ export const getById = query({
 
     let targetViewerId = args.viewerId;
     if (!targetViewerId) {
-      const viewer = await getOptionalAuthenticatedUser(ctx);
-      if (viewer) targetViewerId = viewer._id;
+      const identity = await ctx.auth.getUserIdentity();
+      if (identity?.subject) {
+        const viewer = await getOptionalAuthenticatedUser(ctx);
+        if (viewer) targetViewerId = viewer._id;
+      }
     }
 
     if (targetViewerId) {
@@ -211,6 +217,10 @@ export const listUserManagedPages = query({
   handler: async (ctx, args) => {
     let targetUserId = args.userId;
     if (!targetUserId) {
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity?.subject) {
+        return [];
+      }
       const caller = await getOptionalAuthenticatedUser(ctx);
       if (!caller) {
         return [];

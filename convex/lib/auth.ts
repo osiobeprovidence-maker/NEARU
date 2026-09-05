@@ -40,33 +40,40 @@ import { type MutationCtx, type QueryCtx } from "../_generated/server";
  * if the identity cannot be established.
  */
 export async function getAuthenticatedUser(ctx: MutationCtx | QueryCtx) {
-  const identity = await ctx.auth.getUserIdentity();
+  let identity;
+  try {
+    identity = await ctx.auth.getUserIdentity();
+  } catch (err: any) {
+    console.error("[auth] Failed to retrieve user identity from JWT:", err);
+    throw new Error("Authentication failure: could not verify identity credentials.");
+  }
 
   if (!identity) {
+    console.warn("[auth] No authenticated Firebase identity found on request (JWT missing or expired).");
     throw new Error("Unauthenticated: you must be signed in to perform this action.");
   }
 
-  // identity.subject is the Firebase UID (set by Convex from the JWT `sub` claim,
-  // which Firebase populates with the UID for all token types).
   const firebaseUid = identity.subject;
   if (!firebaseUid) {
+    console.warn("[auth] Firebase identity token missing subject (UID) claim.");
     throw new Error("Authentication error: Firebase UID missing from identity token.");
   }
 
-  // Look up the Convex user by their stable Firebase UID.
-  // Use .first() not .unique() — safe even if a duplicate exists (race condition
-  // during migration), whereas .unique() would throw and crash the request.
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", firebaseUid))
-    .first();
+  let user;
+  try {
+    user = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", firebaseUid))
+      .first();
+  } catch (dbErr: any) {
+    console.error("[auth] Database error querying users table by_firebase_uid:", dbErr);
+    throw new Error("Database error: failed to query user profile.");
+  }
 
   if (!user) {
-    // Firebase auth succeeded but no Convex user record exists yet.
-    // This happens during the brief window between Firebase account creation
-    // and the completion of the onboarding mutation that creates the record.
-    // Throw a specific error so callers can distinguish "not found" from
-    // "unauthenticated" and the frontend can redirect to onboarding.
+    console.warn(
+      `[auth] Firebase user authenticated (UID: ${firebaseUid.slice(0, 8)}...) but no Convex user record exists yet.`
+    );
     throw new Error(
       "Profile not found: your Firebase account is authenticated but no lalao profile exists yet. " +
       "Please complete onboarding."
@@ -87,35 +94,42 @@ export async function getAuthenticatedUser(ctx: MutationCtx | QueryCtx) {
  * requests (no valid JWT).
  */
 export async function getAuthenticatedUserOrNull(ctx: MutationCtx | QueryCtx) {
-  const identity = await ctx.auth.getUserIdentity();
+  let identity;
+  try {
+    identity = await ctx.auth.getUserIdentity();
+  } catch (err: any) {
+    console.error("[auth] Failed to retrieve user identity in getAuthenticatedUserOrNull:", err);
+    throw new Error("Authentication failure: could not verify identity credentials.");
+  }
+
   if (!identity) {
+    console.warn("[auth] No authenticated Firebase identity in getAuthenticatedUserOrNull.");
     throw new Error("Unauthenticated: you must be signed in to perform this action.");
   }
+
   const firebaseUid = identity.subject;
   if (!firebaseUid) {
+    console.warn("[auth] Firebase identity token missing subject claim in getAuthenticatedUserOrNull.");
     throw new Error("Authentication error: Firebase UID missing from identity token.");
   }
-  return await ctx.db
-    .query("users")
-    .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", firebaseUid))
-    .first() ?? null;
+
+  try {
+    return (
+      (await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", firebaseUid))
+        .first()) ?? null
+    );
+  } catch (dbErr: any) {
+    console.error("[auth] Database error in getAuthenticatedUserOrNull:", dbErr);
+    throw new Error("Database error: failed to query user profile.");
+  }
 }
 
 /**
- * Returns the authenticated user document if a valid Firebase JWT is present
- * and a corresponding Convex user record exists. Returns null otherwise (does not throw).
- * Use this for queries or public mutations where an authenticated caller is optional.
+ * Canonical export alias for optional authenticated user resolution.
  */
-export async function getOptionalAuthenticatedUser(ctx: MutationCtx | QueryCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) return null;
-  return (
-    (await ctx.db
-      .query("users")
-      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", identity.subject))
-      .first()) ?? null
-  );
-}
+export const getOptionalAuthenticatedUser = getAuthenticatedUserOrNull;
 
 // ---------------------------------------------------------------------------
 // Admin guard — wraps getAuthenticatedUser and enforces admin role
