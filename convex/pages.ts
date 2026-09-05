@@ -14,6 +14,7 @@ function cleanSlug(slug: string): string {
 function isStorageId(id?: string | null): boolean {
   return Boolean(
     id &&
+      typeof id === "string" &&
       !id.startsWith("http://") &&
       !id.startsWith("https://") &&
       !id.startsWith("data:") &&
@@ -21,24 +22,64 @@ function isStorageId(id?: string | null): boolean {
   );
 }
 
+function extractStorageId(val?: string | null): string | null {
+  if (!val || typeof val !== "string") return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  if (isStorageId(trimmed)) return trimmed;
+  const match = trimmed.match(/\/api\/storage\/([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) return match[1];
+  return null;
+}
+
 async function resolveStorageUrl(
   ctx: any,
-  val?: string | null
+  val?: string | null,
+  cache?: Record<string, string | undefined>
 ): Promise<string | undefined> {
-  if (!val) return undefined;
-  if (!isStorageId(val)) return val;
+  if (!val || typeof val !== "string") return undefined;
+  const trimmed = val.trim();
+  if (!trimmed) return undefined;
+
+  // If it's a Convex storage URL, attempt to extract and re-resolve to a fresh URL
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    const extracted = extractStorageId(trimmed);
+    if (extracted && isStorageId(extracted)) {
+      if (cache && extracted in cache) return cache[extracted];
+      try {
+        const url = await ctx.storage.getUrl(extracted as any);
+        if (url) {
+          if (cache) cache[extracted] = url;
+          return url;
+        }
+      } catch {
+        // Fall back to original if resolution fails
+      }
+    }
+    return trimmed;
+  }
+
+  // Direct storage ID
+  const sid = extractStorageId(trimmed);
+  if (!sid) return undefined;
+  if (cache && sid in cache) return cache[sid];
+
   try {
-    const url = await ctx.storage.getUrl(val as any);
-    return url || val;
+    const url = await ctx.storage.getUrl(sid as any);
+    const resolved = url || undefined;
+    if (cache) cache[sid] = resolved;
+    return resolved;
   } catch {
-    return val;
+    if (cache) cache[sid] = undefined;
+    return undefined;
   }
 }
 
 async function safeDeleteStorageFile(ctx: any, storageId?: string | null) {
-  if (storageId && isStorageId(storageId)) {
+  const sid = extractStorageId(storageId);
+  if (sid && isStorageId(sid)) {
     try {
-      await ctx.storage.delete(storageId as any);
+      await ctx.storage.delete(sid as any);
     } catch (err) {
       console.warn("[pages] Safe storage delete caught error:", err);
     }
@@ -544,19 +585,22 @@ export const updateProfileImage = mutation({
     const caller = await resolveCallerUser(ctx, args.userId);
     const { page } = await checkPageManagerPermission(ctx, args.pageId, caller);
 
+    const cleanStorageId = extractStorageId(args.storageId) || args.storageId.trim();
+    if (!cleanStorageId) throw new Error("A valid storage ID is required.");
+
     const oldAvatar = page.avatar;
-    if (oldAvatar && oldAvatar !== args.storageId) {
+    if (oldAvatar && oldAvatar !== cleanStorageId) {
       await safeDeleteStorageFile(ctx, oldAvatar);
     }
 
     const now = Date.now();
     await ctx.db.patch(args.pageId, {
-      avatar: args.storageId,
+      avatar: cleanStorageId,
       updatedAt: now,
     });
 
-    const url = await resolveStorageUrl(ctx, args.storageId);
-    return { success: true, avatar: url, storageId: args.storageId };
+    const url = await resolveStorageUrl(ctx, cleanStorageId);
+    return { success: true, avatar: url, storageId: cleanStorageId };
   },
 });
 
@@ -600,19 +644,22 @@ export const updateCoverImage = mutation({
     const caller = await resolveCallerUser(ctx, args.userId);
     const { page } = await checkPageManagerPermission(ctx, args.pageId, caller);
 
+    const cleanStorageId = extractStorageId(args.storageId) || args.storageId.trim();
+    if (!cleanStorageId) throw new Error("A valid storage ID is required.");
+
     const oldCover = page.coverImage;
-    if (oldCover && oldCover !== args.storageId) {
+    if (oldCover && oldCover !== cleanStorageId) {
       await safeDeleteStorageFile(ctx, oldCover);
     }
 
     const now = Date.now();
     await ctx.db.patch(args.pageId, {
-      coverImage: args.storageId,
+      coverImage: cleanStorageId,
       updatedAt: now,
     });
 
-    const url = await resolveStorageUrl(ctx, args.storageId);
-    return { success: true, coverImage: url, storageId: args.storageId };
+    const url = await resolveStorageUrl(ctx, cleanStorageId);
+    return { success: true, coverImage: url, storageId: cleanStorageId };
   },
 });
 
@@ -669,17 +716,42 @@ export const update = mutation({
     if (args.description !== undefined) updates.description = args.description.trim();
 
     if (args.avatar !== undefined) {
-      if (page.avatar && page.avatar !== args.avatar) {
-        await safeDeleteStorageFile(ctx, page.avatar);
+      const trimmed = args.avatar ? args.avatar.trim() : "";
+      if (!trimmed) {
+        if (page.avatar) {
+          await safeDeleteStorageFile(ctx, page.avatar);
+        }
+        updates.avatar = undefined;
+      } else {
+        const sid = extractStorageId(trimmed);
+        const isUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+        // Only update avatar if it's a valid new storage ID, not an echoed http(s) URL
+        if (sid && !isUrl) {
+          if (page.avatar && page.avatar !== sid) {
+            await safeDeleteStorageFile(ctx, page.avatar);
+          }
+          updates.avatar = sid;
+        }
       }
-      updates.avatar = args.avatar || undefined;
     }
 
     if (args.coverImage !== undefined) {
-      if (page.coverImage && page.coverImage !== args.coverImage) {
-        await safeDeleteStorageFile(ctx, page.coverImage);
+      const trimmed = args.coverImage ? args.coverImage.trim() : "";
+      if (!trimmed) {
+        if (page.coverImage) {
+          await safeDeleteStorageFile(ctx, page.coverImage);
+        }
+        updates.coverImage = undefined;
+      } else {
+        const sid = extractStorageId(trimmed);
+        const isUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+        if (sid && !isUrl) {
+          if (page.coverImage && page.coverImage !== sid) {
+            await safeDeleteStorageFile(ctx, page.coverImage);
+          }
+          updates.coverImage = sid;
+        }
       }
-      updates.coverImage = args.coverImage || undefined;
     }
 
     if (args.website !== undefined) updates.website = args.website.trim();

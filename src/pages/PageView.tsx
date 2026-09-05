@@ -66,9 +66,12 @@ export default function PageView() {
   const [editDescription, setEditDescription] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
-  const [editAvatar, setEditAvatar] = useState('');
-  const [editCover, setEditCover] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [coverImgFailed, setCoverImgFailed] = useState(false);
+
+  useEffect(() => {
+    setCoverImgFailed(false);
+  }, [page?.coverImage]);
 
   const openEditModal = () => {
     if (!page) return;
@@ -77,8 +80,6 @@ export default function PageView() {
     setEditDescription(page.description || '');
     setEditLocation(page.location || '');
     setEditWebsite(page.website || '');
-    setEditAvatar(page.avatar || '');
-    setEditCover(page.coverImage || '');
     setIsEditOpen(true);
   };
 
@@ -153,8 +154,6 @@ export default function PageView() {
         description: editDescription,
         location: editLocation,
         website: editWebsite,
-        avatar: editAvatar,
-        coverImage: editCover,
       });
       setIsEditOpen(false);
       window.dispatchEvent(
@@ -279,10 +278,10 @@ export default function PageView() {
         <div
           className={cn(
             "relative h-44 sm:h-56 bg-gradient-to-r from-zinc-800 to-zinc-950 overflow-hidden group",
-            isManager && !page.coverImage && "cursor-pointer"
+            isManager && (!page.coverImage || coverImgFailed) && "cursor-pointer"
           )}
           onClick={
-            isManager && !page.coverImage
+            isManager && (!page.coverImage || coverImgFailed)
               ? () => {
                   setCropModalMode('cover');
                   setCropModalOpen(true);
@@ -290,10 +289,11 @@ export default function PageView() {
               : undefined
           }
         >
-          {page.coverImage ? (
+          {page.coverImage && !coverImgFailed ? (
             <img
               src={page.coverImage}
               alt={page.name}
+              onError={() => setCoverImgFailed(true)}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -301,7 +301,7 @@ export default function PageView() {
               <Flag className="w-12 h-12" />
               {isManager && (
                 <span className="text-xs font-bold text-white/70 bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm group-hover:bg-black/50 transition-colors">
-                  Click to add cover photo
+                  {coverImgFailed ? 'Update cover photo' : 'Click to add cover photo'}
                 </span>
               )}
             </div>
@@ -779,20 +779,6 @@ export default function PageView() {
           mode={cropModalMode}
           currentImageUrl={cropModalMode === 'avatar' ? page.avatar : page.coverImage}
           pageName={page.name}
-          onSuccess={(newUrl) => {
-            if (cropModalMode === 'avatar') {
-              setEditAvatar(newUrl || '');
-            } else {
-              setEditCover(newUrl || '');
-            }
-          }}
-          onRemove={() => {
-            if (cropModalMode === 'avatar') {
-              setEditAvatar('');
-            } else {
-              setEditCover('');
-            }
-          }}
         />
       )}
     </PageShell>

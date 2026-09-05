@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -58,13 +58,23 @@ export default function CreatePageModal({
   const [phone, setPhone] = useState('');
 
   // Media
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [coverUrl, setCoverUrl] = useState('');
+  const [avatarStorageId, setAvatarStorageId] = useState('');
+  const [coverStorageId, setCoverStorageId] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [coverPreview, setCoverPreview] = useState('');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Clean up object URLs
+  useEffect(() => {
+    return () => {
+      if (avatarPreview && avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
+      if (coverPreview && coverPreview.startsWith('blob:')) URL.revokeObjectURL(coverPreview);
+    };
+  }, [avatarPreview, coverPreview]);
 
   const handleNameChange = (val: string) => {
     setName(val);
@@ -84,14 +94,17 @@ export default function CreatePageModal({
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const localPreview = URL.createObjectURL(file);
+    setAvatarPreview(localPreview);
     setIsUploadingAvatar(true);
     setError('');
     try {
       const compressed = await processAndCompressImage(file);
       const storageId = await uploadToConvexStorage(compressed, generateUploadUrl);
-      setAvatarUrl(storageId);
+      setAvatarStorageId(storageId);
     } catch (err: any) {
       setError(err?.message || 'Failed to upload profile image.');
+      setAvatarPreview('');
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -100,14 +113,17 @@ export default function CreatePageModal({
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const localPreview = URL.createObjectURL(file);
+    setCoverPreview(localPreview);
     setIsUploadingCover(true);
     setError('');
     try {
       const compressed = await processAndCompressImage(file);
       const storageId = await uploadToConvexStorage(compressed, generateUploadUrl);
-      setCoverUrl(storageId);
+      setCoverStorageId(storageId);
     } catch (err: any) {
       setError(err?.message || 'Failed to upload cover photo.');
+      setCoverPreview('');
     } finally {
       setIsUploadingCover(false);
     }
@@ -138,8 +154,8 @@ export default function CreatePageModal({
         website: website.trim() || undefined,
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
-        avatar: avatarUrl || undefined,
-        coverImage: coverUrl || undefined,
+        avatar: avatarStorageId || undefined,
+        coverImage: coverStorageId || undefined,
       });
 
       window.dispatchEvent(
@@ -221,9 +237,9 @@ export default function CreatePageModal({
                   Branding Photos
                 </label>
                 <div className="relative rounded-2xl overflow-hidden bg-zinc-100 border border-zinc-200 h-28 flex items-center justify-center">
-                  {coverUrl ? (
+                  {coverPreview ? (
                     <img
-                      src={coverUrl}
+                      src={coverPreview}
                       alt="Cover"
                       className="w-full h-full object-cover"
                     />
@@ -236,7 +252,7 @@ export default function CreatePageModal({
                     ) : (
                       <Upload className="w-3.5 h-3.5" />
                     )}
-                    <span>{coverUrl ? 'Change Cover' : 'Add Cover'}</span>
+                    <span>{coverPreview ? 'Change Cover' : 'Add Cover'}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -250,7 +266,7 @@ export default function CreatePageModal({
                 <div className="flex items-center gap-4 px-2">
                   <div className="relative shrink-0">
                     <Avatar
-                      src={avatarUrl}
+                      src={avatarPreview}
                       name={name || 'Page'}
                       size="lg"
                       className="ring-4 ring-white shadow-md"
