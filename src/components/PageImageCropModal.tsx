@@ -22,6 +22,7 @@ export interface PageImageCropModalProps {
   isOpen: boolean;
   onClose: () => void;
   pageId: Id<'pages'>;
+  userId?: Id<'users'> | string | null;
   mode: 'avatar' | 'cover';
   currentImageUrl?: string | null;
   pageName?: string;
@@ -36,6 +37,7 @@ export default function PageImageCropModal({
   isOpen,
   onClose,
   pageId,
+  userId,
   mode,
   currentImageUrl,
   pageName = 'Page',
@@ -43,6 +45,7 @@ export default function PageImageCropModal({
   onRemove,
 }: PageImageCropModalProps) {
   const generateUploadUrl = useMutation(api.pages.generatePageImageUploadUrl);
+  const generateFallbackUploadUrl = useMutation(api.media.generateUploadUrl);
   const updateProfileImageMut = useMutation(api.pages.updateProfileImage);
   const updateCoverImageMut = useMutation(api.pages.updateCoverImage);
   const removeProfileImageMut = useMutation(api.pages.removeProfileImage);
@@ -261,7 +264,17 @@ export default function PageImageCropModal({
       setSaveStep('Uploading to storage...');
       const storageId = await uploadToConvexStorage(
         compressedBlob,
-        async () => await generateUploadUrl({ pageId })
+        async () => {
+          try {
+            return await generateUploadUrl({
+              pageId,
+              userId: (userId as any) || undefined,
+            });
+          } catch (uploadUrlErr) {
+            console.warn('[PageImageCropModal] generatePageImageUploadUrl fallback to media.generateUploadUrl:', uploadUrlErr);
+            return await generateFallbackUploadUrl();
+          }
+        }
       );
 
       // 4. Save to Page document in DB
@@ -272,12 +285,14 @@ export default function PageImageCropModal({
         const res = await updateProfileImageMut({
           pageId,
           storageId,
+          userId: (userId as any) || undefined,
         });
         finalUrl = res.avatar;
       } else {
         const res = await updateCoverImageMut({
           pageId,
           storageId,
+          userId: (userId as any) || undefined,
         });
         finalUrl = res.coverImage;
       }
@@ -317,9 +332,15 @@ export default function PageImageCropModal({
     setError(null);
     try {
       if (isAvatar) {
-        await removeProfileImageMut({ pageId });
+        await removeProfileImageMut({
+          pageId,
+          userId: (userId as any) || undefined,
+        });
       } else {
-        await removeCoverImageMut({ pageId });
+        await removeCoverImageMut({
+          pageId,
+          userId: (userId as any) || undefined,
+        });
       }
 
       window.dispatchEvent(

@@ -759,6 +759,7 @@ export default function PageView() {
           isOpen={cropModalOpen}
           onClose={() => setCropModalOpen(false)}
           pageId={page._id}
+          userId={(convexUserId as any) || undefined}
           mode={cropModalMode}
           currentImageUrl={cropModalMode === 'avatar' ? page.avatar : page.coverImage}
           pageName={page.name}

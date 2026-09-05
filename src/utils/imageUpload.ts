@@ -147,9 +147,9 @@ export async function uploadToConvexStorage(
   let uploadUrl: string;
   try {
     uploadUrl = await generateUploadUrl();
-  } catch (err) {
+  } catch (err: any) {
     logUploadStage('UPLOAD', 'Failed to generate upload URL', { error: String(err) });
-    throw new Error('Could not initialize image upload. Please check your connection.');
+    throw new Error(err?.message || 'Could not initialize image upload. Please check your connection.');
   }
 
   const contentType = options?.contentType || fileOrBlob.type || 'image/jpeg';
