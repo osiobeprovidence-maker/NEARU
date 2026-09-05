@@ -28,6 +28,8 @@ const AddFriends = React.lazy(() => import('./pages/AddFriends'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const ManagePage = React.lazy(() => import('./pages/ManagePage'));
+const PagesHub = React.lazy(() => import('./pages/PagesHub'));
+const PageView = React.lazy(() => import('./pages/PageView'));
 const UserProfile = React.lazy(() => import('./pages/UserProfile'));
 const InterestPage = React.lazy(() => import('./pages/InterestPage'));
 const RallyDetail = React.lazy(() => import('./pages/RallyDetail'));
@@ -218,7 +220,9 @@ const AppRoutes = () => {
           <Route path="messages/:id" element={<Chat />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="manage" element={<ManagePage />} />
+          <Route path="pages" element={<PagesHub />} />
+          <Route path="pages/:slug" element={<PageView />} />
+          <Route path="manage" element={<PagesHub />} />
           <Route path="user/:id" element={<UserProfile />} />
           <Route path="interest/:label" element={<InterestPage />} />
           <Route path="rally/:id" element={<RallyDetail />} />

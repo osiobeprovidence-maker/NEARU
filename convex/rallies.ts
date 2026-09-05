@@ -149,6 +149,25 @@ export const listWithCreators = query({
         }
         const resolvedCreator = creator ? { ...creator, avatar } : null;
 
+        let pageAuthor = null;
+        if (rally.authorType === "page" && rally.pageId) {
+          const page = await ctx.db.get(rally.pageId);
+          if (page) {
+            let pageAvatar = page.avatar || "";
+            if (pageAvatar && isStorageId(pageAvatar)) {
+              pageAvatar = (await resolveStorageUrl(ctx, avatarCache, pageAvatar)) || "";
+            }
+            pageAuthor = {
+              _id: page._id,
+              name: page.name,
+              slug: page.slug,
+              avatar: pageAvatar,
+              category: page.category,
+              isVerified: page.isVerified,
+            };
+          }
+        }
+
         const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
         const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
         const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
@@ -162,7 +181,7 @@ export const listWithCreators = query({
           linkedEvent = linked?.title;
         }
 
-        return { ...rally, mediaUrl, creator: resolvedCreator, linkedEvent, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked, isRsvpd };
+        return { ...rally, mediaUrl, creator: resolvedCreator, pageAuthor, linkedEvent, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked, isRsvpd };
       })
     );
     return results.filter((r): r is NonNullable<typeof r> => r !== null);
@@ -226,6 +245,9 @@ export const listByCreator = query({
   args: { creatorId: v.id("users"), userId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
     const rallies = await ctx.db.query("rallies").withIndex("by_creator", (q) => q.eq("creatorId", args.creatorId)).order("desc").collect();
+    // Strictly isolate personal posts: never return page posts in personal profile
+    const personalRallies = rallies.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
+
     const creator = await ctx.db.get(args.creatorId);
     const mediaCache: Record<string, string | undefined> = {};
     const avatarCache: Record<string, string | undefined> = {};
@@ -242,7 +264,7 @@ export const listByCreator = query({
       organizationName: creator.organizationName,
       isPro: creator.isPro ?? false,
     } : null;
-    return await Promise.all(rallies.map(async (rally) => {
+    return await Promise.all(personalRallies.map(async (rally) => {
       const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
       const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
       const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
@@ -250,6 +272,71 @@ export const listByCreator = query({
       const viewerId = args.userId ?? args.creatorId;
       return { ...rally, mediaUrl, creator: resolvedCreator, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: likes.some((l) => l.userId === viewerId), isRsvpd: rsvps.some((r) => r.userId === viewerId) };
     }));
+  },
+});
+
+export const listByPage = query({
+  args: { pageId: v.id("pages"), userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.get(args.pageId);
+    if (!page) return [];
+
+    const rallies = await ctx.db
+      .query("rallies")
+      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .order("desc")
+      .collect();
+
+    const mediaCache: Record<string, string | undefined> = {};
+    const avatarCache: Record<string, string | undefined> = {};
+
+    let resolvedAvatar = page.avatar || "";
+    if (resolvedAvatar && isStorageId(resolvedAvatar)) {
+      resolvedAvatar = (await resolveStorageUrl(ctx, avatarCache, resolvedAvatar)) || "";
+    }
+
+    const pageAuthor = {
+      _id: page._id,
+      name: page.name,
+      slug: page.slug,
+      avatar: resolvedAvatar,
+      category: page.category,
+      isVerified: page.isVerified,
+    };
+
+    const dummyCreator = {
+      _id: page._id,
+      name: page.name,
+      username: page.slug,
+      avatar: resolvedAvatar,
+      isNINVerified: false,
+      badges: [],
+      accountType: "organization",
+      organizationName: page.name,
+      isPro: false,
+    };
+
+    return await Promise.all(
+      rallies.map(async (rally) => {
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+        const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+        const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
+        const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+        const viewerId = args.userId;
+
+        return {
+          ...rally,
+          mediaUrl,
+          creator: dummyCreator,
+          pageAuthor,
+          likesCount: likes.length,
+          commentsCount,
+          rsvpsCount: rsvps.length,
+          isLiked: viewerId ? likes.some((l) => l.userId === viewerId) : false,
+          isRsvpd: viewerId ? rsvps.some((r) => r.userId === viewerId) : false,
+        };
+      })
+    );
   },
 });
 
@@ -304,8 +391,10 @@ export const getProfileStats = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const allCreated = await ctx.db.query("rallies").withIndex("by_creator", (q) => q.eq("creatorId", args.userId)).collect();
-    const posted = allCreated.length;
-    const completedCreated = allCreated.filter((r) => r.status === "COMPLETED").length;
+    // Exclude page posts: personal profile post counts only count personal posts
+    const personalCreated = allCreated.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
+    const posted = personalCreated.length;
+    const completedCreated = personalCreated.filter((r) => r.status === "COMPLETED").length;
     const userRsvps = await ctx.db.query("rsvps").withIndex("by_user_rally", (q) => q.eq("userId", args.userId)).collect();
     let completedRsvps = 0;
     for (const r of userRsvps) {
@@ -486,6 +575,8 @@ export const create = mutation({
     rallyLinkId: v.optional(v.id("rallies")),
     interests: v.optional(v.array(v.string())),
     scoring: v.optional(v.union(v.literal("sum_scores"), v.literal("matches_won"), v.literal("total_points"))),
+    authorType: v.optional(v.union(v.literal("user"), v.literal("page"))),
+    pageId: v.optional(v.id("pages")),
   },
   handler: async (ctx, args) => {
     let caller = null;
@@ -502,6 +593,35 @@ export const create = mutation({
     // Caller may only create content as themselves.
     if (caller._id.toString() !== args.creatorId.toString()) {
       throw new Error("Forbidden: you can only create content as yourself.");
+    }
+
+    // Authorization for Page posting
+    const isPostingAsPage = args.authorType === "page";
+    let validatedPageId: any = undefined;
+
+    if (isPostingAsPage) {
+      if (!args.pageId) {
+        throw new Error("A valid Page ID is required when posting as a Page.");
+      }
+      const page = await ctx.db.get(args.pageId);
+      if (!page) {
+        throw new Error("Page not found.");
+      }
+      const membership = await ctx.db
+        .query("pageMembers")
+        .withIndex("by_page_user", (q) =>
+          q.eq("pageId", args.pageId!).eq("userId", caller._id)
+        )
+        .first();
+
+      const canPostAsPage =
+        page.creatorId.toString() === caller._id.toString() ||
+        (membership && ["owner", "admin", "editor"].includes(membership.role));
+
+      if (!canPostAsPage) {
+        throw new Error("Forbidden: You do not have permission to post on behalf of this Page.");
+      }
+      validatedPageId = args.pageId;
     }
 
     const normalizedHashtags = (args.hashtags || []).map((h) => h.toLowerCase().replace(/^#/, "").trim()).filter((h) => h.length > 0);
@@ -530,6 +650,9 @@ export const create = mutation({
 
     const rallyId = await ctx.db.insert("rallies", {
       ...args,
+      authorType: isPostingAsPage ? "page" : "user",
+      pageId: validatedPageId,
+      created_by_user_id: caller._id,
       pricing: effectivePricing,
       isPaid: effectiveIsPaid,
       price: effectivePrice,
@@ -753,8 +876,21 @@ export const deleteRally = mutation({
     const caller = await getAuthenticatedUser(ctx);
     const rally = await ctx.db.get(args.rallyId);
     if (!rally) throw new Error("Rally not found");
-    if (rally.creatorId.toString() !== caller._id.toString()) {
-      throw new Error("Not authorised: you can only delete your own posts");
+
+    let isAuthorized = rally.creatorId.toString() === caller._id.toString();
+    if (!isAuthorized && rally.pageId) {
+      const membership = await ctx.db
+        .query("pageMembers")
+        .withIndex("by_page_user", (q) =>
+          q.eq("pageId", rally.pageId!).eq("userId", caller._id)
+        )
+        .first();
+      if (membership && ["owner", "admin", "editor"].includes(membership.role)) {
+        isAuthorized = true;
+      }
+    }
+    if (!isAuthorized) {
+      throw new Error("Not authorised: you can only delete your own posts or posts for pages you manage.");
     }
 
     const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", args.rallyId)).collect();

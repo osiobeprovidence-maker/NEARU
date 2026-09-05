@@ -10,14 +10,13 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, FileText, HelpingHand } from 'lucide-react';
+import { X, FileText, HelpingHand, Flag } from 'lucide-react';
 
 interface CreateContentSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called with 'post' or 'rally' when the user makes a selection.
-   *  Events are created from the Organization/Business page, not here. */
-  onSelect: (type: 'post' | 'rally') => void;
+  /** Called with 'post', 'rally', or 'page' when the user makes a selection. */
+  onSelect: (type: 'post' | 'rally' | 'page') => void;
 }
 
 export default function CreateContentSheet({
@@ -108,6 +107,24 @@ export default function CreateContentSheet({
                   <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
                     Reach out to people near you — ask for something, offer
                     help, or invite people to join you.
+                  </p>
+                </div>
+              </button>
+
+              {/* Page */}
+              <button
+                onClick={() => onSelect('page')}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-zinc-100 hover:border-purple-200 hover:bg-purple-50/40 text-left transition-all active:scale-[0.98] group"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition-colors">
+                  <Flag className="w-6 h-6 text-purple-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-black text-zinc-900 text-base tracking-tight">
+                    Create Page
+                  </p>
+                  <p className="text-sm text-zinc-500 mt-0.5 leading-snug">
+                    Build a distinct identity for your football club, brand, organization or community.
                   </p>
                 </div>
               </button>

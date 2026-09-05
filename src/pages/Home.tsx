@@ -198,6 +198,10 @@ export default function Home() {
         interests: r.interests,
         rallyLinkId: r.rallyLinkId,
         linkedEvent: r.linkedEvent,
+        authorType: r.authorType,
+        pageId: r.pageId,
+        created_by_user_id: r.created_by_user_id,
+        pageAuthor: r.pageAuthor,
       }));
     }
     return [];

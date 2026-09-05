@@ -250,12 +250,65 @@ export default defineSchema({
     // RALLY. Used for event discovery + event Posts. Name avoids confusion with
     // the `creatorId`/`rallyId` used in messaging/notifications.
     rallyLinkId: v.optional(v.id("rallies")),
+    // Identity and Page Posting Architecture:
+    // authorType: "user" (default) or "page".
+    // When authorType === "page", pageId points to the Page, and created_by_user_id records the admin who published it.
+    authorType: v.optional(v.union(v.literal("user"), v.literal("page"))),
+    pageId: v.optional(v.id("pages")),
+    created_by_user_id: v.optional(v.id("users")),
   })
     .index("by_status", ["status"])
     .index("by_city", ["city"])
     .index("by_creator", ["creatorId"])
     .index("by_interest", ["interest"])
-    .index("by_rally_link", ["rallyLinkId"]),
+    .index("by_rally_link", ["rallyLinkId"])
+    .index("by_page", ["pageId"]),
+
+  // Independent Brand/Community Pages (separate from personal user profiles)
+  pages: defineTable({
+    name: v.string(),
+    slug: v.string(), // lowercase handle, e.g. "footballhub"
+    category: v.string(),
+    description: v.optional(v.string()),
+    avatar: v.optional(v.string()),
+    coverImage: v.optional(v.string()),
+    website: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    location: v.optional(v.string()),
+    creatorId: v.id("users"), // original creator / super-owner
+    isVerified: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_creator", ["creatorId"]),
+
+  // Page roles & permissions (owner, admin, editor, moderator)
+  pageMembers: defineTable({
+    pageId: v.id("pages"),
+    userId: v.id("users"),
+    role: v.union(
+      v.literal("owner"),
+      v.literal("admin"),
+      v.literal("editor"),
+      v.literal("moderator")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_page", ["pageId"])
+    .index("by_user", ["userId"])
+    .index("by_page_user", ["pageId", "userId"]),
+
+  // Followers of a Page
+  pageFollows: defineTable({
+    pageId: v.id("pages"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_page", ["pageId"])
+    .index("by_user", ["userId"])
+    .index("by_page_user", ["pageId", "userId"]),
 
   // Event hub: a user who JOINED a RALLY (participating). Distinct from
   // following. Indexed to prevent duplicate participation.

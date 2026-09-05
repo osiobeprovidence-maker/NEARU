@@ -121,11 +121,13 @@ export default function AppShell() {
     };
   }, []);
 
-  // Called when the user picks an option in the create sheet. Only Post and
-  // Rally are offered here — Events are created from the Organization/Business
-  // page, which dispatches 'open-create-rally' with type EVENT directly.
-  const handleCreateSelect = (choice: 'post' | 'rally') => {
+  // Called when the user picks an option in the create sheet.
+  const handleCreateSelect = (choice: 'post' | 'rally' | 'page') => {
     setIsCreateContentOpen(false);
+    if (choice === 'page') {
+      navigate('/pages?create=true');
+      return;
+    }
     if (choice === 'post') setCreateInitialType('POST');
     else setCreateInitialType(undefined);
     setIsCreateModalOpen(true);
@@ -153,20 +155,9 @@ export default function AppShell() {
     { label: 'Notifications', icon: Bell, path: '/notifications' },
   ];
 
-  const isOrgOrBiz =
-    user.accountType === 'organization' || user.accountType === 'business';
-
   const secondaryNavItems = [
     { label: 'Profile', icon: User, path: '/profile' },
-    ...(isOrgOrBiz
-      ? [
-          {
-            label: 'My Page',
-            icon: user.accountType === 'business' ? Store : Building2,
-            path: '/manage',
-          },
-        ]
-      : []),
+    { label: 'My Page', icon: Building2, path: '/pages' },
     { label: 'Verification', icon: ShieldCheck, path: '/verification' },
     { label: 'RALLY+', icon: Crown, path: '/plus' },
   ];

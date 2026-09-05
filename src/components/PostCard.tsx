@@ -216,7 +216,11 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
     showComments ? { rallyId: post.id as any } : 'skip'
   );
 
-  const isOwner = !!convexUserId && convexUserId === post.creator.id;
+  const isPagePost = post.authorType === 'page' && !!post.pageAuthor;
+  const isOwner = !!convexUserId && (
+    convexUserId === post.creator?.id ||
+    (isPagePost && post.created_by_user_id === convexUserId)
+  );
 
   // Normal social posts (POST type) have no Rally context by default.
   const isPost = post.type === 'POST';
@@ -417,60 +421,112 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         )}
       </AnimatePresence>
 
-      {/* ── 1. USER HEADER ─────────────────────────────────────────────── */}
+      {/* ── 1. AUTHOR HEADER ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
-        <Link
-          to={`/user/${post.creator.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="shrink-0"
-        >
-          <Avatar
-            src={post.creator.avatar}
-            name={post.creator.name}
-            size="md"
-            className="shadow-sm"
-          />
-        </Link>
-        <Link
-          to={`/user/${post.creator.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex-1 min-w-0 block"
-        >
-          <div className="flex items-center gap-1.5">
-            <span className="font-bold text-[15px] text-zinc-900 truncate">
-              {post.creator.organizationName || post.creator.name}
-            </span>
-            {post.creator.isNINVerified && (
-              <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            )}
-            {(post.creator.accountType === 'organization' ||
-              post.creator.accountType === 'business') && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
-                {post.creator.accountType === 'business' ? 'Biz' : 'Org'}
-              </span>
-            )}
-          </div>
-          <div className="text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
-            <span className="truncate">
-              {post.creator.username
-                ? post.creator.username.startsWith('@')
-                  ? post.creator.username
-                  : `@${post.creator.username}`
-                : ''}
-            </span>
-            <span>·</span>
-            <span className="shrink-0">{timeAgo(post.createdAt)}</span>
-            {displayLocation && (
-              <>
-                <span>·</span>
-                <span className="flex items-center gap-0.5 truncate">
-                  <MapPin className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{displayLocation}</span>
+        {isPagePost && post.pageAuthor ? (
+          <>
+            <Link
+              to={`/pages/${post.pageAuthor.slug}`}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0"
+            >
+              <Avatar
+                src={post.pageAuthor.avatar}
+                name={post.pageAuthor.name}
+                size="md"
+                className="shadow-sm ring-1 ring-zinc-200"
+              />
+            </Link>
+            <Link
+              to={`/pages/${post.pageAuthor.slug}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 block"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-[15px] text-zinc-900 truncate">
+                  {post.pageAuthor.name}
                 </span>
-              </>
-            )}
-          </div>
-        </Link>
+                {post.pageAuthor.isVerified && (
+                  <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
+                  {post.pageAuthor.category || 'Page'}
+                </span>
+              </div>
+              <div className="text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
+                <span className="truncate font-medium text-zinc-600">
+                  @{post.pageAuthor.slug}
+                </span>
+                <span>·</span>
+                <span className="shrink-0">{timeAgo(post.createdAt)}</span>
+                {displayLocation && (
+                  <>
+                    <span>·</span>
+                    <span className="flex items-center gap-0.5 truncate">
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{displayLocation}</span>
+                    </span>
+                  </>
+                )}
+              </div>
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link
+              to={`/user/${post.creator?.id || post.creator?._id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0"
+            >
+              <Avatar
+                src={post.creator?.avatar}
+                name={post.creator?.name || 'User'}
+                size="md"
+                className="shadow-sm"
+              />
+            </Link>
+            <Link
+              to={`/user/${post.creator?.id || post.creator?._id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 block"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-[15px] text-zinc-900 truncate">
+                  {post.creator?.organizationName || post.creator?.name || 'User'}
+                </span>
+                {post.creator?.isNINVerified && (
+                  <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
+                {(post.creator?.accountType === 'organization' ||
+                  post.creator?.accountType === 'business') && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
+                    {post.creator?.accountType === 'business' ? 'Biz' : 'Org'}
+                  </span>
+                )}
+              </div>
+              <div className="text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
+                <span className="truncate">
+                  {post.creator?.username
+                    ? post.creator.username.startsWith('@')
+                      ? post.creator.username
+                      : `@${post.creator.username}`
+                    : ''}
+                </span>
+                <span>·</span>
+                <span className="shrink-0">{timeAgo(post.createdAt)}</span>
+                {displayLocation && (
+                  <>
+                    <span>·</span>
+                    <span className="flex items-center gap-0.5 truncate">
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{displayLocation}</span>
+                    </span>
+                  </>
+                )}
+              </div>
+            </Link>
+          </>
+        )}
 
         {/* Overflow menu — right side */}
         <div className="relative shrink-0">

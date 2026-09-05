@@ -21,6 +21,7 @@ import type * as media from "../media.js";
 import type * as messages from "../messages.js";
 import type * as messagingHelpers from "../messagingHelpers.js";
 import type * as notifications from "../notifications.js";
+import type * as pages from "../pages.js";
 import type * as push from "../push.js";
 import type * as rallies from "../rallies.js";
 import type * as users from "../users.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   messagingHelpers: typeof messagingHelpers;
   notifications: typeof notifications;
+  pages: typeof pages;
   push: typeof push;
   rallies: typeof rallies;
   users: typeof users;

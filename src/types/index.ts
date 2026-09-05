@@ -93,6 +93,36 @@ export interface User {
   blockedUsers?: BlockedUser[];
 }
 
+export interface Page {
+  _id: string;
+  name: string;
+  slug: string;
+  category: string;
+  description?: string;
+  avatar?: string;
+  coverImage?: string;
+  website?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  creatorId?: string;
+  isVerified?: boolean;
+  createdAt?: number;
+  followersCount?: number;
+  postsCount?: number;
+  isFollowing?: boolean;
+  viewerRole?: 'owner' | 'admin' | 'editor' | 'moderator' | null;
+}
+
+export interface PageMember {
+  _id: string;
+  pageId: string;
+  userId: string;
+  role: 'owner' | 'admin' | 'editor' | 'moderator';
+  createdAt: number;
+  user?: User;
+}
+
 export interface Rally {
   id: string;
   type: ActivityType;
@@ -107,6 +137,10 @@ export interface Rally {
   /** Access model: 'free' = FREE, 'paid' = charged admission, 'none' = no admission fee. */
   pricing?: 'free' | 'paid' | 'none';
   creator: User;
+  authorType?: 'user' | 'page';
+  pageId?: string;
+  created_by_user_id?: string;
+  pageAuthor?: Page;
   status: 'ACTIVE' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
   city?: string;

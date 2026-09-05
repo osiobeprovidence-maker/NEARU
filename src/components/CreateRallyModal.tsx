@@ -16,7 +16,10 @@ import {
   MessageSquarePlus,
   Tag,
   Link2,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
+import Avatar from './Avatar';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { createMuxUpload, putFileToMux, waitForPlayback } from '../lib/mux';
@@ -37,6 +40,8 @@ interface CreateRallyModalProps {
    * selecting "Post" opens with type "POST" pre-selected.
    */
   initialType?: ActivityType;
+  /** Optional page ID to default posting as that page */
+  defaultPageId?: string;
 }
 
 const RALLY_TYPES: ActivityType[] = ['ASK', 'HELP', 'JOIN'];
@@ -66,6 +71,7 @@ export default function CreateRallyModal({
   onClose,
   onCreated,
   initialType,
+  defaultPageId,
 }: CreateRallyModalProps) {
   const [step, setStep] = useState(1);
   const [type, setType] = useState<ActivityType | null>(null);
@@ -98,7 +104,52 @@ export default function CreateRallyModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { city, position, geoState } = useLocation();
-  const { firebaseUser, convexUserId } = useAuth();
+  const { firebaseUser, convexUserId, user } = useAuth();
+
+  // Pages managed by the authenticated user
+  const managedPages = useQuery(
+    api.pages.listUserManagedPages,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
+  const [showIdentityDropdown, setShowIdentityDropdown] = useState(false);
+  const [postingIdentity, setPostingIdentity] = useState<{
+    type: 'user' | 'page';
+    pageId?: string;
+    name: string;
+    handle: string;
+    avatar?: string;
+  }>({
+    type: 'user',
+    name: user?.name || 'Personal Profile',
+    handle: user?.username ? (user.username.startsWith('@') ? user.username : `@${user.username}`) : '',
+    avatar: user?.avatar,
+  });
+
+  // Sync posting identity when modal opens or managedPages / defaultPageId changes
+  useEffect(() => {
+    if (isOpen) {
+      if (defaultPageId && managedPages) {
+        const found = managedPages.find((p: any) => p._id === defaultPageId);
+        if (found) {
+          setPostingIdentity({
+            type: 'page',
+            pageId: found._id,
+            name: found.name,
+            handle: `@${found.slug}`,
+            avatar: found.avatar,
+          });
+          return;
+        }
+      }
+      setPostingIdentity({
+        type: 'user',
+        name: user?.name || 'Personal Profile',
+        handle: user?.username ? (user.username.startsWith('@') ? user.username : `@${user.username}`) : '',
+        avatar: user?.avatar,
+      });
+    }
+  }, [isOpen, defaultPageId, managedPages, user]);
+
   const createRally = useMutation(api.rallies.create);
   const saveMuxResult = useMutation(api.rallies.saveMuxResult);
   const getOrCreateUser = useMutation(api.users.getOrCreateByEmail);
@@ -319,6 +370,8 @@ export default function CreateRallyModal({
           effectiveIsPaid && price ? parseInt(price, 10) : undefined,
         pricing: effectivePricing,
         creatorId: userId as any,
+        authorType: postingIdentity.type,
+        pageId: postingIdentity.type === 'page' ? (postingIdentity.pageId as any) : undefined,
         city: city || undefined,
         locationLabel: rallyLocation,
         rallyLatitude: position?.latitude,
@@ -542,6 +595,136 @@ export default function CreateRallyModal({
               {/* STEP 2 — Details */}
               {step === 2 && type && (
                 <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                  {/* Identity Selector */}
+                  <div className="relative">
+                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1.5">
+                      Posting as
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowIdentityDropdown((v) => !v)}
+                        className="w-full flex items-center justify-between p-3 rounded-2xl border border-zinc-200 hover:border-zinc-300 bg-zinc-50/70 hover:bg-zinc-100/50 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar
+                            src={postingIdentity.avatar}
+                            name={postingIdentity.name}
+                            size="sm"
+                            className="shadow-sm ring-1 ring-zinc-200"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-sm text-zinc-900 truncate">
+                                {postingIdentity.name}
+                              </span>
+                              <span
+                                className={cn(
+                                  'px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider',
+                                  postingIdentity.type === 'page'
+                                    ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
+                                    : 'bg-zinc-200 text-zinc-700'
+                                )}
+                              >
+                                {postingIdentity.type === 'page' ? 'Page' : 'Personal Profile'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-500 truncate">
+                              {postingIdentity.handle}
+                            </p>
+                          </div>
+                        </div>
+                        {managedPages && managedPages.length > 0 && (
+                          <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0 ml-2" />
+                        )}
+                      </button>
+
+                      {showIdentityDropdown && managedPages && managedPages.length > 0 && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowIdentityDropdown(false)}
+                          />
+                          <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-white rounded-2xl border border-zinc-200 shadow-xl z-50 space-y-1">
+                            <div className="px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-zinc-400">
+                              Personal Profile
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPostingIdentity({
+                                  type: 'user',
+                                  name: user?.name || 'Personal Profile',
+                                  handle: user?.username
+                                    ? user.username.startsWith('@')
+                                      ? user.username
+                                      : `@${user.username}`
+                                    : '',
+                                  avatar: user?.avatar,
+                                });
+                                setShowIdentityDropdown(false);
+                              }}
+                              className={cn(
+                                'w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-colors',
+                                postingIdentity.type === 'user'
+                                  ? 'bg-indigo-50/70 text-indigo-900 font-semibold'
+                                  : 'hover:bg-zinc-50 text-zinc-700'
+                              )}
+                            >
+                              <Avatar src={user?.avatar} name={user?.name || 'Me'} size="sm" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold truncate">{user?.name}</div>
+                                <div className="text-xs text-zinc-500 truncate">Personal Profile</div>
+                              </div>
+                              {postingIdentity.type === 'user' && (
+                                <Check className="w-4 h-4 text-indigo-600 shrink-0" />
+                              )}
+                            </button>
+
+                            <div className="px-3 pt-2 pb-1 text-[11px] font-black uppercase tracking-wider text-zinc-400 border-t border-zinc-100">
+                              Pages you manage
+                            </div>
+                            {managedPages.map((page: any) => (
+                              <button
+                                key={page._id}
+                                type="button"
+                                onClick={() => {
+                                  setPostingIdentity({
+                                    type: 'page',
+                                    pageId: page._id,
+                                    name: page.name,
+                                    handle: `@${page.slug}`,
+                                    avatar: page.avatar,
+                                  });
+                                  setShowIdentityDropdown(false);
+                                }}
+                                className={cn(
+                                  'w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-colors',
+                                  postingIdentity.type === 'page' &&
+                                    postingIdentity.pageId === page._id
+                                    ? 'bg-indigo-50/70 text-indigo-900 font-semibold'
+                                    : 'hover:bg-zinc-50 text-zinc-700'
+                                )}
+                              >
+                                <Avatar src={page.avatar} name={page.name} size="sm" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-bold truncate">{page.name}</div>
+                                  <div className="text-xs text-zinc-500 truncate">
+                                    @{page.slug} · {page.category}
+                                  </div>
+                                </div>
+                                {postingIdentity.type === 'page' &&
+                                  postingIdentity.pageId === page._id && (
+                                    <Check className="w-4 h-4 text-indigo-600 shrink-0" />
+                                  )}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Description */}
                   <div className="space-y-2">
                     <h3 className="text-lg font-bold text-zinc-900">
@@ -1001,6 +1184,34 @@ export default function CreateRallyModal({
               {step === 3 && type && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                   <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-4">
+                    {/* Publishing Identity Summary */}
+                    <div className="flex items-center gap-3 pb-3 border-b border-zinc-200/80">
+                      <Avatar
+                        src={postingIdentity.avatar}
+                        name={postingIdentity.name}
+                        size="sm"
+                        className="shadow-sm ring-1 ring-zinc-200"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-zinc-400">
+                          Publishing as
+                        </div>
+                        <div className="text-sm font-bold text-zinc-900 truncate flex items-center gap-1.5">
+                          <span>{postingIdentity.name}</span>
+                          <span
+                            className={cn(
+                              'px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider',
+                              postingIdentity.type === 'page'
+                                ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
+                                : 'bg-zinc-200 text-zinc-700'
+                            )}
+                          >
+                            {postingIdentity.type === 'page' ? 'Page' : 'Personal Profile'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Type badge + paid badge */}
                     <div className="flex items-center gap-3">
                       {(() => {
