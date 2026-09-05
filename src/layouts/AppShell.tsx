@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Avatar from '../components/Avatar';
 import BrandLogo from '../components/BrandLogo';
 import { Outlet, NavLink, useNavigate, Link, useLocation as useRouteLocation } from 'react-router-dom';
@@ -23,7 +23,8 @@ import {
   ChevronDown,
   ArrowLeft,
   Building2,
-  Store
+  Store,
+  Menu
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useQuery } from 'convex/react';
@@ -65,6 +66,8 @@ export default function AppShell() {
   const [isCreateContentOpen, setIsCreateContentOpen] = useState(false);
   const [toastConfig, setToastConfig] = useState<{ title: string, subtitle: string } | null>(null);
   const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = useQuery(
     api.notifications.unreadCount,
@@ -89,7 +92,21 @@ export default function AppShell() {
 
   useEffect(() => {
     setIsNotifPanelOpen(false);
+    setIsProfileMenuOpen(false);
   }, [routeLocation.pathname]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside);
+    };
+  }, [isProfileMenuOpen]);
 
   const isLocationHidden = 
     routeLocation.pathname !== '/';
@@ -394,13 +411,60 @@ export default function AppShell() {
           )}
 
           {routeLocation.pathname === '/profile' ? (
-            <NavLink 
-              to="/settings" 
-              className={({isActive}) => cn("p-2 rounded-full transition-colors shrink-0", isActive ? "text-indigo-600 bg-indigo-50" : "text-zinc-600 hover:bg-zinc-100")}
-              title="Settings"
-            >
-              <Settings className="w-5 h-5" />
-            </NavLink>
+            <div className="relative shrink-0" ref={profileMenuRef}>
+              <button 
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                className={cn(
+                  "p-2 rounded-full transition-colors active:scale-95",
+                  isProfileMenuOpen ? "text-zinc-900 bg-zinc-100" : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                )}
+                title="Menu"
+                aria-label="Profile navigation menu"
+                aria-expanded={isProfileMenuOpen}
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
+              {isProfileMenuOpen && (
+                <>
+                  {/* Backdrop for outside dismissal */}
+                  <div 
+                    className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" 
+                    onClick={() => setIsProfileMenuOpen(false)} 
+                  />
+                  <div 
+                    className="absolute right-0 top-full mt-2 z-50 w-48 bg-white rounded-2xl shadow-xl shadow-zinc-900/10 border border-zinc-200/80 overflow-hidden py-1.5 animate-in fade-in zoom-in-95 duration-150 divide-y divide-zinc-100 text-left"
+                    role="menu"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        navigate('/pages');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 active:bg-zinc-100 text-zinc-800 text-sm font-semibold transition-colors"
+                      role="menuitem"
+                    >
+                      <Building2 className="w-4.5 h-4.5 text-zinc-600 shrink-0" />
+                      <span className="flex-1">My Page</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        navigate('/settings');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 active:bg-zinc-100 text-zinc-800 text-sm font-semibold transition-colors"
+                      role="menuitem"
+                    >
+                      <Settings className="w-4.5 h-4.5 text-zinc-600 shrink-0" />
+                      <span className="flex-1">Settings</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           ) : (routeLocation.pathname === '/settings' ||
                routeLocation.pathname === '/settings/personal-info' || 
                routeLocation.pathname === '/profile/edit' || 
