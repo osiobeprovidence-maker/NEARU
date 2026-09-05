@@ -12,26 +12,49 @@ function cleanSlug(slug: string): string {
 
 /**
  * Helper to resolve a valid Convex user ID from either an Id, a string, or the auth context.
+ * Guaranteed never to throw, handling unauthenticated callers, missing profile records, or string UIDs gracefully.
  */
 async function resolveUserId(ctx: any, rawUserId?: string | null): Promise<any | null> {
-  try {
-    const caller = await getAuthenticatedUser(ctx);
-    if (caller) return caller._id;
-  } catch {}
+  // 1. If an explicit userId was supplied by the caller, resolve it first
+  if (rawUserId && typeof rawUserId === "string" && rawUserId.trim().length > 0) {
+    const trimmed = rawUserId.trim();
+    try {
+      const normalized = ctx.db.normalizeId("users", trimmed);
+      if (normalized) {
+        const userDoc = await ctx.db.get(normalized);
+        if (userDoc) return userDoc._id;
+      }
+    } catch {}
 
-  if (!rawUserId) return null;
+    try {
+      const userByUid = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", trimmed))
+        .first();
+      if (userByUid) return userByUid._id;
+    } catch {}
 
-  try {
-    const normalized = ctx.db.normalizeId("users", rawUserId);
-    if (normalized) return normalized;
-  } catch {}
+    try {
+      const userByUsername = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q: any) => q.eq("username", trimmed.replace(/^@/, "")))
+        .first();
+      if (userByUsername) return userByUsername._id;
+    } catch {}
 
+    return null;
+  }
+
+  // 2. If no userId argument was provided, fall back to the authenticated caller identity
   try {
-    const userByUid = await ctx.db
-      .query("users")
-      .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", rawUserId))
-      .first();
-    if (userByUid) return userByUid._id;
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity?.subject) {
+      const userByUid = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", identity.subject))
+        .first();
+      if (userByUid) return userByUid._id;
+    }
   } catch {}
 
   return null;
@@ -228,33 +251,47 @@ export const listUserManagedPages = query({
     userId: v.optional(v.union(v.id("users"), v.string())),
   },
   handler: async (ctx, args) => {
-    const targetUserId = await resolveUserId(ctx, args.userId);
-    if (!targetUserId) {
+    try {
+      const targetUserId = await resolveUserId(ctx, args.userId);
+      if (!targetUserId) {
+        return [];
+      }
+
+      const memberships = await ctx.db
+        .query("pageMembers")
+        .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+        .collect();
+
+      if (!memberships || memberships.length === 0) {
+        return [];
+      }
+
+      const results = [];
+      for (const m of memberships) {
+        if (!m || !m.pageId) continue;
+        try {
+          const page = await ctx.db.get(m.pageId);
+          if (page) {
+            results.push({
+              _id: page._id,
+              name: page.name || "Untitled Page",
+              slug: page.slug || "",
+              category: page.category || "General",
+              avatar: page.avatar || undefined,
+              coverImage: page.coverImage || undefined,
+              description: page.description || undefined,
+              role: m.role || "owner",
+            });
+          }
+        } catch {
+          // ignore individual page load issue
+        }
+      }
+      return results;
+    } catch (err) {
+      console.warn("[pages:listUserManagedPages] safe error fallback:", err);
       return [];
     }
-
-    const memberships = await ctx.db
-      .query("pageMembers")
-      .withIndex("by_user", (q) => q.eq("userId", targetUserId))
-      .collect();
-
-    const results = [];
-    for (const m of memberships) {
-      const page = await ctx.db.get(m.pageId);
-      if (page) {
-        results.push({
-          _id: page._id,
-          name: page.name,
-          slug: page.slug,
-          category: page.category,
-          avatar: page.avatar,
-          coverImage: page.coverImage,
-          description: page.description,
-          role: m.role,
-        });
-      }
-    }
-    return results;
   },
 });
 

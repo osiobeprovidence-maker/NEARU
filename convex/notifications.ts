@@ -228,9 +228,48 @@ export const notifyNearbyUsers = mutation({
 });
 
 /**
+ * Helper to resolve user ID safely for push mutations.
+ */
+async function resolveCallerId(ctx: any, rawUserId?: string | null): Promise<any | null> {
+  // 1. Try authenticated JWT claims first
+  try {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity?.subject) {
+      const userByUid = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", identity.subject))
+        .first();
+      if (userByUid) return userByUid._id;
+    }
+  } catch {}
+
+  // 2. Try client-supplied ID (verified against users table)
+  if (rawUserId && typeof rawUserId === "string" && rawUserId.trim().length > 0) {
+    const trimmed = rawUserId.trim();
+    try {
+      const normalized = ctx.db.normalizeId("users", trimmed);
+      if (normalized) {
+        const userDoc = await ctx.db.get(normalized);
+        if (userDoc) return userDoc._id;
+      }
+    } catch {}
+
+    try {
+      const userByUid = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", trimmed))
+        .first();
+      if (userByUid) return userByUid._id;
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
  * Register a push subscription for the authenticated user.
- * The client-supplied userId is ignored — auth identity is used.
- * Supports multiple devices per user (desktop, tablet, mobile).
+ * Validates keys, updates existing subscriptions to prevent duplicate accumulation,
+ * and handles missing/invalid optional fields without crashing.
  */
 export const savePushSubscription = mutation({
   args: {
@@ -242,57 +281,57 @@ export const savePushSubscription = mutation({
     userAgent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let callerId: any = null;
-    try {
-      const caller = await getAuthenticatedUser(ctx);
-      if (caller) callerId = caller._id;
-    } catch {}
+    const endpoint = args.endpoint?.trim();
+    const p256dh = args.p256dh?.trim();
+    const auth = args.auth?.trim();
 
-    if (!callerId && args.userId) {
-      try {
-        const normalized = ctx.db.normalizeId("users", args.userId as string);
-        if (normalized) callerId = normalized;
-      } catch {}
-      if (!callerId) {
-        const userByUid = await ctx.db
-          .query("users")
-          .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId as string))
-          .first();
-        if (userByUid) callerId = userByUid._id;
-      }
+    if (!endpoint || !p256dh || !auth) {
+      throw new Error("Invalid push subscription: endpoint, p256dh, and auth are required.");
     }
 
+    const callerId = await resolveCallerId(ctx, args.userId);
     if (!callerId) {
-      return null;
+      throw new Error("Unauthenticated: valid user required to save push subscription.");
     }
 
-    const existing = await ctx.db
+    // Query all subscriptions for this endpoint to handle any prior duplicates
+    const existingSubs = await ctx.db
       .query("pushSubscriptions")
-      .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
-      .first();
+      .withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
+      .collect();
 
     const now = Date.now();
-    if (existing) {
-      // If subscription was previously attached to a different account on this device,
-      // update ownership to the currently logged in user
-      await ctx.db.patch(existing._id, {
+    const platform = args.platform?.trim() || undefined;
+    const userAgent = args.userAgent?.trim() || undefined;
+
+    if (existingSubs && existingSubs.length > 0) {
+      const primary = existingSubs[0];
+      await ctx.db.patch(primary._id, {
         userId: callerId,
-        p256dh: args.p256dh,
-        auth: args.auth,
-        platform: args.platform,
-        userAgent: args.userAgent,
+        p256dh,
+        auth,
+        platform,
+        userAgent,
         updatedAt: now,
       });
-      return existing._id;
+
+      // Clean up any extraneous duplicates
+      if (existingSubs.length > 1) {
+        for (let i = 1; i < existingSubs.length; i++) {
+          await ctx.db.delete(existingSubs[i]._id);
+        }
+      }
+
+      return primary._id;
     }
 
     return await ctx.db.insert("pushSubscriptions", {
       userId: callerId,
-      endpoint: args.endpoint,
-      p256dh: args.p256dh,
-      auth: args.auth,
-      platform: args.platform,
-      userAgent: args.userAgent,
+      endpoint,
+      p256dh,
+      auth,
+      platform,
+      userAgent,
       createdAt: now,
       updatedAt: now,
     });
@@ -305,11 +344,15 @@ export const savePushSubscription = mutation({
 export const removePushSubscription = mutation({
   args: { endpoint: v.string() },
   handler: async (ctx, args) => {
+    const endpoint = args.endpoint?.trim();
+    if (!endpoint) return;
     const existing = await ctx.db
       .query("pushSubscriptions")
-      .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
-      .first();
-    if (existing) await ctx.db.delete(existing._id);
+      .withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
+      .collect();
+    for (const sub of existing) {
+      await ctx.db.delete(sub._id);
+    }
   },
 });
 
@@ -323,40 +366,23 @@ export const clearUserPushSubscriptions = mutation({
     endpoint: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    if (args.endpoint) {
+    if (args.endpoint?.trim()) {
       const existing = await ctx.db
         .query("pushSubscriptions")
-        .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
-        .first();
-      if (existing) await ctx.db.delete(existing._id);
+        .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint!.trim()))
+        .collect();
+      for (const sub of existing) {
+        await ctx.db.delete(sub._id);
+      }
       return;
     }
 
-    let callerId: any = null;
-    try {
-      const caller = await getAuthenticatedUser(ctx);
-      if (caller) callerId = caller._id;
-    } catch {}
-
-    if (!callerId && args.userId) {
-      try {
-        const normalized = ctx.db.normalizeId("users", args.userId as string);
-        if (normalized) callerId = normalized;
-      } catch {}
-      if (!callerId) {
-        const userByUid = await ctx.db
-          .query("users")
-          .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId as string))
-          .first();
-        if (userByUid) callerId = userByUid._id;
-      }
-    }
-
+    const callerId = await resolveCallerId(ctx, args.userId);
     if (!callerId) return;
 
     const subs = await ctx.db
       .query("pushSubscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", callerId!))
+      .withIndex("by_user", (q) => q.eq("userId", callerId))
       .collect();
 
     for (const sub of subs) {
