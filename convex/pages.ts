@@ -323,6 +323,8 @@ export const getById = query({
 
 /**
  * List all Pages managed by a user (owner, admin, or editor).
+ * Returns pages owned directly by the user first, followed by authorized manager pages,
+ * sorted by creation date with live post and follower counts.
  */
 export const listUserManagedPages = query({
   args: {
@@ -342,23 +344,75 @@ export const listUserManagedPages = query({
       targetUserId = caller._id;
     }
 
+    // 1. Fetch memberships where user is owner/admin/editor
     const memberships = await ctx.db
       .query("pageMembers")
       .withIndex("by_user", (q) => q.eq("userId", targetUserId!))
       .collect();
 
-    if (!memberships || memberships.length === 0) {
+    // 2. Also fetch pages directly created by user to ensure no owned pages are missed
+    const createdPages = await ctx.db
+      .query("pages")
+      .withIndex("by_creator", (q) => q.eq("creatorId", targetUserId!))
+      .collect();
+
+    // 3. Merge pages into a deduplicated map
+    const pageMap = new Map<string, { page: any; role: string }>();
+
+    // Add created pages as owner
+    for (const page of createdPages) {
+      if (!page) continue;
+      pageMap.set(page._id.toString(), {
+        page,
+        role: "owner",
+      });
+    }
+
+    // Add membership pages
+    for (const m of memberships) {
+      if (!m || !m.pageId) continue;
+      const idStr = m.pageId.toString();
+      const existing = pageMap.get(idStr);
+      if (existing) {
+        // If already in map and created by user, keep owner; otherwise assign role
+        if (existing.page.creatorId?.toString() === targetUserId.toString()) {
+          existing.role = "owner";
+        } else if (m.role) {
+          existing.role = m.role;
+        }
+      } else {
+        const page = await ctx.db.get(m.pageId);
+        if (page) {
+          const isCreator = page.creatorId?.toString() === targetUserId.toString();
+          pageMap.set(idStr, {
+            page,
+            role: isCreator ? "owner" : (m.role || "admin"),
+          });
+        }
+      }
+    }
+
+    if (pageMap.size === 0) {
       return [];
     }
 
-    const results = [];
-    for (const m of memberships) {
-      if (!m || !m.pageId) continue;
-      const page = await ctx.db.get(m.pageId);
-      if (page) {
-        const resolvedAvatar = await resolveStorageUrl(ctx, page.avatar);
-        const resolvedCover = await resolveStorageUrl(ctx, page.coverImage);
-        results.push({
+    // 4. Resolve details, live metrics (postsCount, followersCount), and images for each page
+    const items = await Promise.all(
+      Array.from(pageMap.values()).map(async ({ page, role }) => {
+        const [follows, posts, resolvedAvatar, resolvedCover] = await Promise.all([
+          ctx.db
+            .query("pageFollows")
+            .withIndex("by_page", (q) => q.eq("pageId", page._id))
+            .collect(),
+          ctx.db
+            .query("rallies")
+            .withIndex("by_page", (q) => q.eq("pageId", page._id))
+            .collect(),
+          resolveStorageUrl(ctx, page.avatar),
+          resolveStorageUrl(ctx, page.coverImage),
+        ]);
+
+        return {
           _id: page._id,
           name: page.name || "Untitled Page",
           slug: page.slug || "",
@@ -366,11 +420,38 @@ export const listUserManagedPages = query({
           avatar: resolvedAvatar,
           coverImage: resolvedCover,
           description: page.description || undefined,
-          role: m.role || "owner",
-        });
+          location: page.location || undefined,
+          website: page.website || undefined,
+          isVerified: page.isVerified ?? false,
+          creatorId: page.creatorId,
+          role: role || "owner",
+          followersCount: follows.length,
+          postsCount: posts.length,
+          createdAt: page.createdAt || 0,
+          updatedAt: page.updatedAt,
+        };
+      })
+    );
+
+    // 5. Order: Owned pages first (role === 'owner'), followed by admin, editor, moderator.
+    // Within the same role priority, sort newest first (createdAt descending).
+    const rolePriority: Record<string, number> = {
+      owner: 0,
+      admin: 1,
+      editor: 2,
+      moderator: 3,
+    };
+
+    items.sort((a, b) => {
+      const pA = rolePriority[a.role] ?? 4;
+      const pB = rolePriority[b.role] ?? 4;
+      if (pA !== pB) {
+        return pA - pB;
       }
-    }
-    return results;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+
+    return items;
   },
 });
 

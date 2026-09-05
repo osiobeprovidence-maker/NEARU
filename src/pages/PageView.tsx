@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import PageShell from '../components/PageShell';
@@ -34,6 +34,7 @@ import PageImageCropModal from '../components/PageImageCropModal';
 
 export default function PageView() {
   const { slug } = useParams<{ slug: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, convexUserId } = useAuth();
 
@@ -179,6 +180,20 @@ export default function PageView() {
   };
 
   const isManager = Boolean(page?.viewerRole);
+
+  useEffect(() => {
+    if (
+      page &&
+      isManager &&
+      (searchParams.get('manage') === 'true' || searchParams.get('edit') === 'true')
+    ) {
+      openEditModal();
+      const next = new URLSearchParams(searchParams);
+      next.delete('manage');
+      next.delete('edit');
+      setSearchParams(next, { replace: true });
+    }
+  }, [page, isManager, searchParams]);
 
   const mappedPosts: Rally[] = useMemo(() => {
     if (!pagePosts) return [];

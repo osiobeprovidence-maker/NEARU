@@ -142,9 +142,18 @@ export default function CreatePageModal({
         coverImage: coverUrl || undefined,
       });
 
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: {
+            title: 'Page created successfully!',
+            subtitle: `@${res.slug} is ready. Manage your page below.`,
+          },
+        })
+      );
+
       onClose();
       onCreated?.(res.slug);
-      navigate(`/pages/${res.slug}`);
+      navigate('/pages', { replace: true });
     } catch (err: any) {
       setError(err?.message || 'Failed to create Page. Please try again.');
     } finally {
