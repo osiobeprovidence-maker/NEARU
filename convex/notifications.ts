@@ -234,7 +234,7 @@ export const notifyNearbyUsers = mutation({
  */
 export const savePushSubscription = mutation({
   args: {
-    userId: v.optional(v.id("users")),
+    userId: v.optional(v.union(v.id("users"), v.string())),
     endpoint: v.string(),
     p256dh: v.string(),
     auth: v.string(),
@@ -242,20 +242,34 @@ export const savePushSubscription = mutation({
     userAgent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let callerId = args.userId;
+    let callerId: any = null;
     try {
       const caller = await getAuthenticatedUser(ctx);
       if (caller) callerId = caller._id;
     } catch {}
 
+    if (!callerId && args.userId) {
+      try {
+        const normalized = ctx.db.normalizeId("users", args.userId as string);
+        if (normalized) callerId = normalized;
+      } catch {}
+      if (!callerId) {
+        const userByUid = await ctx.db
+          .query("users")
+          .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId as string))
+          .first();
+        if (userByUid) callerId = userByUid._id;
+      }
+    }
+
     if (!callerId) {
-      throw new Error("Unauthenticated: userId is required.");
+      return null;
     }
 
     const existing = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
-      .unique();
+      .first();
 
     const now = Date.now();
     if (existing) {
@@ -294,7 +308,7 @@ export const removePushSubscription = mutation({
     const existing = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
-      .unique();
+      .first();
     if (existing) await ctx.db.delete(existing._id);
   },
 });
@@ -305,7 +319,7 @@ export const removePushSubscription = mutation({
  */
 export const clearUserPushSubscriptions = mutation({
   args: {
-    userId: v.optional(v.id("users")),
+    userId: v.optional(v.union(v.id("users"), v.string())),
     endpoint: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -313,16 +327,30 @@ export const clearUserPushSubscriptions = mutation({
       const existing = await ctx.db
         .query("pushSubscriptions")
         .withIndex("by_endpoint", (q) => q.eq("endpoint", args.endpoint))
-        .unique();
+        .first();
       if (existing) await ctx.db.delete(existing._id);
       return;
     }
 
-    let callerId = args.userId;
+    let callerId: any = null;
     try {
       const caller = await getAuthenticatedUser(ctx);
       if (caller) callerId = caller._id;
     } catch {}
+
+    if (!callerId && args.userId) {
+      try {
+        const normalized = ctx.db.normalizeId("users", args.userId as string);
+        if (normalized) callerId = normalized;
+      } catch {}
+      if (!callerId) {
+        const userByUid = await ctx.db
+          .query("users")
+          .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId as string))
+          .first();
+        if (userByUid) callerId = userByUid._id;
+      }
+    }
 
     if (!callerId) return;
 

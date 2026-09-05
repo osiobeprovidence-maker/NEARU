@@ -11,6 +11,33 @@ function cleanSlug(slug: string): string {
 }
 
 /**
+ * Helper to resolve a valid Convex user ID from either an Id, a string, or the auth context.
+ */
+async function resolveUserId(ctx: any, rawUserId?: string | null): Promise<any | null> {
+  try {
+    const caller = await getAuthenticatedUser(ctx);
+    if (caller) return caller._id;
+  } catch {}
+
+  if (!rawUserId) return null;
+
+  try {
+    const normalized = ctx.db.normalizeId("users", rawUserId);
+    if (normalized) return normalized;
+  } catch {}
+
+  try {
+    const userByUid = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", rawUserId))
+      .first();
+    if (userByUid) return userByUid._id;
+  } catch {}
+
+  return null;
+}
+
+/**
  * Create a new Page.
  * Automatically assigns the authenticated creator as "owner" in pageMembers.
  */
@@ -87,7 +114,7 @@ export const create = mutation({
 export const getBySlug = query({
   args: {
     slug: v.string(),
-    viewerId: v.optional(v.id("users")),
+    viewerId: v.optional(v.union(v.id("users"), v.string())),
   },
   handler: async (ctx, args) => {
     const normalizedSlug = cleanSlug(args.slug);
@@ -98,13 +125,11 @@ export const getBySlug = query({
 
     if (!page) return null;
 
-    // Follower count
     const follows = await ctx.db
       .query("pageFollows")
       .withIndex("by_page", (q) => q.eq("pageId", page._id))
       .collect();
 
-    // Posts count
     const posts = await ctx.db
       .query("rallies")
       .withIndex("by_page", (q) => q.eq("pageId", page._id))
@@ -113,15 +138,16 @@ export const getBySlug = query({
     let isFollowing = false;
     let viewerRole: "owner" | "admin" | "editor" | "moderator" | null = null;
 
-    if (args.viewerId) {
+    const resolvedViewer = await resolveUserId(ctx, args.viewerId);
+    if (resolvedViewer) {
       isFollowing = follows.some(
-        (f) => f.userId.toString() === args.viewerId!.toString()
+        (f) => f.userId.toString() === resolvedViewer.toString()
       );
 
       const membership = await ctx.db
         .query("pageMembers")
         .withIndex("by_page_user", (q) =>
-          q.eq("pageId", page._id).eq("userId", args.viewerId!)
+          q.eq("pageId", page._id).eq("userId", resolvedViewer)
         )
         .first();
 
@@ -146,7 +172,7 @@ export const getBySlug = query({
 export const getById = query({
   args: {
     pageId: v.id("pages"),
-    viewerId: v.optional(v.id("users")),
+    viewerId: v.optional(v.union(v.id("users"), v.string())),
   },
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId);
@@ -165,15 +191,16 @@ export const getById = query({
     let isFollowing = false;
     let viewerRole: "owner" | "admin" | "editor" | "moderator" | null = null;
 
-    if (args.viewerId) {
+    const resolvedViewer = await resolveUserId(ctx, args.viewerId);
+    if (resolvedViewer) {
       isFollowing = follows.some(
-        (f) => f.userId.toString() === args.viewerId!.toString()
+        (f) => f.userId.toString() === resolvedViewer.toString()
       );
 
       const membership = await ctx.db
         .query("pageMembers")
         .withIndex("by_page_user", (q) =>
-          q.eq("pageId", page._id).eq("userId", args.viewerId!)
+          q.eq("pageId", page._id).eq("userId", resolvedViewer)
         )
         .first();
 
@@ -194,15 +221,21 @@ export const getById = query({
 
 /**
  * List all Pages managed by a user (owner, admin, or editor).
+ * Resilient to either Convex User Id or string UID.
  */
 export const listUserManagedPages = query({
   args: {
-    userId: v.id("users"),
+    userId: v.optional(v.union(v.id("users"), v.string())),
   },
   handler: async (ctx, args) => {
+    const targetUserId = await resolveUserId(ctx, args.userId);
+    if (!targetUserId) {
+      return [];
+    }
+
     const memberships = await ctx.db
       .query("pageMembers")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", targetUserId))
       .collect();
 
     const results = [];
@@ -319,18 +352,19 @@ export const update = mutation({
 export const toggleFollow = mutation({
   args: {
     pageId: v.id("pages"),
-    userId: v.id("users"),
+    userId: v.optional(v.union(v.id("users"), v.string())),
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
-    if (caller._id.toString() !== args.userId.toString()) {
-      throw new Error("Forbidden: You can only follow as yourself.");
+    const actingUserId = caller?._id;
+    if (!actingUserId) {
+      throw new Error("Forbidden: You must be signed in to follow a Page.");
     }
 
     const existing = await ctx.db
       .query("pageFollows")
       .withIndex("by_page_user", (q) =>
-        q.eq("pageId", args.pageId).eq("userId", caller._id)
+        q.eq("pageId", args.pageId).eq("userId", actingUserId)
       )
       .first();
 
@@ -341,7 +375,7 @@ export const toggleFollow = mutation({
 
     await ctx.db.insert("pageFollows", {
       pageId: args.pageId,
-      userId: caller._id,
+      userId: actingUserId,
       createdAt: Date.now(),
     });
     return { following: true };
