@@ -61,42 +61,26 @@ export default function Landing() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-50/60 via-zinc-50 to-zinc-50" />
         <div className="relative max-w-6xl mx-auto px-5 pt-20 pb-24 md:pt-32 md:pb-40 text-center">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={stagger}
-          >
-            <motion.div variants={fadeUp} transition={{ duration: 0.5 }}>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-full mb-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both">
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-full mb-2">
                 <Zap className="w-3.5 h-3.5" />
                 Now live across Nigeria
               </span>
-            </motion.div>
+            </div>
 
-            <motion.h1
-              variants={fadeUp}
-              transition={{ duration: 0.6 }}
-              className="text-4xl sm:text-5xl md:text-7xl font-black text-zinc-900 tracking-tighter leading-[1.05] max-w-4xl mx-auto"
-            >
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-zinc-900 tracking-tighter leading-[1.05] max-w-4xl mx-auto">
               Your community,
               <br />
               <span className="text-indigo-600">one rally away.</span>
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              variants={fadeUp}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="mt-6 text-base sm:text-lg text-zinc-500 max-w-xl mx-auto leading-relaxed"
-            >
+            <p className="mt-6 text-base sm:text-lg text-zinc-500 max-w-xl mx-auto leading-relaxed">
               Need help? Offering a ride? Looking for company? lalao connects you 
               with verified people around you — fast, safe, and local.
-            </motion.p>
+            </p>
 
-            <motion.div
-              variants={fadeUp}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
-            >
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
                 onClick={handleGetStarted}
                 className="w-full sm:w-auto px-8 py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2"
@@ -111,13 +95,9 @@ export default function Landing() {
                 I have an account
                 <ChevronRight className="w-4 h-4" />
               </button>
-            </motion.div>
+            </div>
 
-            <motion.div
-              variants={fadeUp}
-              transition={{ duration: 0.5, delay: 0.35 }}
-              className="mt-8 flex items-center justify-center gap-6 text-xs text-zinc-400 font-medium"
-            >
+            <div className="mt-8 flex items-center justify-center gap-6 text-xs text-zinc-400 font-medium">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                 NIN Verified
@@ -130,8 +110,8 @@ export default function Landing() {
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                 No spam
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -29,8 +29,12 @@ export default function BrandLogo({
       <img
         src={branding.brandLogoUrl || branding.brandIconUrl || ''}
         alt=""
-        className={cn('object-contain', boxClassName, rounded)}
+        width={32}
+        height={32}
+        className={cn('object-contain aspect-square shrink-0', boxClassName, rounded)}
         crossOrigin="anonymous"
+        loading="eager"
+        decoding="async"
       />
     ) : (
       <div

@@ -79,3 +79,9 @@
 .top-header-offset {
   top: calc(53px + env(safe-area-inset-top));
 }
+
+/* Core Web Vitals: reserve layout space for object-contain images to eliminate CLS */
+img.object-contain {
+  aspect-ratio: 1 / 1;
+}
+

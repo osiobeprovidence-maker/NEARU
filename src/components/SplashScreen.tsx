@@ -82,35 +82,41 @@ export default function SplashScreen({
         backgroundColor: solidBg,
       }}
     >
-      {hasActiveUploadedSplash ? (
-        /* =================================================================== */
-        /* 1. ADMIN UPLOADED SPLASH IMAGE                                      */
-        /* Displayed prominently as the primary visual element in full-screen. */
-        /* Uses object-contain to preserve original aspect ratio cleanly.      */
-        /* =================================================================== */
-        <img
-          src={uploadedSplash!}
-          alt="App Splash Screen"
-          onError={() => setImgError(true)}
-          className="max-w-[85vw] max-h-[75vh] sm:max-w-[80vw] sm:max-h-[80vh] md:max-w-[75vw] md:max-h-[85vh] w-auto h-auto object-contain pointer-events-none select-none drop-shadow-sm"
-          crossOrigin="anonymous"
-          loading="eager"
-          decoding="async"
-        />
-      ) : (
-        /* =================================================================== */
-        /* 2. CLEAN FALLBACK BRANDING                                          */
-        /* Rendered ONLY when NO admin-uploaded splash image exists.           */
-        /* =================================================================== */
-        <img
-          src={fallbackLogo}
-          alt="LALOA"
-          className="w-[clamp(5rem,16vw,12rem)] h-[clamp(5rem,16vw,12rem)] object-contain aspect-square pointer-events-none select-none"
-          crossOrigin="anonymous"
-          loading="eager"
-          decoding="async"
-        />
-      )}
+      <div className="relative flex items-center justify-center w-full max-w-[min(85vw,480px)] max-h-[min(75vh,480px)] aspect-square">
+        {hasActiveUploadedSplash ? (
+          /* =================================================================== */
+          /* 1. ADMIN UPLOADED SPLASH IMAGE                                      */
+          /* Displayed prominently as the primary visual element in full-screen. */
+          /* Uses object-contain to preserve original aspect ratio cleanly.      */
+          /* =================================================================== */
+          <img
+            src={uploadedSplash!}
+            alt="App Splash Screen"
+            width={512}
+            height={512}
+            onError={() => setImgError(true)}
+            className="w-full h-full max-w-[85vw] max-h-[75vh] sm:max-w-[80vw] sm:max-h-[80vh] md:max-w-[75vw] md:max-h-[85vh] object-contain aspect-square pointer-events-none select-none drop-shadow-sm"
+            crossOrigin="anonymous"
+            loading="eager"
+            decoding="async"
+          />
+        ) : (
+          /* =================================================================== */
+          /* 2. CLEAN FALLBACK BRANDING                                          */
+          /* Rendered ONLY when NO admin-uploaded splash image exists.           */
+          /* =================================================================== */
+          <img
+            src={fallbackLogo}
+            alt="LALOA"
+            width={192}
+            height={192}
+            className="w-[clamp(5rem,16vw,12rem)] h-[clamp(5rem,16vw,12rem)] object-contain aspect-square pointer-events-none select-none"
+            crossOrigin="anonymous"
+            loading="eager"
+            decoding="async"
+          />
+        )}
+      </div>
     </div>
   );
 }

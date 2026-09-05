@@ -9,6 +9,8 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="preconnect" href="https://rare-rooster-878.eu-west-1.convex.cloud" crossorigin />
+    <link rel="dns-prefetch" href="https://rare-rooster-878.eu-west-1.convex.cloud" />
     <meta property="og:title" content="lalao — Post. Rally. Connect." />
     <meta property="og:description" content="Post, Rally, and connect with people around you on lalao." />
     <meta property="og:type" content="website" />
@@ -27,6 +29,8 @@
           id="initial-splash-img"
           src="/icon.svg"
           alt="LALOA"
+          width="192"
+          height="192"
           style="width: clamp(5rem, 16vw, 12rem); height: clamp(5rem, 16vw, 12rem); object-fit: contain; aspect-ratio: 1 / 1; pointer-events: none; user-select: none;"
         />
       </div>
@@ -42,11 +46,14 @@
             }
             if (splashImg && img) {
               img.src = splashImg;
-              img.style.width = 'auto';
+              img.width = 512;
+              img.height = 512;
+              img.style.width = '100%';
               img.style.height = 'auto';
-              img.style.maxWidth = '85vw';
-              img.style.maxHeight = '75vh';
-              img.style.aspectRatio = 'auto';
+              img.style.maxWidth = 'min(85vw, 480px)';
+              img.style.maxHeight = 'min(75vh, 480px)';
+              img.style.objectFit = 'contain';
+              img.style.aspectRatio = '1 / 1';
             }
           } catch(e) {}
         })();
