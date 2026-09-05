@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar';
+import UserAvatarCropModal from '../components/UserAvatarCropModal';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
 import RallyCard from '../components/RallyCard';
@@ -63,41 +64,15 @@ export default function Profile() {
   const showToast = (t: string, s: string) =>
     window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: t, subtitle: s } }));
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !convexUserId) return;
-    setAvatarUploading(true);
-    logUploadStage('SELECT', 'Avatar photo selected from mobile/desktop picker', {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    });
-    try {
-      const compressedBlob = await processAndCompressImage(file, {
-        maxWidth: 800,
-        maxHeight: 800,
-        quality: 0.85,
-      });
-      const blobUrl = URL.createObjectURL(compressedBlob);
-      updateUser({ avatar: blobUrl });
-
-      const storageId = await uploadToConvexStorage(
-        compressedBlob,
-        generateAvatarUploadUrl
-      );
-      logUploadStage('SYNC', 'Updating user avatar in Convex', { storageId });
-      await updateUserMutation({
-        userId: convexUserId as any,
-        avatar: storageId,
-      });
-      showToast('Profile photo updated', 'Your new photo is now live.');
-    } catch (err: any) {
-      logUploadStage('UPLOAD', 'Avatar upload failed', { error: err?.message || String(err) });
-      showToast('Error', err?.message || 'Could not save profile photo. Please try again.');
-    } finally {
-      setAvatarUploading(false);
-      if (avatarInputRef.current) avatarInputRef.current.value = '';
-    }
+    setCropFile(file);
+    setIsCropModalOpen(true);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
 
   // ---------------------------------------------------------------------------
@@ -311,17 +286,17 @@ export default function Profile() {
                 </div>
 
                 {/* Direct Mobile/Desktop Avatar Picker Trigger */}
-                <label
-                  htmlFor="profile-avatar-input"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropFile(null);
+                    setIsCropModalOpen(true);
+                  }}
                   className="absolute bottom-0 right-0 p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-all shadow-md active:scale-95 cursor-pointer z-20"
                   title="Edit Profile Photo"
                 >
-                  {avatarUploading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Camera className="w-3.5 h-3.5" />
-                  )}
-                </label>
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
 
                 <input
                   id="profile-avatar-input"
@@ -724,6 +699,14 @@ export default function Profile() {
           </div>
 
         </div>
+
+        <UserAvatarCropModal
+          isOpen={isCropModalOpen}
+          onClose={() => setIsCropModalOpen(false)}
+          initialFile={cropFile}
+          currentImageUrl={user.avatar}
+          userName={user.name}
+        />
       </PageShell>
     </QueryErrorBoundary>
   );

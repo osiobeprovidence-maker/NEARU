@@ -132,6 +132,159 @@ export async function processAndCompressImage(
   });
 }
 
+export interface ProcessAvatarOptions {
+  targetSize?: number;
+  safeAreaRatio?: number;
+  quality?: number;
+  fillBackground?: string | 'auto';
+}
+
+/**
+ * Prepares an avatar image on a strict 1:1 square canvas (standard 1080x1080 px).
+ * If the source image is non-square (wide logo or tall portrait):
+ * - It fits the entire image proportionally into the ~80% safe area circle so no portion is cut off.
+ * - Samples the dominant edge/corner background color so non-square images blend seamlessly.
+ * - Never stretches or distorts the image.
+ */
+export async function processAvatarImage(
+  file: File | Blob,
+  options: ProcessAvatarOptions = {}
+): Promise<Blob> {
+  const {
+    targetSize = 1080,
+    safeAreaRatio = 0.80,
+    quality = 0.90,
+    fillBackground = 'auto',
+  } = options;
+
+  logUploadStage('PROCESS', 'Starting avatar image processing', {
+    originalSize: file.size,
+    type: file.type,
+    targetSize,
+    safeAreaRatio,
+  });
+
+  return new Promise<Blob>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const naturalW = img.naturalWidth || img.width;
+      const naturalH = img.naturalHeight || img.height;
+
+      if (!naturalW || !naturalH) {
+        resolve(file);
+        return;
+      }
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        const ratio = naturalW / naturalH;
+        const isSquare = ratio >= 0.92 && ratio <= 1.08;
+
+        // Auto background sampling from source image corners
+        let bgColor = '#FFFFFF';
+        if (fillBackground === 'auto') {
+          try {
+            const sampleCanvas = document.createElement('canvas');
+            sampleCanvas.width = 16;
+            sampleCanvas.height = 16;
+            const sCtx = sampleCanvas.getContext('2d');
+            if (sCtx) {
+              sCtx.drawImage(img, 0, 0, 16, 16);
+              const p = sCtx.getImageData(0, 0, 1, 1).data;
+              if (p[3] < 128) {
+                bgColor = 'transparent';
+              } else {
+                bgColor = `rgb(${p[0]}, ${p[1]}, ${p[2]})`;
+              }
+            }
+          } catch {
+            bgColor = '#FFFFFF';
+          }
+        } else if (fillBackground) {
+          bgColor = fillBackground;
+        }
+
+        if (bgColor !== 'transparent') {
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(0, 0, targetSize, targetSize);
+        }
+
+        let drawW: number;
+        let drawH: number;
+        let drawX: number;
+        let drawY: number;
+
+        if (isSquare) {
+          // Image is already square: scale directly to target canvas (1080x1080)
+          drawW = targetSize;
+          drawH = targetSize;
+          drawX = 0;
+          drawY = 0;
+        } else {
+          // Non-square image: fit inside the ~80% safe zone circle so no logo text or parts are clipped
+          const maxDim = targetSize * safeAreaRatio;
+          if (naturalW > naturalH) {
+            drawW = maxDim;
+            drawH = Math.round(maxDim / ratio);
+          } else {
+            drawH = maxDim;
+            drawW = Math.round(maxDim * ratio);
+          }
+          drawX = Math.round((targetSize - drawW) / 2);
+          drawY = Math.round((targetSize - drawH) / 2);
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+        const mimeType = file.type === 'image/png' && bgColor === 'transparent' ? 'image/png' : 'image/jpeg';
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            logUploadStage('PROCESS', 'Avatar image prepared successfully', {
+              dimensions: `${targetSize}x${targetSize}`,
+              size: blob.size,
+              isSquare,
+            });
+            resolve(blob);
+          },
+          mimeType,
+          quality
+        );
+      } catch (err) {
+        logUploadStage('PROCESS', 'Avatar canvas processing error, falling back to original', { error: String(err) });
+        resolve(file);
+      }
+    };
+
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      logUploadStage('PROCESS', 'Avatar image failed to load', { error: String(err) });
+      resolve(file);
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 /**
  * Uploads a processed image blob or file to Convex storage using a generated signed upload URL.
  */

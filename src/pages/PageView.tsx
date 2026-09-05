@@ -346,7 +346,7 @@ export default function PageView() {
                   src={page.avatar}
                   name={page.name}
                   size="xl"
-                  className="ring-4 ring-white shadow-lg rounded-3xl"
+                  className="ring-4 ring-white shadow-lg"
                 />
                 {isManager && (
                   <button
@@ -621,7 +621,7 @@ export default function PageView() {
                       src={page.avatar}
                       name={page.name}
                       size="lg"
-                      className="rounded-2xl ring-2 ring-zinc-200"
+                      className="ring-2 ring-zinc-200"
                     />
                     <div>
                       <div className="text-xs font-bold text-zinc-900">

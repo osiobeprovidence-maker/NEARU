@@ -7,6 +7,7 @@ import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { NIGERIA_STATES, COUNTRIES } from '../data/nigeria';
 import Avatar from '../components/Avatar';
+import UserAvatarCropModal from '../components/UserAvatarCropModal';
 import { 
   User, 
   Mail, 
@@ -101,49 +102,18 @@ export default function EditProfile() {
   const [newCustomInterest, setNewCustomInterest] = useState('');
   const [showAddInterest, setShowAddInterest] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [cropInitialFile, setCropInitialFile] = useState<File | null>(null);
 
   const selectedStateData = NIGERIA_STATES.find((s) => s.name === selectedState);
   const availableCities = selectedStateData?.cities || [];
 
-  const performAvatarUpload = async (file: File) => {
-    setIsUploading(true);
-    setSaveError(null);
-    setLastFailedFile(null);
-    logUploadStage('SELECT', 'Avatar photo selected in EditProfile', {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    });
-    try {
-      const compressedBlob = await processAndCompressImage(file, {
-        maxWidth: 800,
-        maxHeight: 800,
-        quality: 0.85,
-      });
-      const blobUrl = URL.createObjectURL(compressedBlob);
-      setAvatar(blobUrl);
-
-      const storageId = await uploadToConvexStorage(
-        compressedBlob,
-        generateAvatarUploadUrl
-      );
-      setAvatarStorageId(storageId);
-      setShowAvatarPicker(false);
-      logUploadStage('PROCESS', 'Avatar uploaded to storage in EditProfile', { storageId });
-    } catch (err: any) {
-      logUploadStage('UPLOAD', 'Avatar upload failed in EditProfile', { error: err?.message || String(err) });
-      setSaveError(err?.message || 'Failed to upload image. Please try again.');
-      setLastFailedFile(file);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    performAvatarUpload(file);
+    setCropInitialFile(file);
+    setIsCropModalOpen(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -312,23 +282,26 @@ export default function EditProfile() {
                   disabled={isUploading}
                   accept="image/*"
                 />
-                <label
-                  htmlFor="edit-profile-avatar-input"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropInitialFile(null);
+                    setIsCropModalOpen(true);
+                  }}
                   className="w-full mb-3 py-3 border-2 border-dashed border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all cursor-pointer select-none"
                 >
-                  {isUploading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Optimizing & uploading...</>
-                  ) : (
-                    <><Upload className="w-4 h-4" /> Upload your own photo</>
-                  )}
-                </label>
+                  <Upload className="w-4 h-4" /> Upload your own photo
+                </button>
 
                 {saveError && lastFailedFile && (
                   <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2 text-xs text-rose-700">
                     <span className="truncate">{saveError}</span>
                     <button
                       type="button"
-                      onClick={() => performAvatarUpload(lastFailedFile)}
+                      onClick={() => {
+                        setCropInitialFile(lastFailedFile);
+                        setIsCropModalOpen(true);
+                      }}
                       className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shrink-0 flex items-center gap-1 active:scale-95 transition-all"
                     >
                       <RefreshCw className="w-3 h-3" />
@@ -714,6 +687,19 @@ export default function EditProfile() {
           </button>
         </div>
       </form>
+
+      <UserAvatarCropModal
+        isOpen={isCropModalOpen}
+        onClose={() => setIsCropModalOpen(false)}
+        initialFile={cropInitialFile}
+        currentImageUrl={avatar || user.avatar}
+        userName={name || user.name}
+        onSuccess={(storageId, blobUrl) => {
+          setAvatar(blobUrl);
+          setAvatarStorageId(storageId);
+          setShowAvatarPicker(false);
+        }}
+      />
     </PageShell>
   );
 }

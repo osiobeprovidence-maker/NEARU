@@ -35,6 +35,7 @@ import { cn } from '../lib/utils';
 import { Rally } from '../types';
 import {
   processAndCompressImage,
+  processAvatarImage,
   uploadToConvexStorage,
   logUploadStage,
 } from '../utils/imageUpload';
@@ -508,10 +509,9 @@ function EditPageSheet({
     setSaveError(null);
     logUploadStage('SELECT', 'Avatar selected in ManagePage', { name: file.name, size: file.size });
     try {
-      const compressedBlob = await processAndCompressImage(file, {
-        maxWidth: 800,
-        maxHeight: 800,
-        quality: 0.85,
+      const compressedBlob = await processAvatarImage(file, {
+        targetSize: 1080,
+        safeAreaRatio: 0.80,
       });
       const storageId = await uploadToConvexStorage(compressedBlob, generateAvatarUploadUrl);
       setAvatarStorageId(storageId);

@@ -16,7 +16,7 @@ import { useMutation } from 'convex/react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../convex/_generated/api';
 import Avatar from './Avatar';
-import { processAndCompressImage, uploadToConvexStorage } from '../utils/imageUpload';
+import { processAndCompressImage, processAvatarImage, uploadToConvexStorage } from '../utils/imageUpload';
 
 interface CreatePageModalProps {
   isOpen: boolean;
@@ -99,7 +99,7 @@ export default function CreatePageModal({
     setIsUploadingAvatar(true);
     setError('');
     try {
-      const compressed = await processAndCompressImage(file);
+      const compressed = await processAvatarImage(file, { targetSize: 1080, safeAreaRatio: 0.80 });
       const storageId = await uploadToConvexStorage(compressed, generateUploadUrl);
       setAvatarStorageId(storageId);
     } catch (err: any) {

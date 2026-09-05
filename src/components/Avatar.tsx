@@ -38,9 +38,11 @@ function getInitials(name?: string | null): string {
 
 export default function Avatar({ src, name, size = 'md', className }: AvatarProps) {
   const [failed, setFailed] = useState(false);
+  const [isNonSquare, setIsNonSquare] = useState(false);
 
   React.useEffect(() => {
     setFailed(false);
+    setIsNonSquare(false);
   }, [src]);
 
   const resolvedSrc = useMemo(() => {
@@ -67,14 +69,28 @@ export default function Avatar({ src, name, size = 'md', className }: AvatarProp
     return hash % BG_COLORS.length;
   }, [name]);
 
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      // If aspect ratio significantly deviates from 1:1, use contain to prevent cutting off the logo
+      if (ratio < 0.88 || ratio > 1.14) {
+        setIsNonSquare(true);
+      }
+    }
+  };
+
+  // Strip conflicting rounded-* overrides to guarantee circular avatar presentation
+  const safeClassName = className ? className.replace(/\brounded-(?:none|sm|md|lg|xl|2xl|3xl)\b/g, '').trim() : '';
+
   if (!showImage) {
     return (
       <div
         className={cn(
-          'rounded-full flex items-center justify-center font-bold text-white select-none shrink-0',
+          'rounded-full flex items-center justify-center font-bold text-white select-none shrink-0 overflow-hidden',
           SIZE_CLASSES[size],
           BG_COLORS[colorIndex],
-          className
+          safeClassName
         )}
         aria-label={name || 'avatar'}
       >
@@ -84,11 +100,26 @@ export default function Avatar({ src, name, size = 'md', className }: AvatarProp
   }
 
   return (
-    <img
-      src={resolvedSrc}
-      alt={name || 'avatar'}
-      onError={() => setFailed(true)}
-      className={cn('rounded-full object-cover shrink-0', SIZE_CLASSES[size], className)}
-    />
+    <div
+      className={cn(
+        'rounded-full overflow-hidden flex items-center justify-center select-none shrink-0 relative bg-zinc-100',
+        SIZE_CLASSES[size],
+        safeClassName
+      )}
+      aria-label={name || 'avatar'}
+    >
+      <img
+        src={resolvedSrc}
+        alt={name || 'avatar'}
+        onLoad={handleImageLoad}
+        onError={() => setFailed(true)}
+        className={cn(
+          'w-full h-full object-center select-none pointer-events-none transition-all duration-150',
+          isNonSquare
+            ? 'object-contain p-[10%] bg-zinc-900/5'
+            : 'object-cover'
+        )}
+      />
+    </div>
   );
 }

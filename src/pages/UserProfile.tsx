@@ -31,6 +31,7 @@ import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
+import UserAvatarCropModal from '../components/UserAvatarCropModal';
 import {
   processAndCompressImage,
   uploadToConvexStorage,
@@ -167,42 +168,15 @@ export default function UserProfile() {
     }
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !convexUserId || !isSelf) return;
-    setAvatarUploading(true);
-    logUploadStage('SELECT', 'Avatar photo selected in UserProfile', {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    });
-    try {
-      const compressedBlob = await processAndCompressImage(file, {
-        maxWidth: 800,
-        maxHeight: 800,
-        quality: 0.85,
-      });
-      const blobUrl = URL.createObjectURL(compressedBlob);
-      setAvatarPreview(blobUrl);
-      updateUser({ avatar: blobUrl });
-
-      const storageId = await uploadToConvexStorage(
-        compressedBlob,
-        generateAvatarUploadUrl
-      );
-      logUploadStage('SYNC', 'Updating user avatar in Convex from UserProfile', { storageId });
-      await updateUserMutation({
-        userId: convexUserId as any,
-        avatar: storageId,
-      });
-      showToast('Profile photo updated', 'Your new photo is live.');
-    } catch (err: any) {
-      logUploadStage('UPLOAD', 'Avatar upload failed in UserProfile', { error: err?.message || String(err) });
-      showToast('Error', err?.message || 'Could not save profile photo. Please try again.');
-    } finally {
-      setAvatarUploading(false);
-      if (avatarInputRef.current) avatarInputRef.current.value = '';
-    }
+    setCropFile(file);
+    setIsCropModalOpen(true);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
 
   const handleToggleFollow = async () => {
@@ -410,17 +384,17 @@ export default function UserProfile() {
             </div>
             {isSelf && convexUserId && (
               <>
-                <label
-                  htmlFor="user-profile-avatar-input"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropFile(null);
+                    setIsCropModalOpen(true);
+                  }}
                   className="absolute bottom-0 right-0 p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-all shadow-md active:scale-95 cursor-pointer z-20"
                   title="Change Profile Photo"
                 >
-                  {avatarUploading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Camera className="w-3.5 h-3.5" />
-                  )}
-                </label>
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
                 <input
                   id="user-profile-avatar-input"
                   ref={avatarInputRef}
@@ -803,6 +777,19 @@ export default function UserProfile() {
             </form>
           </div>
         </div>
+      )}
+
+      {isSelf && (
+        <UserAvatarCropModal
+          isOpen={isCropModalOpen}
+          onClose={() => setIsCropModalOpen(false)}
+          initialFile={cropFile}
+          currentImageUrl={avatarPreview || profile?.avatar || target?.avatar}
+          userName={profile?.name || target?.name}
+          onSuccess={(_storageId, blobUrl) => {
+            setAvatarPreview(blobUrl);
+          }}
+        />
       )}
     </PageShell>
     </QueryErrorBoundary>
