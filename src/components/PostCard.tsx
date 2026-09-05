@@ -474,7 +474,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         ) : (
           <>
             <Link
-              to={`/user/${post.creator?.id || post.creator?._id}`}
+              to={`/user/${post.creator?.id || (post.creator as any)?._id}`}
               onClick={(e) => e.stopPropagation()}
               className="shrink-0"
             >
@@ -486,7 +486,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
               />
             </Link>
             <Link
-              to={`/user/${post.creator?.id || post.creator?._id}`}
+              to={`/user/${post.creator?.id || (post.creator as any)?._id}`}
               onClick={(e) => e.stopPropagation()}
               className="flex-1 min-w-0 block"
             >

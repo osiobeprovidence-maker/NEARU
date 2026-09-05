@@ -25,10 +25,12 @@ import {
   AlertCircle,
   X,
   Upload,
+  Camera,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Rally } from '../types';
 import { processAndCompressImage, uploadToConvexStorage } from '../utils/imageUpload';
+import PageImageCropModal from '../components/PageImageCropModal';
 
 export default function PageView() {
   const { slug } = useParams<{ slug: string }>();
@@ -38,6 +40,8 @@ export default function PageView() {
   const [activeTab, setActiveTab] = useState<'posts' | 'about'>('posts');
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropModalMode, setCropModalMode] = useState<'avatar' | 'cover'>('avatar');
 
   const page = useQuery(
     api.pages.getBySlug,
@@ -256,7 +260,20 @@ export default function PageView() {
     <PageShell title={page.name} backTo="/pages">
       <div className="max-w-3xl mx-auto pb-16">
         {/* Cover Photo Banner */}
-        <div className="relative h-44 sm:h-56 bg-gradient-to-r from-zinc-800 to-zinc-950 overflow-hidden">
+        <div
+          className={cn(
+            "relative h-44 sm:h-56 bg-gradient-to-r from-zinc-800 to-zinc-950 overflow-hidden group",
+            isManager && !page.coverImage && "cursor-pointer"
+          )}
+          onClick={
+            isManager && !page.coverImage
+              ? () => {
+                  setCropModalMode('cover');
+                  setCropModalOpen(true);
+                }
+              : undefined
+          }
+        >
           {page.coverImage ? (
             <img
               src={page.coverImage}
@@ -264,30 +281,72 @@ export default function PageView() {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center opacity-30">
-              <Flag className="w-16 h-16 text-white" />
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/40">
+              <Flag className="w-12 h-12" />
+              {isManager && (
+                <span className="text-xs font-bold text-white/70 bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm group-hover:bg-black/50 transition-colors">
+                  Click to add cover photo
+                </span>
+              )}
             </div>
           )}
+
           {/* Share Button on Cover */}
           <button
-            onClick={handleShare}
-            className="absolute top-4 right-4 p-2.5 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleShare();
+            }}
+            className="absolute top-4 right-4 p-2.5 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full transition-colors z-10"
             aria-label="Share page"
           >
             <Share2 className="w-4 h-4" />
           </button>
+
+          {/* Manager Cover Edit Button */}
+          {isManager && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCropModalMode('cover');
+                setCropModalOpen(true);
+              }}
+              className="absolute bottom-3 right-3 px-3.5 py-2 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-lg transition-all active:scale-95 z-10 cursor-pointer"
+              title="Edit Cover Photo"
+            >
+              <Camera className="w-4 h-4" />
+              <span>{page.coverImage ? 'Edit Cover' : 'Add Cover'}</span>
+            </button>
+          )}
         </div>
 
         {/* Header Profile Section */}
         <div className="px-4 sm:px-6 relative pb-6 border-b border-zinc-100">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-16 sm:-mt-14 mb-4">
             <div className="flex items-end gap-3.5">
-              <Avatar
-                src={page.avatar}
-                name={page.name}
-                size="xl"
-                className="ring-4 ring-white shadow-lg shrink-0 rounded-3xl"
-              />
+              <div className="relative group shrink-0">
+                <Avatar
+                  src={page.avatar}
+                  name={page.name}
+                  size="xl"
+                  className="ring-4 ring-white shadow-lg rounded-3xl"
+                />
+                {isManager && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCropModalMode('avatar');
+                      setCropModalOpen(true);
+                    }}
+                    className="absolute -bottom-1 -right-1 p-2 rounded-2xl bg-zinc-900 hover:bg-indigo-600 text-white shadow-md transition-all active:scale-90 z-10 border-2 border-white cursor-pointer"
+                    title="Change Profile Picture"
+                    aria-label="Change Profile Picture"
+                  >
+                    <Camera className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <div className="pt-2 sm:pt-0">
                 <div className="flex items-center gap-1.5">
                   <h1 className="text-xl sm:text-2xl font-black text-zinc-900 leading-tight">
@@ -535,6 +594,78 @@ export default function PageView() {
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
+              {/* Profile Image Management */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-2.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase block">
+                  Profile Image
+                </label>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      src={page.avatar}
+                      name={page.name}
+                      size="lg"
+                      className="rounded-2xl ring-2 ring-zinc-200"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-zinc-900">
+                        {page.avatar ? 'Custom Photo' : 'Default Initials'}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
+                        1:1 Square recommended
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCropModalMode('avatar');
+                      setCropModalOpen(true);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  >
+                    {page.avatar ? 'Change' : 'Add Photo'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Cover Image Management */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-2.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase block">
+                  Cover Image
+                </label>
+                <div className="space-y-2">
+                  <div className="relative h-20 w-full rounded-xl overflow-hidden bg-zinc-900">
+                    {page.coverImage ? (
+                      <img
+                        src={page.coverImage}
+                        alt="Cover preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs font-medium">
+                        No cover banner set
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-zinc-500 font-medium">
+                      Wide landscape banner
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCropModalMode('cover');
+                        setCropModalOpen(true);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                    >
+                      {page.coverImage ? 'Change Cover' : 'Add Cover'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">
                   Page Name
@@ -620,6 +751,32 @@ export default function PageView() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Page Image Cropper & Manager Modal */}
+      {isManager && (
+        <PageImageCropModal
+          isOpen={cropModalOpen}
+          onClose={() => setCropModalOpen(false)}
+          pageId={page._id}
+          mode={cropModalMode}
+          currentImageUrl={cropModalMode === 'avatar' ? page.avatar : page.coverImage}
+          pageName={page.name}
+          onSuccess={(newUrl) => {
+            if (cropModalMode === 'avatar') {
+              setEditAvatar(newUrl || '');
+            } else {
+              setEditCover(newUrl || '');
+            }
+          }}
+          onRemove={() => {
+            if (cropModalMode === 'avatar') {
+              setEditAvatar('');
+            } else {
+              setEditCover('');
+            }
+          }}
+        />
       )}
     </PageShell>
   );

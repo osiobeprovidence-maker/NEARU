@@ -88,8 +88,7 @@ export default function CreatePageModal({
     setError('');
     try {
       const compressed = await processAndCompressImage(file);
-      const postUrl = await generateUploadUrl();
-      const storageId = await uploadToConvexStorage(postUrl, compressed);
+      const storageId = await uploadToConvexStorage(compressed, generateUploadUrl);
       setAvatarUrl(storageId);
     } catch (err: any) {
       setError(err?.message || 'Failed to upload profile image.');
@@ -105,8 +104,7 @@ export default function CreatePageModal({
     setError('');
     try {
       const compressed = await processAndCompressImage(file);
-      const postUrl = await generateUploadUrl();
-      const storageId = await uploadToConvexStorage(postUrl, compressed);
+      const storageId = await uploadToConvexStorage(compressed, generateUploadUrl);
       setCoverUrl(storageId);
     } catch (err: any) {
       setError(err?.message || 'Failed to upload cover photo.');

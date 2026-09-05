@@ -4,12 +4,13 @@ import { cn } from '../lib/utils';
 interface PageShellProps {
   title: string;
   subtitle?: string;
+  backTo?: string;
   children: React.ReactNode;
   headerAction?: React.ReactNode;
   className?: string;
 }
 
-export default function PageShell({ title, subtitle, children, headerAction, className }: PageShellProps) {
+export default function PageShell({ title, subtitle, backTo, children, headerAction, className }: PageShellProps) {
   return (
     <div className={cn("px-0 md:px-8 pt-0 md:pt-8 pb-24 md:pb-8", className)}>
       {/* Desktop Header */}

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "./lib/auth";
 
 function cleanSlug(slug: string): string {
@@ -8,6 +9,70 @@ function cleanSlug(slug: string): string {
     .trim()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9_-]/g, "");
+}
+
+function isStorageId(id?: string | null): boolean {
+  return Boolean(
+    id &&
+      !id.startsWith("http://") &&
+      !id.startsWith("https://") &&
+      !id.startsWith("data:") &&
+      !id.startsWith("blob:")
+  );
+}
+
+async function resolveStorageUrl(
+  ctx: any,
+  val?: string | null
+): Promise<string | undefined> {
+  if (!val) return undefined;
+  if (!isStorageId(val)) return val;
+  try {
+    const url = await ctx.storage.getUrl(val as any);
+    return url || val;
+  } catch {
+    return val;
+  }
+}
+
+async function safeDeleteStorageFile(ctx: any, storageId?: string | null) {
+  if (storageId && isStorageId(storageId)) {
+    try {
+      await ctx.storage.delete(storageId as any);
+    } catch (err) {
+      console.warn("[pages] Safe storage delete caught error:", err);
+    }
+  }
+}
+
+/**
+ * Verify that the caller is authenticated and has permission to manage the target Page.
+ * Authorized roles: Page creator, or pageMembers with role "owner", "admin", or "editor".
+ */
+async function checkPageManagerPermission(
+  ctx: any,
+  pageId: Id<"pages">,
+  callerId: Id<"users">
+) {
+  const page = await ctx.db.get(pageId);
+  if (!page) throw new Error("Page not found.");
+
+  const member = await ctx.db
+    .query("pageMembers")
+    .withIndex("by_page_user", (q: any) =>
+      q.eq("pageId", pageId).eq("userId", callerId)
+    )
+    .first();
+
+  const isAuthorized =
+    page.creatorId.toString() === callerId.toString() ||
+    Boolean(member && ["owner", "admin", "editor"].includes(member.role));
+
+  if (!isAuthorized) {
+    throw new Error("Forbidden: You do not have permission to manage this Page.");
+  }
+
+  return { page, member };
 }
 
 /**
@@ -80,6 +145,7 @@ export const create = mutation({
 
 /**
  * Get Page by unique slug / handle.
+ * Resolves avatar and coverImage to public CDN URLs if stored as Convex storage IDs.
  */
 export const getBySlug = query({
   args: {
@@ -134,8 +200,15 @@ export const getBySlug = query({
       }
     }
 
+    const resolvedAvatar = await resolveStorageUrl(ctx, page.avatar);
+    const resolvedCoverImage = await resolveStorageUrl(ctx, page.coverImage);
+
     return {
       ...page,
+      avatar: resolvedAvatar,
+      coverImage: resolvedCoverImage,
+      rawAvatarStorageId: isStorageId(page.avatar) ? page.avatar : undefined,
+      rawCoverStorageId: isStorageId(page.coverImage) ? page.coverImage : undefined,
       followersCount: follows.length,
       postsCount: posts.length,
       isFollowing,
@@ -146,6 +219,7 @@ export const getBySlug = query({
 
 /**
  * Get Page by ID.
+ * Resolves avatar and coverImage to public CDN URLs.
  */
 export const getById = query({
   args: {
@@ -195,8 +269,15 @@ export const getById = query({
       }
     }
 
+    const resolvedAvatar = await resolveStorageUrl(ctx, page.avatar);
+    const resolvedCoverImage = await resolveStorageUrl(ctx, page.coverImage);
+
     return {
       ...page,
+      avatar: resolvedAvatar,
+      coverImage: resolvedCoverImage,
+      rawAvatarStorageId: isStorageId(page.avatar) ? page.avatar : undefined,
+      rawCoverStorageId: isStorageId(page.coverImage) ? page.coverImage : undefined,
       followersCount: follows.length,
       postsCount: posts.length,
       isFollowing,
@@ -207,8 +288,6 @@ export const getById = query({
 
 /**
  * List all Pages managed by a user (owner, admin, or editor).
- * Expected hierarchy:
- *   User -> users._id -> pageMembers.userId -> pageMembers.pageId -> pages._id
  */
 export const listUserManagedPages = query({
   args: {
@@ -242,13 +321,15 @@ export const listUserManagedPages = query({
       if (!m || !m.pageId) continue;
       const page = await ctx.db.get(m.pageId);
       if (page) {
+        const resolvedAvatar = await resolveStorageUrl(ctx, page.avatar);
+        const resolvedCover = await resolveStorageUrl(ctx, page.coverImage);
         results.push({
           _id: page._id,
           name: page.name || "Untitled Page",
           slug: page.slug || "",
           category: page.category || "General",
-          avatar: page.avatar || undefined,
-          coverImage: page.coverImage || undefined,
+          avatar: resolvedAvatar,
+          coverImage: resolvedCover,
           description: page.description || undefined,
           role: m.role || "owner",
         });
@@ -281,13 +362,140 @@ export const listAll = query({
           .query("rallies")
           .withIndex("by_page", (q) => q.eq("pageId", page._id))
           .collect();
+        const resolvedAvatar = await resolveStorageUrl(ctx, page.avatar);
+        const resolvedCover = await resolveStorageUrl(ctx, page.coverImage);
         return {
           ...page,
+          avatar: resolvedAvatar,
+          coverImage: resolvedCover,
           followersCount: follows.length,
           postsCount: posts.length,
         };
       })
     );
+  },
+});
+
+/**
+ * Generate a signed upload URL for a Page image (avatar or cover).
+ * Gated on the backend to Page owners, admins, or editors.
+ */
+export const generatePageImageUploadUrl = mutation({
+  args: {
+    pageId: v.id("pages"),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    await checkPageManagerPermission(ctx, args.pageId, caller._id);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Update Page profile / avatar image.
+ * Verifies permission, safely cleans previous storage file, and saves new storage ID.
+ */
+export const updateProfileImage = mutation({
+  args: {
+    pageId: v.id("pages"),
+    storageId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { page } = await checkPageManagerPermission(ctx, args.pageId, caller._id);
+
+    const oldAvatar = page.avatar;
+    if (oldAvatar && oldAvatar !== args.storageId) {
+      await safeDeleteStorageFile(ctx, oldAvatar);
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.pageId, {
+      avatar: args.storageId,
+      updatedAt: now,
+    });
+
+    const url = await resolveStorageUrl(ctx, args.storageId);
+    return { success: true, avatar: url, storageId: args.storageId };
+  },
+});
+
+/**
+ * Remove Page profile / avatar image.
+ * Verifies permission, deletes file from Convex storage, and clears avatar field.
+ */
+export const removeProfileImage = mutation({
+  args: {
+    pageId: v.id("pages"),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { page } = await checkPageManagerPermission(ctx, args.pageId, caller._id);
+
+    if (page.avatar) {
+      await safeDeleteStorageFile(ctx, page.avatar);
+    }
+
+    await ctx.db.patch(args.pageId, {
+      avatar: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update Page cover image.
+ * Verifies permission, safely cleans previous storage file, and saves new storage ID.
+ */
+export const updateCoverImage = mutation({
+  args: {
+    pageId: v.id("pages"),
+    storageId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { page } = await checkPageManagerPermission(ctx, args.pageId, caller._id);
+
+    const oldCover = page.coverImage;
+    if (oldCover && oldCover !== args.storageId) {
+      await safeDeleteStorageFile(ctx, oldCover);
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.pageId, {
+      coverImage: args.storageId,
+      updatedAt: now,
+    });
+
+    const url = await resolveStorageUrl(ctx, args.storageId);
+    return { success: true, coverImage: url, storageId: args.storageId };
+  },
+});
+
+/**
+ * Remove Page cover image.
+ * Verifies permission, deletes file from Convex storage, and clears coverImage field.
+ */
+export const removeCoverImage = mutation({
+  args: {
+    pageId: v.id("pages"),
+  },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const { page } = await checkPageManagerPermission(ctx, args.pageId, caller._id);
+
+    if (page.coverImage) {
+      await safeDeleteStorageFile(ctx, page.coverImage);
+    }
+
+    await ctx.db.patch(args.pageId, {
+      coverImage: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });
 
@@ -309,32 +517,27 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
-
-    const page = await ctx.db.get(args.pageId);
-    if (!page) throw new Error("Page not found.");
-
-    // Check membership role
-    const member = await ctx.db
-      .query("pageMembers")
-      .withIndex("by_page_user", (q) =>
-        q.eq("pageId", args.pageId).eq("userId", caller._id)
-      )
-      .first();
-
-    const isAuthorized =
-      page.creatorId.toString() === caller._id.toString() ||
-      (member && ["owner", "admin", "editor"].includes(member.role));
-
-    if (!isAuthorized) {
-      throw new Error("Forbidden: You do not have permission to edit this Page.");
-    }
+    const { page } = await checkPageManagerPermission(ctx, args.pageId, caller._id);
 
     const updates: Record<string, any> = { updatedAt: Date.now() };
     if (args.name !== undefined) updates.name = args.name.trim();
     if (args.category !== undefined) updates.category = args.category.trim();
     if (args.description !== undefined) updates.description = args.description.trim();
-    if (args.avatar !== undefined) updates.avatar = args.avatar;
-    if (args.coverImage !== undefined) updates.coverImage = args.coverImage;
+
+    if (args.avatar !== undefined) {
+      if (page.avatar && page.avatar !== args.avatar) {
+        await safeDeleteStorageFile(ctx, page.avatar);
+      }
+      updates.avatar = args.avatar || undefined;
+    }
+
+    if (args.coverImage !== undefined) {
+      if (page.coverImage && page.coverImage !== args.coverImage) {
+        await safeDeleteStorageFile(ctx, page.coverImage);
+      }
+      updates.coverImage = args.coverImage || undefined;
+    }
+
     if (args.website !== undefined) updates.website = args.website.trim();
     if (args.email !== undefined) updates.email = args.email.trim();
     if (args.phone !== undefined) updates.phone = args.phone.trim();

@@ -153,6 +153,7 @@ export const updateBranding = mutation({
         requireEmailVerification: false,
         autoVerifyPhone: false,
         maintenanceMode: false,
+        updatedAt: now,
         ...cleanUpdates,
       });
     }
