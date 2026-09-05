@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
+import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
 import PageImageCropModal from './PageImageCropModal';
 import {
@@ -59,6 +60,7 @@ export default function EditPageModal({
   onClose,
   onSaved,
 }: EditPageModalProps) {
+  const { convexUserId } = useAuth();
   const updatePageMut = useMutation(api.pages.update);
 
   const [name, setName] = useState('');
@@ -350,6 +352,7 @@ export default function EditPageModal({
       {cropModalOpen && (
         <PageImageCropModal
           pageId={page._id as Id<'pages'>}
+          userId={(convexUserId as any) || undefined}
           pageName={page.name}
           mode={cropModalMode}
           currentImageUrl={cropModalMode === 'avatar' ? currentAvatar : currentCover}

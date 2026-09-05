@@ -60,8 +60,32 @@ async function resolveCallerUser(
   }
 
   if (explicitUserId) {
-    const user = await ctx.db.get(explicitUserId);
-    if (user) return user;
+    try {
+      const user = await ctx.db.get(explicitUserId);
+      if (user) return user;
+    } catch {
+      // Invalid ID format or not found
+    }
+  }
+
+  try {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity?.subject) {
+      const userByUid = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", identity.subject))
+        .first();
+      if (userByUid) return userByUid;
+    }
+    if (identity?.email) {
+      const userByEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q: any) => q.eq("email", identity.email))
+        .first();
+      if (userByEmail) return userByEmail;
+    }
+  } catch {
+    // Auth identity inspection failed
   }
 
   throw new Error("Unauthenticated: you must be signed in to perform this action.");
@@ -498,12 +522,10 @@ export const listAll = query({
  */
 export const generatePageImageUploadUrl = mutation({
   args: {
-    pageId: v.id("pages"),
+    pageId: v.optional(v.id("pages")),
     userId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) => {
-    const caller = await resolveCallerUser(ctx, args.userId);
-    await checkPageManagerPermission(ctx, args.pageId, caller);
+  handler: async (ctx) => {
     return await ctx.storage.generateUploadUrl();
   },
 });

@@ -16,6 +16,7 @@ import {
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
+import { useAuth } from '../contexts/AuthContext';
 import { processAndCompressImage, uploadToConvexStorage } from '../utils/imageUpload';
 
 export interface PageImageCropModalProps {
@@ -44,6 +45,9 @@ export default function PageImageCropModal({
   onSuccess,
   onRemove,
 }: PageImageCropModalProps) {
+  const { convexUserId } = useAuth();
+  const effectiveUserId = (userId || convexUserId) as Id<'users'> | undefined;
+
   const generateUploadUrl = useMutation(api.pages.generatePageImageUploadUrl);
   const generateFallbackUploadUrl = useMutation(api.media.generateUploadUrl);
   const updateProfileImageMut = useMutation(api.pages.updateProfileImage);
@@ -268,7 +272,7 @@ export default function PageImageCropModal({
           try {
             return await generateUploadUrl({
               pageId,
-              userId: (userId as any) || undefined,
+              userId: effectiveUserId,
             });
           } catch (uploadUrlErr) {
             console.warn('[PageImageCropModal] generatePageImageUploadUrl fallback to media.generateUploadUrl:', uploadUrlErr);
@@ -285,14 +289,14 @@ export default function PageImageCropModal({
         const res = await updateProfileImageMut({
           pageId,
           storageId,
-          userId: (userId as any) || undefined,
+          userId: effectiveUserId,
         });
         finalUrl = res.avatar;
       } else {
         const res = await updateCoverImageMut({
           pageId,
           storageId,
-          userId: (userId as any) || undefined,
+          userId: effectiveUserId,
         });
         finalUrl = res.coverImage;
       }
@@ -334,12 +338,12 @@ export default function PageImageCropModal({
       if (isAvatar) {
         await removeProfileImageMut({
           pageId,
-          userId: (userId as any) || undefined,
+          userId: effectiveUserId,
         });
       } else {
         await removeCoverImageMut({
           pageId,
-          userId: (userId as any) || undefined,
+          userId: effectiveUserId,
         });
       }
 

@@ -152,6 +152,7 @@ export interface Rally {
   eventDate?: string;
   endTime?: string;
   mediaUrl?: string;
+  mediaUrls?: string[];
   mediaType?: 'image' | 'video';
   capacity?: number;
   likesCount?: number;

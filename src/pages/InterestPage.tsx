@@ -76,6 +76,7 @@ export default function InterestPage() {
     hashtags: r.hashtags,
     eventDate: r.eventDate,
     mediaUrl: r.mediaUrl,
+    mediaUrls: r.mediaUrls && r.mediaUrls.length > 0 ? r.mediaUrls : (r.mediaUrl ? [r.mediaUrl] : []),
     mediaType: r.mediaType,
     capacity: r.capacity,
     likesCount: r.likesCount,

@@ -462,6 +462,7 @@ export default function PagesHub() {
       {cropModalState?.isOpen && (
         <PageImageCropModal
           pageId={cropModalState.pageId}
+          userId={(convexUserId as any) || undefined}
           pageName={cropModalState.pageName}
           mode={cropModalState.mode}
           currentImageUrl={cropModalState.currentUrl}

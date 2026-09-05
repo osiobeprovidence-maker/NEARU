@@ -288,7 +288,7 @@ export default function UserProfile() {
     for (const c of content) {
       if (c.type === 'POST') out.posts.push(c);
       else out.rallies.push(c);
-      if (c.mediaUrl) out.media.push(c);
+      if (c.mediaUrl || (c.mediaUrls && c.mediaUrls.length > 0)) out.media.push(c);
     }
     return out;
   }, [content]);
@@ -329,6 +329,7 @@ export default function UserProfile() {
     hashtags: r.hashtags,
     eventDate: r.eventDate,
     mediaUrl: r.mediaUrl,
+    mediaUrls: r.mediaUrls && r.mediaUrls.length > 0 ? r.mediaUrls : (r.mediaUrl ? [r.mediaUrl] : []),
     mediaType: r.mediaType,
     capacity: r.capacity,
     authorType: r.authorType,

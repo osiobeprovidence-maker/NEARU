@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import {
@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   HelpingHand,
   X,
+  ChevronLeft,
   ChevronRight,
   Repeat2,
 } from 'lucide-react';
@@ -191,9 +192,41 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
 
   const [imgError, setImgError] = useState(false);
 
+  // Normalized list of media URLs for multi-image support
+  const mediaList = useMemo(() => {
+    if (post.mediaUrls && post.mediaUrls.length > 0) {
+      return post.mediaUrls;
+    }
+    if (post.mediaUrl) {
+      return [post.mediaUrl];
+    }
+    return [];
+  }, [post.mediaUrls, post.mediaUrl]);
+
+  const [activeSlide, setActiveSlide] = useState(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setImgError(false);
-  }, [post.mediaUrl]);
+    setActiveSlide(0);
+  }, [post.mediaUrl, post.mediaUrls]);
+
+  const handleCarouselScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (!el || el.clientWidth === 0) return;
+    const index = Math.round(el.scrollLeft / el.clientWidth);
+    setActiveSlide(index);
+  }, []);
+
+  const scrollToSlide = useCallback((index: number) => {
+    if (!carouselRef.current) return;
+    const width = carouselRef.current.clientWidth;
+    carouselRef.current.scrollTo({
+      left: index * width,
+      behavior: 'smooth',
+    });
+    setActiveSlide(index);
+  }, []);
 
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -613,29 +646,107 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         </p>
       )}
 
-      {/* ── 3. MEDIA ───────────────────────────────────────────────────── */}
-      {post.mediaUrl && !imgError && (
-        <div className="mt-3 rounded-2xl overflow-hidden bg-zinc-950/5 relative">
-          {post.mediaType === 'video' ||
-          post.mediaUrl.endsWith('.mp4') ||
-          post.mediaUrl.endsWith('.webm') ||
-          post.mediaUrl.endsWith('.mov') ||
-          post.mediaUrl.includes('stream.mux.com') ? (
-            <video
-              src={post.mediaUrl}
-              className="w-full max-h-[480px] object-cover bg-black"
-              controls
-              playsInline
-              preload="metadata"
-              onError={() => setImgError(true)}
-            />
+      {/* ── 3. MEDIA (Single image/video OR multi-image carousel) ───────────────────── */}
+      {mediaList.length > 0 && !imgError && (
+        <div
+          className="mt-3 rounded-2xl overflow-hidden bg-zinc-950/5 relative select-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {mediaList.length === 1 ? (
+            /* Single Media */
+            post.mediaType === 'video' ||
+            mediaList[0].endsWith('.mp4') ||
+            mediaList[0].endsWith('.webm') ||
+            mediaList[0].endsWith('.mov') ||
+            mediaList[0].includes('stream.mux.com') ? (
+              <video
+                src={mediaList[0]}
+                className="w-full max-h-[480px] object-cover bg-black"
+                controls
+                playsInline
+                preload="metadata"
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <img
+                src={mediaList[0]}
+                alt=""
+                className="w-full max-h-[480px] object-cover"
+                onError={() => setImgError(true)}
+              />
+            )
           ) : (
-            <img
-              src={post.mediaUrl}
-              alt=""
-              className="w-full max-h-[480px] object-cover"
-              onError={() => setImgError(true)}
-            />
+            /* Instagram-style Multi-Image Carousel */
+            <div className="relative group">
+              {/* Swipeable container */}
+              <div
+                ref={carouselRef}
+                onScroll={handleCarouselScroll}
+                className="w-full max-h-[480px] aspect-[4/3] sm:aspect-square flex overflow-x-auto snap-x snap-mandatory no-scrollbar touch-pan-y"
+              >
+                {mediaList.map((url, i) => (
+                  <div
+                    key={i}
+                    className="w-full h-full shrink-0 snap-center flex items-center justify-center bg-zinc-950/10 overflow-hidden"
+                  >
+                    <img
+                      src={url}
+                      alt={`Photo ${i + 1}`}
+                      className="w-full h-full object-cover"
+                      loading={i === 0 ? 'eager' : 'lazy'}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Floating Slide Counter Pill: 1 / 4 */}
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-semibold tracking-wider pointer-events-none z-10 shadow-sm">
+                {activeSlide + 1} / {mediaList.length}
+              </div>
+
+              {/* Dot Indicators */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md pointer-events-none z-10 transition-opacity">
+                {mediaList.map((_, dotIdx) => (
+                  <div
+                    key={dotIdx}
+                    className={cn(
+                      'h-1.5 rounded-full transition-all duration-200',
+                      dotIdx === activeSlide
+                        ? 'w-4 bg-white'
+                        : 'w-1.5 bg-white/50'
+                    )}
+                  />
+                ))}
+              </div>
+
+              {/* Desktop Chevron Navigation Buttons */}
+              {activeSlide > 0 && (
+                <button
+                  type="button"
+                  aria-label="Previous image"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    scrollToSlide(activeSlide - 1);
+                  }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/75 text-white backdrop-blur-md flex items-center justify-center transition-all z-10 shadow-sm opacity-0 group-hover:opacity-100 sm:opacity-90"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              {activeSlide < mediaList.length - 1 && (
+                <button
+                  type="button"
+                  aria-label="Next image"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    scrollToSlide(activeSlide + 1);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/75 text-white backdrop-blur-md flex items-center justify-center transition-all z-10 shadow-sm opacity-0 group-hover:opacity-100 sm:opacity-90"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

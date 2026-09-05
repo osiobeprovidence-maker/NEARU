@@ -225,6 +225,7 @@ export default function PageView() {
       eventDate: r.eventDate,
       endTime: r.endTime,
       mediaUrl: r.mediaUrl,
+      mediaUrls: r.mediaUrls && r.mediaUrls.length > 0 ? r.mediaUrls : (r.mediaUrl ? [r.mediaUrl] : []),
       mediaType: r.mediaType,
       capacity: r.capacity,
       likesCount: r.likesCount,

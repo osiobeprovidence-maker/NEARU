@@ -17,18 +17,34 @@ import {
   Tag,
   Link2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check,
+  Plus,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { createMuxUpload, putFileToMux, waitForPlayback } from '../lib/mux';
 import { uploadToConvexStorage } from '../lib/storageUpload';
+import { processAndCompressImage } from '../utils/imageUpload';
 import { ActivityType } from '../types';
 import { RallyPricing } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
 import { useAuth } from '../contexts/AuthContext';
+
+export interface SelectedMediaItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  storageId?: string;
+  status: 'pending' | 'uploading' | 'uploaded' | 'error';
+  progress: number;
+  error?: string;
+}
 
 interface CreateRallyModalProps {
   isOpen: boolean;
@@ -84,7 +100,9 @@ export default function CreateRallyModal({
   // Interest tag — only used (and only meaningful) for POST type
   const [interest, setInterest] = useState<string>('');
   // Media state
-  const [localPreview, setLocalPreview] = useState<string>('');   // blob: URL for immediate preview
+  const [selectedImages, setSelectedImages] = useState<SelectedMediaItem[]>([]);
+  const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+  const [localPreview, setLocalPreview] = useState<string>('');   // blob: URL for immediate video preview
   const [mediaStorageId, setMediaStorageId] = useState<string>('');
   const [muxUploadId, setMuxUploadId] = useState<string>('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
@@ -186,6 +204,11 @@ export default function CreateRallyModal({
   }, [isOpen, initialType]);
 
   const resetAndClose = () => {
+    selectedImages.forEach((img) => {
+      if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
+    });
+    setSelectedImages([]);
+    setActivePreviewIndex(0);
     setStep(1);
     setType(null);
     setDescription('');
@@ -211,64 +234,92 @@ export default function CreateRallyModal({
   };
 
   // -------------------------------------------------------------------------
-  // Media upload — images go to Convex storage, videos go to Mux
+  // Media upload — up to 6 images go to Convex storage, videos go to Mux
   // -------------------------------------------------------------------------
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // Clear input so the same file can be re-selected after removal
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (!file) return;
 
-    const isImage = file.type.startsWith('image/');
-    const isVideo = file.type.startsWith('video/');
-    if (!isImage && !isVideo) return;
+  // Upload a single compressed image item to Convex storage
+  const uploadSingleImageItem = async (itemId: string, originalFile: File) => {
+    setSelectedImages((prev) =>
+      prev.map((it) =>
+        it.id === itemId
+          ? { ...it, status: 'uploading', progress: 0, error: undefined }
+          : it
+      )
+    );
 
-    // 1. Show a local preview immediately (blob URL)
+    try {
+      const compressedBlob = await processAndCompressImage(originalFile, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.85,
+      });
+      const fileToUpload = new File([compressedBlob], originalFile.name, {
+        type: 'image/jpeg',
+      });
+
+      const uploadUrl = await generateUploadUrl();
+      const storageId = await uploadToConvexStorage(uploadUrl, fileToUpload, (fraction) => {
+        setSelectedImages((prev) =>
+          prev.map((it) =>
+            it.id === itemId ? { ...it, progress: fraction } : it
+          )
+        );
+      });
+
+      setSelectedImages((prev) =>
+        prev.map((it) =>
+          it.id === itemId
+            ? { ...it, status: 'uploaded', progress: 1, storageId, error: undefined }
+            : it
+        )
+      );
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Tap to retry.';
+      setSelectedImages((prev) =>
+        prev.map((it) =>
+          it.id === itemId ? { ...it, status: 'error', error: msg } : it
+        )
+      );
+    }
+  };
+
+  const handleSingleVideoUpload = async (file: File) => {
+    // Clear any existing images
+    selectedImages.forEach((img) => {
+      if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
+    });
+    setSelectedImages([]);
+    setActivePreviewIndex(0);
+
     const preview = URL.createObjectURL(file);
     setLocalPreview(preview);
-    setMediaType(isImage ? 'image' : 'video');
+    setMediaType('video');
     setMediaStorageId('');
     setMuxUploadId('');
     setUploadError('');
     setUploadProgress(0);
     uploadedRef.current = false;
 
-    // 2. Upload in background
     setIsUploading(true);
     try {
-      if (isVideo) {
-        // Direct permanent storage upload so the video is immediately and permanently saved with the post
-        const uploadUrl = await generateUploadUrl();
-        setUploadProgress(0);
-        const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => {
-          setUploadProgress(fraction);
-        });
-        setUploadProgress(1);
-        setMediaStorageId(storageId);
-        uploadedRef.current = true;
+      const uploadUrl = await generateUploadUrl();
+      setUploadProgress(0);
+      const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => {
+        setUploadProgress(fraction);
+      });
+      setUploadProgress(1);
+      setMediaStorageId(storageId);
+      uploadedRef.current = true;
 
-        // Optionally kick off Mux direct upload in background for transcoded HLS playback if available
-        try {
-          const { uploadId, url } = await createMuxUpload();
-          putFileToMux(url, file).catch(() => {});
-          setMuxUploadId(uploadId);
-        } catch (muxErr) {
-          console.warn('[CreateRallyModal] Mux upload optional enhancement skipped:', muxErr);
-        }
-      } else {
-        // Image → Convex storage
-        const uploadUrl = await generateUploadUrl();
-        setUploadProgress(0);
-        const storageId = await uploadToConvexStorage(uploadUrl, file, (fraction) => {
-          setUploadProgress(fraction);
-        });
-        setUploadProgress(1);
-        setMediaStorageId(storageId);
-        uploadedRef.current = true;
+      try {
+        const { uploadId, url } = await createMuxUpload();
+        putFileToMux(url, file).catch(() => {});
+        setMuxUploadId(uploadId);
+      } catch (muxErr) {
+        console.warn('[CreateRallyModal] Mux upload optional enhancement skipped:', muxErr);
       }
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Upload failed. Please try again.';
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       setUploadError(msg);
       setMediaStorageId('');
       setMuxUploadId('');
@@ -278,8 +329,111 @@ export default function CreateRallyModal({
     }
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (files.length === 0) return;
+
+    // Check if any video was selected
+    const videoFile = files.find((f) => f.type.startsWith('video/'));
+    if (videoFile) {
+      handleSingleVideoUpload(videoFile);
+      return;
+    }
+
+    // Filter to only image files
+    const imageFiles = files.filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    // Clear video state if previously video
+    if (mediaType === 'video') {
+      if (localPreview) URL.revokeObjectURL(localPreview);
+      setLocalPreview('');
+      setMediaStorageId('');
+      setMuxUploadId('');
+    }
+    setMediaType('image');
+
+    const currentCount = selectedImages.length;
+    const availableSlots = 6 - currentCount;
+
+    if (availableSlots <= 0) {
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: {
+            title: 'Maximum photos reached',
+            subtitle: 'You can add up to 6 photos per post.',
+          },
+        })
+      );
+      return;
+    }
+
+    if (imageFiles.length > availableSlots) {
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: {
+            title: 'Limit reached',
+            subtitle: 'You can add up to 6 photos per post.',
+          },
+        })
+      );
+    }
+
+    const filesToAdd = imageFiles.slice(0, availableSlots);
+    const newItems: SelectedMediaItem[] = filesToAdd.map((file) => ({
+      id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      status: 'pending',
+      progress: 0,
+    }));
+
+    const updatedList = [...selectedImages, ...newItems];
+    setSelectedImages(updatedList);
+
+    // Upload each new image
+    newItems.forEach((item) => {
+      uploadSingleImageItem(item.id, item.file);
+    });
+  };
+
+  const handleMoveImage = (index: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= selectedImages.length) return;
+
+    setSelectedImages((prev) => {
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+    setActivePreviewIndex(targetIndex);
+  };
+
+  const handleRemoveImageItem = (index: number) => {
+    const itemToRemove = selectedImages[index];
+    if (itemToRemove?.previewUrl) {
+      URL.revokeObjectURL(itemToRemove.previewUrl);
+    }
+    const nextList = selectedImages.filter((_, i) => i !== index);
+    setSelectedImages(nextList);
+    if (nextList.length === 0) {
+      setMediaType(null);
+      setActivePreviewIndex(0);
+    } else if (activePreviewIndex >= nextList.length) {
+      setActivePreviewIndex(nextList.length - 1);
+    }
+  };
+
   const handleRemoveMedia = () => {
+    selectedImages.forEach((img) => {
+      if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
+    });
     if (localPreview) URL.revokeObjectURL(localPreview);
+    setSelectedImages([]);
+    setActivePreviewIndex(0);
     setLocalPreview('');
     setMediaStorageId('');
     setMuxUploadId('');
@@ -322,7 +476,30 @@ export default function CreateRallyModal({
     if (!POST_ONLY_TYPES.includes(type) && pricing === null) return;
 
     // Guard: if media was chosen, ensure it has successfully uploaded before posting
-    if (localPreview && !mediaStorageId) {
+    if (mediaType === 'image' && selectedImages.length > 0) {
+      if (selectedImages.some((m) => m.status === 'uploading' || m.status === 'pending')) {
+        window.dispatchEvent(
+          new CustomEvent('show-toast', {
+            detail: {
+              title: 'Upload in progress',
+              subtitle: 'Please wait for your photos to finish uploading before publishing.',
+            },
+          })
+        );
+        return;
+      }
+      if (selectedImages.some((m) => m.status === 'error' || !m.storageId)) {
+        window.dispatchEvent(
+          new CustomEvent('show-toast', {
+            detail: {
+              title: 'Upload incomplete',
+              subtitle: 'Some photos failed to upload. Please retry or remove them before publishing.',
+            },
+          })
+        );
+        return;
+      }
+    } else if (localPreview && !mediaStorageId) {
       if (isUploading) {
         window.dispatchEvent(
           new CustomEvent('show-toast', {
@@ -356,6 +533,11 @@ export default function CreateRallyModal({
         : (pricing ?? 'none');
       const effectiveIsPaid = effectivePricing === 'paid';
 
+      const rawImageStorageIds =
+        mediaType === 'image' && selectedImages.length > 0
+          ? selectedImages.map((m) => m.storageId).filter((id): id is string => Boolean(id))
+          : undefined;
+
       const rallyId = await createRally({
         type,
         title,
@@ -382,8 +564,21 @@ export default function CreateRallyModal({
         // Interest Post: only POST type may carry an interest tag.
         interest:
           type === 'POST' && interest.trim() ? interest.trim() : undefined,
-        // Only send storageId if upload completed successfully (images)
-        mediaStorageId: mediaStorageId || undefined,
+        // Multi-image and single-image backward compatibility
+        mediaStorageId:
+          rawImageStorageIds && rawImageStorageIds.length > 0
+            ? rawImageStorageIds[0]
+            : mediaStorageId || undefined,
+        mediaStorageIds:
+          rawImageStorageIds && rawImageStorageIds.length > 0
+            ? rawImageStorageIds
+            : mediaStorageId
+            ? [mediaStorageId]
+            : undefined,
+        mediaUrls:
+          rawImageStorageIds && rawImageStorageIds.length > 0
+            ? rawImageStorageIds
+            : undefined,
         // Don't persist blob: URLs — they're session-only
         mediaUrl: undefined,
         mediaType: mediaType || undefined,
@@ -449,9 +644,23 @@ export default function CreateRallyModal({
   // -------------------------------------------------------------------------
   const isPost = type && POST_ONLY_TYPES.includes(type);
   const needsPricingChoice = type && !isPost;
+
+  const isAnyImageUploading = selectedImages.some(
+    (it) => it.status === 'pending' || it.status === 'uploading'
+  );
+  const hasImageErrors = selectedImages.some((it) => it.status === 'error');
+  const allImagesUploaded =
+    mediaType !== 'image' ||
+    (selectedImages.length > 0 &&
+      selectedImages.every((it) => it.status === 'uploaded' && Boolean(it.storageId)));
+
+  const isMediaUploading = isUploading || isAnyImageUploading;
+
   const canReview =
     !!description.trim() &&
-    !isUploading &&
+    !isMediaUploading &&
+    !hasImageErrors &&
+    allImagesUploaded &&
     (!localPreview || !!mediaStorageId) &&
     (isPost || (pricing !== null && (pricing !== 'paid' || !!price)));
 
@@ -748,37 +957,47 @@ export default function CreateRallyModal({
 
                   {/* Photo / Video upload */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900">
-                      Photo or Video (optional)
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-zinc-900">
+                        {mediaType === 'image' && selectedImages.length > 0
+                          ? `Photos (${selectedImages.length}/6)`
+                          : 'Photos or Video (optional)'}
+                      </h3>
+                      {((mediaType === 'image' && selectedImages.length > 0) ||
+                        (mediaType === 'video' && localPreview)) && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveMedia}
+                          className="text-xs font-bold text-rose-500 hover:text-rose-600 transition-colors"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="image/*,video/*"
+                      multiple
                       onChange={handleFileSelect}
                       className="hidden"
                     />
-                    {localPreview ? (
-                      <div className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
-                        {mediaType === 'video' ? (
-                          <video
-                            src={localPreview}
-                            controls
-                            muted
-                            playsInline
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <img
-                            src={localPreview}
-                            alt="Preview"
-                            className="w-full h-full object-cover"
-                          />
-                        )}
+
+                    {mediaType === 'video' && localPreview ? (
+                      /* Single Video Preview */
+                      <div className="relative rounded-2xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-950">
+                        <video
+                          src={localPreview}
+                          controls
+                          muted
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
                         {/* Upload status overlay */}
                         {isUploading && (
-                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2">
-                            {mediaType === 'video' && uploadProgress > 0 ? (
+                          <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
+                            {uploadProgress > 0 ? (
                               <div className="w-3/4 max-w-[220px]">
                                 <div className="flex justify-between text-white text-[10px] font-bold mb-1">
                                   <span>Uploading video…</span>
@@ -795,46 +1014,241 @@ export default function CreateRallyModal({
                               <>
                                 <Loader2 className="w-7 h-7 text-white animate-spin" />
                                 <span className="text-white text-xs font-bold">
-                                  Uploading…
+                                  Uploading video…
                                 </span>
                               </>
                             )}
                           </div>
                         )}
                         {uploadError && !isUploading && (
-                          <div className="absolute inset-0 bg-rose-900/60 flex flex-col items-center justify-center gap-2 p-4">
+                          <div className="absolute inset-0 bg-rose-900/70 flex flex-col items-center justify-center gap-2 p-4">
                             <AlertCircle className="w-7 h-7 text-white" />
                             <span className="text-white text-xs font-bold text-center">
                               {uploadError}
                             </span>
                             <button
+                              type="button"
                               onClick={() => fileInputRef.current?.click()}
-                              className="px-3 py-1.5 bg-white text-rose-700 text-xs font-bold rounded-full mt-1"
+                              className="px-3 py-1.5 bg-white text-rose-700 text-xs font-bold rounded-full mt-1 shadow-sm"
                             >
                               Retry
                             </button>
                           </div>
                         )}
-                        {!isUploading && !uploadError &&
-                          (mediaStorageId || muxUploadId) && (
-                          <div className="absolute top-2 left-2 px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full">
+                        {!isUploading && !uploadError && (mediaStorageId || muxUploadId) && (
+                          <div className="absolute top-2 left-2 px-2.5 py-1 bg-emerald-500/90 text-white text-[10px] font-bold rounded-full shadow-sm">
                             ✓ Uploaded
                           </div>
                         )}
                         <button
+                          type="button"
                           onClick={handleRemoveMedia}
-                          className="absolute top-2 right-2 p-1.5 bg-zinc-900/60 rounded-full text-white hover:bg-zinc-900/80"
+                          className="absolute top-2 right-2 p-1.5 bg-zinc-900/60 rounded-full text-white hover:bg-zinc-900/80 shadow-sm"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
+                    ) : mediaType === 'image' && selectedImages.length > 0 ? (
+                      /* Multi-Image Preview Reel */
+                      <div className="space-y-3">
+                        {/* Main Enlarge Preview of the Active Image */}
+                        <div className="relative rounded-2xl overflow-hidden border border-zinc-200 aspect-[4/3] sm:aspect-video bg-zinc-900">
+                          <img
+                            src={selectedImages[activePreviewIndex]?.previewUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+
+                          {/* Slide counter badge: 1 / 4 */}
+                          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-bold shadow-sm tracking-wide">
+                            {activePreviewIndex + 1} / {selectedImages.length}
+                          </div>
+
+                          {/* Active image upload state overlay */}
+                          {selectedImages[activePreviewIndex]?.status === 'uploading' && (
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
+                              <Loader2 className="w-7 h-7 text-white animate-spin" />
+                              <span className="text-white text-xs font-bold">
+                                Uploading photo ({Math.round((selectedImages[activePreviewIndex]?.progress || 0) * 100)}%)…
+                              </span>
+                            </div>
+                          )}
+
+                          {selectedImages[activePreviewIndex]?.status === 'error' && (
+                            <div className="absolute inset-0 bg-rose-950/70 backdrop-blur-xs flex flex-col items-center justify-center gap-2 p-4">
+                              <AlertCircle className="w-7 h-7 text-rose-300" />
+                              <span className="text-white text-xs font-bold text-center">
+                                {selectedImages[activePreviewIndex]?.error || 'Photo upload failed'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  uploadSingleImageItem(
+                                    selectedImages[activePreviewIndex].id,
+                                    selectedImages[activePreviewIndex].file
+                                  )
+                                }
+                                className="px-3.5 py-1.5 bg-white text-rose-700 text-xs font-bold rounded-full flex items-center gap-1.5 shadow-sm active:scale-95"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Retry upload
+                              </button>
+                            </div>
+                          )}
+
+                          {selectedImages[activePreviewIndex]?.status === 'uploaded' && (
+                            <div className="absolute top-3 right-12 px-2.5 py-1 bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold rounded-full shadow-sm">
+                              ✓ Ready
+                            </div>
+                          )}
+
+                          {/* Delete active photo button */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImageItem(activePreviewIndex)}
+                            className="absolute top-3 right-3 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors shadow-sm"
+                            title="Remove photo"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+
+                          {/* Desktop Prev/Next overlay controls */}
+                          {selectedImages.length > 1 && (
+                            <>
+                              {activePreviewIndex > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActivePreviewIndex(activePreviewIndex - 1)}
+                                  className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm transition-all shadow-sm"
+                                  title="Previous photo"
+                                >
+                                  <ChevronLeft className="w-5 h-5" />
+                                </button>
+                              )}
+                              {activePreviewIndex < selectedImages.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActivePreviewIndex(activePreviewIndex + 1)}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm transition-all shadow-sm"
+                                  title="Next photo"
+                                >
+                                  <ChevronRight className="w-5 h-5" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        {/* Thumbnail Strip with reordering buttons and per-thumbnail actions */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs text-zinc-500 px-1">
+                            <span className="font-medium">Thumbnail strip · Use ‹ › arrows to reorder</span>
+                            <span>{selectedImages.length} of 6 max</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 no-scrollbar">
+                            {selectedImages.map((item, idx) => {
+                              const isActive = idx === activePreviewIndex;
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={cn(
+                                    'relative shrink-0 flex flex-col items-center rounded-xl p-1 transition-all',
+                                    isActive
+                                      ? 'bg-indigo-50/80 ring-2 ring-indigo-500'
+                                      : 'bg-zinc-50 border border-zinc-200 hover:border-zinc-300'
+                                  )}
+                                >
+                                  {/* Thumbnail image */}
+                                  <div
+                                    onClick={() => setActivePreviewIndex(idx)}
+                                    className="relative w-16 h-16 rounded-lg overflow-hidden cursor-pointer"
+                                  >
+                                    <img
+                                      src={item.previewUrl}
+                                      alt=""
+                                      className="w-full h-full object-cover"
+                                    />
+
+                                    {/* Uploading indicator */}
+                                    {item.status === 'uploading' && (
+                                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                        <Loader2 className="w-4 h-4 text-white animate-spin" />
+                                      </div>
+                                    )}
+
+                                    {/* Error indicator */}
+                                    {item.status === 'error' && (
+                                      <div className="absolute inset-0 bg-rose-600/70 flex items-center justify-center">
+                                        <AlertCircle className="w-4 h-4 text-white" />
+                                      </div>
+                                    )}
+
+                                    {/* Ready checkmark */}
+                                    {item.status === 'uploaded' && (
+                                      <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[9px] font-bold shadow-xs">
+                                        ✓
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Micro reorder controls below thumbnail */}
+                                  <div className="flex items-center justify-between w-full mt-1 px-0.5 text-zinc-600">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMoveImage(idx, 'left');
+                                      }}
+                                      className="p-0.5 text-xs hover:text-indigo-600 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                                      title="Move left"
+                                    >
+                                      ‹
+                                    </button>
+                                    <span className="text-[10px] font-bold text-zinc-400">
+                                      {idx + 1}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={idx === selectedImages.length - 1}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMoveImage(idx, 'right');
+                                      }}
+                                      className="p-0.5 text-xs hover:text-indigo-600 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                                      title="Move right"
+                                    >
+                                      ›
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* + Add more button */}
+                            {selectedImages.length < 6 && (
+                              <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="shrink-0 w-16 h-24 rounded-xl border-2 border-dashed border-zinc-200 hover:border-indigo-400 hover:bg-indigo-50/30 flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-indigo-600 transition-all"
+                              >
+                                <Plus className="w-5 h-5" />
+                                <span className="text-[10px] font-bold">Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     ) : (
+                      /* Empty state: tap to add */
                       <button
+                        type="button"
                         onClick={() => fileInputRef.current?.click()}
                         className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-50 border-2 border-dashed border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-zinc-600 font-semibold text-sm"
                       >
                         <ImagePlus className="w-5 h-5 text-zinc-400" />
-                        Tap to add a photo or video
+                        Add up to 6 photos or a video
                       </button>
                     )}
                   </div>
@@ -1265,30 +1679,60 @@ export default function CreateRallyModal({
                     </p>
 
                     {/* Media preview */}
-                    {(localPreview && mediaType === 'image') ||
-                      (localPreview && mediaType === 'video') ? (
-                      <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100 relative">
-                        {mediaType === 'video' ? (
-                          <video
-                            src={localPreview}
-                            controls
-                            muted
-                            playsInline
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <img
-                            src={localPreview}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                        {!mediaStorageId && (
-                          <div className="absolute inset-0 bg-amber-900/40 flex items-center justify-center">
-                            <span className="text-white text-xs font-bold bg-amber-700 px-3 py-1 rounded-full">
-                              Upload incomplete — please wait or re-select
-                            </span>
-                          </div>
+                    {mediaType === 'video' && localPreview ? (
+                      <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-950 relative">
+                        <video
+                          src={localPreview}
+                          controls
+                          muted
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : mediaType === 'image' && selectedImages.length > 0 ? (
+                      <div className="rounded-xl overflow-hidden border border-zinc-200 aspect-[4/3] sm:aspect-video bg-zinc-900 relative">
+                        <img
+                          src={selectedImages[activePreviewIndex]?.previewUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                        {selectedImages.length > 1 && (
+                          <>
+                            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-bold">
+                              {activePreviewIndex + 1} / {selectedImages.length}
+                            </div>
+                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md">
+                              {selectedImages.map((_, dotIdx) => (
+                                <div
+                                  key={dotIdx}
+                                  className={cn(
+                                    'h-1.5 rounded-full transition-all',
+                                    dotIdx === activePreviewIndex
+                                      ? 'w-4 bg-white'
+                                      : 'w-1.5 bg-white/50'
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            {activePreviewIndex > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setActivePreviewIndex(activePreviewIndex - 1)}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white backdrop-blur-sm"
+                              >
+                                <ChevronLeft className="w-4 h-4" />
+                              </button>
+                            )}
+                            {activePreviewIndex < selectedImages.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setActivePreviewIndex(activePreviewIndex + 1)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white backdrop-blur-sm"
+                              >
+                                <ChevronRight className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     ) : null}

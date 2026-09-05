@@ -231,8 +231,10 @@ export default defineSchema({
     hashtags: v.optional(v.array(v.string())),
     eventDate: v.optional(v.string()),
     mediaUrl: v.optional(v.string()),
+    mediaUrls: v.optional(v.array(v.string())),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
     mediaStorageId: v.optional(v.string()),
+    mediaStorageIds: v.optional(v.array(v.string())),
     // Mux video: a video uploaded via Mux direct upload resolves to a playback
     // id/asset id once transcoding completes. playbackId drives the player.
     muxUploadId: v.optional(v.string()),

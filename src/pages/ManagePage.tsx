@@ -119,6 +119,7 @@ export default function ManagePage() {
       hashtags: r.hashtags,
       eventDate: r.eventDate,
       mediaUrl: r.mediaUrl,
+      mediaUrls: r.mediaUrls && r.mediaUrls.length > 0 ? r.mediaUrls : (r.mediaUrl ? [r.mediaUrl] : []),
       mediaType: r.mediaType as Rally['mediaType'],
       capacity: r.capacity,
       likesCount: r.likesCount,
@@ -132,7 +133,7 @@ export default function ManagePage() {
   const posts = mapped.filter((r) => r.type === 'POST');
   const events = mapped.filter((r) => r.type === 'EVENT');
   const rallyItems = mapped.filter((r) => r.type !== 'POST' && r.type !== 'EVENT');
-  const mediaItems = mapped.filter((r) => !!r.mediaUrl);
+  const mediaItems = mapped.filter((r) => !!r.mediaUrl || (!!r.mediaUrls && r.mediaUrls.length > 0));
   const isLoading = content === undefined;
 
   const displayName = user.organizationName || user.name;

@@ -67,6 +67,30 @@ async function resolveMediaUrl(
   return undefined;
 }
 
+async function resolveMediaUrls(
+  ctx: any,
+  cache: Record<string, string | undefined>,
+  rally: any
+): Promise<string[]> {
+  const urls: string[] = [];
+  if (Array.isArray(rally.mediaUrls) && rally.mediaUrls.length > 0) {
+    for (let i = 0; i < rally.mediaUrls.length; i++) {
+      const u = rally.mediaUrls[i];
+      const sId = Array.isArray(rally.mediaStorageIds) ? rally.mediaStorageIds[i] : null;
+      const target = sId || u;
+      if (target) {
+        const resolved = await resolveStorageUrl(ctx, cache, target);
+        if (resolved) urls.push(resolved);
+      }
+    }
+  }
+  if (urls.length === 0) {
+    const single = await resolveMediaUrl(ctx, cache, rally);
+    if (single) urls.push(single);
+  }
+  return urls;
+}
+
 // ---------------------------------------------------------------------------
 // Storage upload — requires auth
 // ---------------------------------------------------------------------------
@@ -142,6 +166,7 @@ export const listWithCreators = query({
         if (viewerBlockedDbIds.has(rally.creatorId.toString())) return null;
 
         const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+        const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
         const creator = rally.creatorId in creators ? creators[rally.creatorId] : null;
         let avatar = creator?.avatar || "";
         if (creator && isStorageId(avatar)) {
@@ -181,7 +206,7 @@ export const listWithCreators = query({
           linkedEvent = linked?.title;
         }
 
-        return { ...rally, mediaUrl, creator: resolvedCreator, pageAuthor, linkedEvent, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked, isRsvpd };
+        return { ...rally, mediaUrl, mediaUrls, creator: resolvedCreator, pageAuthor, linkedEvent, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked, isRsvpd };
       })
     );
     return results.filter((r): r is NonNullable<typeof r> => r !== null);
@@ -229,13 +254,14 @@ export const listByInterest = query({
     const results = await Promise.all(rallies.map(async (rally) => {
       if (blockedSet.has(rally.creatorId.toString())) return null;
       const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+      const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
       const creator = rally.creatorId in creators ? creators[rally.creatorId] : null;
       let avatar = creator?.avatar || "";
       if (creator && isStorageId(avatar)) avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
       const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
       const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
       const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
-      return { ...rally, mediaUrl, creator: creator ? { ...creator, avatar } : null, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: args.userId ? likes.some((l) => l.userId === args.userId) : false, isRsvpd: args.userId ? rsvps.some((r) => r.userId === args.userId) : false };
+      return { ...rally, mediaUrl, mediaUrls, creator: creator ? { ...creator, avatar } : null, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: args.userId ? likes.some((l) => l.userId === args.userId) : false, isRsvpd: args.userId ? rsvps.some((r) => r.userId === args.userId) : false };
     }));
     return results.filter((r): r is NonNullable<typeof r> => r !== null);
   },
@@ -266,11 +292,12 @@ export const listByCreator = query({
     } : null;
     return await Promise.all(personalRallies.map(async (rally) => {
       const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+      const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
       const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
       const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
       const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
       const viewerId = args.userId ?? args.creatorId;
-      return { ...rally, mediaUrl, creator: resolvedCreator, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: likes.some((l) => l.userId === viewerId), isRsvpd: rsvps.some((r) => r.userId === viewerId) };
+      return { ...rally, mediaUrl, mediaUrls, creator: resolvedCreator, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: likes.some((l) => l.userId === viewerId), isRsvpd: rsvps.some((r) => r.userId === viewerId) };
     }));
   },
 });
@@ -319,6 +346,7 @@ export const listByPage = query({
     return await Promise.all(
       rallies.map(async (rally) => {
         const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+        const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
         const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
         const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
         const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
@@ -327,6 +355,7 @@ export const listByPage = query({
         return {
           ...rally,
           mediaUrl,
+          mediaUrls,
           creator: dummyCreator,
           pageAuthor,
           likesCount: likes.length,
@@ -357,13 +386,14 @@ export const getEventPosts = query({
     const results = await Promise.all(posts.map(async (post) => {
       if (blocked.has(post.creatorId.toString())) return null;
       const mediaUrl = await resolveMediaUrl(ctx, mediaCache, post);
+      const mediaUrls = await resolveMediaUrls(ctx, mediaCache, post);
       const creator = post.creatorId in creators ? creators[post.creatorId] : null;
       let avatar = creator?.avatar || "";
       if (creator && isStorageId(avatar)) avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
       const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", post._id)).collect();
       const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", post._id)).collect()).length;
       const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", post._id)).collect();
-      return { ...post, mediaUrl, creator: creator ? { ...creator, avatar } : null, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: args.viewerId ? likes.some((l) => l.userId === args.viewerId) : false, isRsvpd: args.viewerId ? rsvps.some((r) => r.userId === args.viewerId) : false };
+      return { ...post, mediaUrl, mediaUrls, creator: creator ? { ...creator, avatar } : null, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: args.viewerId ? likes.some((l) => l.userId === args.viewerId) : false, isRsvpd: args.viewerId ? rsvps.some((r) => r.userId === args.viewerId) : false };
     }));
     return results.filter((r): r is NonNullable<typeof r> => r !== null);
   },
@@ -383,7 +413,8 @@ export const get = query({
     if (!rally) return null;
     const mediaCache: Record<string, string | undefined> = {};
     const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
-    return { ...rally, mediaUrl };
+    const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
+    return { ...rally, mediaUrl, mediaUrls };
   },
 });
 
@@ -493,6 +524,7 @@ export const listCompletedByUser = query({
           avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
         }
         const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+        const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
         const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
         const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
         const rsvpList = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
@@ -500,6 +532,7 @@ export const listCompletedByUser = query({
         return {
           ...rally,
           mediaUrl,
+          mediaUrls,
           creator: creator
             ? {
                 _id: creator._id,
@@ -568,7 +601,9 @@ export const create = mutation({
     endTime: v.optional(v.string()),
     capacity: v.optional(v.number()),
     mediaStorageId: v.optional(v.string()),
+    mediaStorageIds: v.optional(v.array(v.string())),
     mediaUrl: v.optional(v.string()),
+    mediaUrls: v.optional(v.array(v.string())),
     mediaType: v.optional(v.union(v.literal("image"), v.literal("video"))),
     muxUploadId: v.optional(v.string()),
     interest: v.optional(v.string()),
@@ -638,8 +673,18 @@ export const create = mutation({
       throw new Error("Paid RALLYs must include a price greater than zero.");
     }
 
+    // Enforce max 6 images and backward compatibility fallbacks
+    const rawMediaUrls = args.mediaUrls ? args.mediaUrls.slice(0, 6) : undefined;
+    const rawMediaStorageIds = args.mediaStorageIds ? args.mediaStorageIds.slice(0, 6) : undefined;
+    const fallbackMediaUrl = args.mediaUrl || rawMediaUrls?.[0] || undefined;
+    const fallbackMediaStorageId = args.mediaStorageId || rawMediaStorageIds?.[0] || undefined;
+
     const rallyId = await ctx.db.insert("rallies", {
       ...args,
+      mediaUrl: fallbackMediaUrl,
+      mediaUrls: rawMediaUrls,
+      mediaStorageId: fallbackMediaStorageId,
+      mediaStorageIds: rawMediaStorageIds,
       authorType: isPostingAsPage ? "page" : "user",
       pageId: validatedPageId,
       created_by_user_id: caller._id,

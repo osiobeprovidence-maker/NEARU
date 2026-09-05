@@ -209,6 +209,7 @@ export default function Profile() {
     hashtags: r.hashtags,
     eventDate: r.eventDate,
     mediaUrl: r.mediaUrl,
+    mediaUrls: r.mediaUrls && r.mediaUrls.length > 0 ? r.mediaUrls : (r.mediaUrl ? [r.mediaUrl] : []),
     mediaType: r.mediaType as Rally['mediaType'],
     capacity: r.capacity,
     authorType: r.authorType,
