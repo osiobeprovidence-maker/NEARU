@@ -104,12 +104,12 @@ export default function CreateRallyModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { city, position, geoState } = useLocation();
-  const { firebaseUser, convexUserId, user } = useAuth();
+  const { firebaseUser, convexUserId, user, isLoggedIn } = useAuth();
 
   // Pages managed by the authenticated user
   const managedPages = useQuery(
     api.pages.listUserManagedPages,
-    convexUserId ? { userId: convexUserId as any } : 'skip'
+    isLoggedIn ? {} : 'skip'
   );
   const [showIdentityDropdown, setShowIdentityDropdown] = useState(false);
   const [postingIdentity, setPostingIdentity] = useState<{

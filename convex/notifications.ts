@@ -1,7 +1,7 @@
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { getAuthenticatedUser } from "./lib/auth";
+import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "./lib/auth";
 
 // ---------------------------------------------------------------------------
 // Queries — no auth required (userId supplied by caller for filtering)
@@ -228,52 +228,13 @@ export const notifyNearbyUsers = mutation({
 });
 
 /**
- * Helper to resolve user ID safely for push mutations.
- */
-async function resolveCallerId(ctx: any, rawUserId?: string | null): Promise<any | null> {
-  // 1. Try authenticated JWT claims first
-  try {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity?.subject) {
-      const userByUid = await ctx.db
-        .query("users")
-        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", identity.subject))
-        .first();
-      if (userByUid) return userByUid._id;
-    }
-  } catch {}
-
-  // 2. Try client-supplied ID (verified against users table)
-  if (rawUserId && typeof rawUserId === "string" && rawUserId.trim().length > 0) {
-    const trimmed = rawUserId.trim();
-    try {
-      const normalized = ctx.db.normalizeId("users", trimmed);
-      if (normalized) {
-        const userDoc = await ctx.db.get(normalized);
-        if (userDoc) return userDoc._id;
-      }
-    } catch {}
-
-    try {
-      const userByUid = await ctx.db
-        .query("users")
-        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", trimmed))
-        .first();
-      if (userByUid) return userByUid._id;
-    } catch {}
-  }
-
-  return null;
-}
-
-/**
  * Register a push subscription for the authenticated user.
  * Validates keys, updates existing subscriptions to prevent duplicate accumulation,
  * and handles missing/invalid optional fields without crashing.
  */
 export const savePushSubscription = mutation({
   args: {
-    userId: v.optional(v.union(v.id("users"), v.string())),
+    userId: v.optional(v.id("users")),
     endpoint: v.string(),
     p256dh: v.string(),
     auth: v.string(),
@@ -289,10 +250,8 @@ export const savePushSubscription = mutation({
       throw new Error("Invalid push subscription: endpoint, p256dh, and auth are required.");
     }
 
-    const callerId = await resolveCallerId(ctx, args.userId);
-    if (!callerId) {
-      throw new Error("Unauthenticated: valid user required to save push subscription.");
-    }
+    const caller = await getAuthenticatedUser(ctx);
+    const callerId = caller._id;
 
     // Query all subscriptions for this endpoint to handle any prior duplicates
     const existingSubs = await ctx.db
@@ -362,7 +321,7 @@ export const removePushSubscription = mutation({
  */
 export const clearUserPushSubscriptions = mutation({
   args: {
-    userId: v.optional(v.union(v.id("users"), v.string())),
+    userId: v.optional(v.id("users")),
     endpoint: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -377,12 +336,13 @@ export const clearUserPushSubscriptions = mutation({
       return;
     }
 
-    const callerId = await resolveCallerId(ctx, args.userId);
-    if (!callerId) return;
+    const caller = await getOptionalAuthenticatedUser(ctx);
+    const targetUserId = args.userId || caller?._id;
+    if (!targetUserId) return;
 
     const subs = await ctx.db
       .query("pushSubscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", callerId))
+      .withIndex("by_user", (q) => q.eq("userId", targetUserId))
       .collect();
 
     for (const sub of subs) {
@@ -397,15 +357,8 @@ export const clearUserPushSubscriptions = mutation({
 export const sendTestPush = mutation({
   args: { userId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
-    let targetUserId = args.userId;
-    try {
-      const caller = await getAuthenticatedUser(ctx);
-      if (caller) targetUserId = caller._id;
-    } catch {}
-
-    if (!targetUserId) {
-      throw new Error("User ID required to send test notification.");
-    }
+    const caller = await getAuthenticatedUser(ctx);
+    const targetUserId = caller._id;
 
     // Schedule test push action
     await ctx.scheduler.runAfter(0, (internal as any).push.sendPushNotification, {

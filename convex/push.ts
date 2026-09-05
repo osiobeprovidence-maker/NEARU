@@ -5,20 +5,20 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import webpush from "web-push";
 
-// Default VAPID keypair — can be overridden via environment variables
-const VAPID_PUBLIC_KEY =
-  process.env.VAPID_PUBLIC_KEY ||
-  "BAWBNIsZ2WbXzOVVIaAKbq1Gg-gMM9dHZxgeAcHUxi2GRr6LQIv603aKpPqplfu7KIy6N0kO1YkoBfi1iSJZc6Q";
-
-const VAPID_PRIVATE_KEY =
-  process.env.VAPID_PRIVATE_KEY ||
-  "Rt7Za9tBoh5C9KUco-7AqPYtcNv99lYQjPNpL85PL9E";
-
+// Read VAPID keys from Convex environment variables
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_SUBJECT =
   process.env.VAPID_SUBJECT || "mailto:support@usenearu.com";
 
-// Configure web-push with VAPID credentials
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+// Configure web-push only when VAPID credentials are provided
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  } catch (err) {
+    console.error("[webpush] Failed to initialize VAPID credentials:", err);
+  }
+}
 
 /**
  * Internal action to dispatch a real Web Push notification to all active devices
@@ -34,6 +34,12 @@ export const sendPushNotification = internalAction({
     icon: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      console.warn(
+        "[webpush] VAPID keys not configured in environment variables. Skipping push notification."
+      );
+      return { sent: 0, reason: "vapid_not_configured" };
+    }
     try {
       const context = await ctx.runQuery(internal.notifications.getUserPushContext, {
         userId: args.userId,

@@ -123,14 +123,17 @@ export async function subscribeUserToPush(
     const platform = isMobile ? 'mobile-web' : 'desktop-web';
 
     // 5. Persist to Convex
-    await saveMutation({
-      userId,
+    const savePayload: Record<string, any> = {
       endpoint,
       p256dh,
       auth,
       platform,
       userAgent: navigator.userAgent,
-    });
+    };
+    if (userId && typeof userId === 'string' && userId.trim().length > 10) {
+      savePayload.userId = userId.trim();
+    }
+    await saveMutation(savePayload);
 
     return {
       success: true,
@@ -164,11 +167,17 @@ export async function unsubscribeUserFromPush(
       await subscription.unsubscribe();
     }
 
-    if (userId && clearMutation) {
-      await clearMutation({
-        userId,
-        endpoint,
-      }).catch((err: any) => console.warn('[pushManager] clearMutation warning:', err));
+    if (clearMutation) {
+      const clearPayload: Record<string, any> = {};
+      if (endpoint) clearPayload.endpoint = endpoint;
+      if (userId && typeof userId === 'string' && userId.trim().length > 10) {
+        clearPayload.userId = userId.trim();
+      }
+      if (clearPayload.endpoint || clearPayload.userId) {
+        await clearMutation(clearPayload).catch((err: any) =>
+          console.warn('[pushManager] clearMutation warning:', err)
+        );
+      }
     }
 
     return { success: true };
@@ -202,14 +211,17 @@ export async function syncPushSubscriptionSilently(
     const subJson = subscription.toJSON();
     if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      await saveMutation({
-        userId,
+      const syncPayload: Record<string, any> = {
         endpoint: subJson.endpoint,
         p256dh: subJson.keys.p256dh,
         auth: subJson.keys.auth,
         platform: isMobile ? 'mobile-web' : 'desktop-web',
         userAgent: navigator.userAgent,
-      });
+      };
+      if (userId && typeof userId === 'string' && userId.trim().length > 10) {
+        syncPayload.userId = userId.trim();
+      }
+      await saveMutation(syncPayload);
     }
   } catch (err) {
     // Silent sync shouldn't throw to user UI

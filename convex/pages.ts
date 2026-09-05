@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthenticatedUser } from "./lib/auth";
+import { getAuthenticatedUser, getOptionalAuthenticatedUser } from "./lib/auth";
 
 function cleanSlug(slug: string): string {
   return slug
@@ -8,56 +8,6 @@ function cleanSlug(slug: string): string {
     .trim()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9_-]/g, "");
-}
-
-/**
- * Helper to resolve a valid Convex user ID from either an Id, a string, or the auth context.
- * Guaranteed never to throw, handling unauthenticated callers, missing profile records, or string UIDs gracefully.
- */
-async function resolveUserId(ctx: any, rawUserId?: string | null): Promise<any | null> {
-  // 1. If an explicit userId was supplied by the caller, resolve it first
-  if (rawUserId && typeof rawUserId === "string" && rawUserId.trim().length > 0) {
-    const trimmed = rawUserId.trim();
-    try {
-      const normalized = ctx.db.normalizeId("users", trimmed);
-      if (normalized) {
-        const userDoc = await ctx.db.get(normalized);
-        if (userDoc) return userDoc._id;
-      }
-    } catch {}
-
-    try {
-      const userByUid = await ctx.db
-        .query("users")
-        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", trimmed))
-        .first();
-      if (userByUid) return userByUid._id;
-    } catch {}
-
-    try {
-      const userByUsername = await ctx.db
-        .query("users")
-        .withIndex("by_username", (q: any) => q.eq("username", trimmed.replace(/^@/, "")))
-        .first();
-      if (userByUsername) return userByUsername._id;
-    } catch {}
-
-    return null;
-  }
-
-  // 2. If no userId argument was provided, fall back to the authenticated caller identity
-  try {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity?.subject) {
-      const userByUid = await ctx.db
-        .query("users")
-        .withIndex("by_firebase_uid", (q: any) => q.eq("firebaseUid", identity.subject))
-        .first();
-      if (userByUid) return userByUid._id;
-    }
-  } catch {}
-
-  return null;
 }
 
 /**
@@ -79,9 +29,6 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
-    if (!caller) {
-      throw new Error("You must be signed in to create a Page.");
-    }
 
     const trimmedName = args.name.trim();
     if (!trimmedName) throw new Error("Page name is required.");
@@ -137,7 +84,7 @@ export const create = mutation({
 export const getBySlug = query({
   args: {
     slug: v.string(),
-    viewerId: v.optional(v.union(v.id("users"), v.string())),
+    viewerId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     const normalizedSlug = cleanSlug(args.slug);
@@ -161,16 +108,21 @@ export const getBySlug = query({
     let isFollowing = false;
     let viewerRole: "owner" | "admin" | "editor" | "moderator" | null = null;
 
-    const resolvedViewer = await resolveUserId(ctx, args.viewerId);
-    if (resolvedViewer) {
+    let targetViewerId = args.viewerId;
+    if (!targetViewerId) {
+      const viewer = await getOptionalAuthenticatedUser(ctx);
+      if (viewer) targetViewerId = viewer._id;
+    }
+
+    if (targetViewerId) {
       isFollowing = follows.some(
-        (f) => f.userId.toString() === resolvedViewer.toString()
+        (f) => f.userId.toString() === targetViewerId!.toString()
       );
 
       const membership = await ctx.db
         .query("pageMembers")
         .withIndex("by_page_user", (q) =>
-          q.eq("pageId", page._id).eq("userId", resolvedViewer)
+          q.eq("pageId", page._id).eq("userId", targetViewerId!)
         )
         .first();
 
@@ -195,7 +147,7 @@ export const getBySlug = query({
 export const getById = query({
   args: {
     pageId: v.id("pages"),
-    viewerId: v.optional(v.union(v.id("users"), v.string())),
+    viewerId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId);
@@ -214,16 +166,21 @@ export const getById = query({
     let isFollowing = false;
     let viewerRole: "owner" | "admin" | "editor" | "moderator" | null = null;
 
-    const resolvedViewer = await resolveUserId(ctx, args.viewerId);
-    if (resolvedViewer) {
+    let targetViewerId = args.viewerId;
+    if (!targetViewerId) {
+      const viewer = await getOptionalAuthenticatedUser(ctx);
+      if (viewer) targetViewerId = viewer._id;
+    }
+
+    if (targetViewerId) {
       isFollowing = follows.some(
-        (f) => f.userId.toString() === resolvedViewer.toString()
+        (f) => f.userId.toString() === targetViewerId!.toString()
       );
 
       const membership = await ctx.db
         .query("pageMembers")
         .withIndex("by_page_user", (q) =>
-          q.eq("pageId", page._id).eq("userId", resolvedViewer)
+          q.eq("pageId", page._id).eq("userId", targetViewerId!)
         )
         .first();
 
@@ -244,54 +201,50 @@ export const getById = query({
 
 /**
  * List all Pages managed by a user (owner, admin, or editor).
- * Resilient to either Convex User Id or string UID.
+ * Expected hierarchy:
+ *   User -> users._id -> pageMembers.userId -> pageMembers.pageId -> pages._id
  */
 export const listUserManagedPages = query({
   args: {
-    userId: v.optional(v.union(v.id("users"), v.string())),
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    try {
-      const targetUserId = await resolveUserId(ctx, args.userId);
-      if (!targetUserId) {
+    let targetUserId = args.userId;
+    if (!targetUserId) {
+      const caller = await getOptionalAuthenticatedUser(ctx);
+      if (!caller) {
         return [];
       }
+      targetUserId = caller._id;
+    }
 
-      const memberships = await ctx.db
-        .query("pageMembers")
-        .withIndex("by_user", (q) => q.eq("userId", targetUserId))
-        .collect();
+    const memberships = await ctx.db
+      .query("pageMembers")
+      .withIndex("by_user", (q) => q.eq("userId", targetUserId!))
+      .collect();
 
-      if (!memberships || memberships.length === 0) {
-        return [];
-      }
-
-      const results = [];
-      for (const m of memberships) {
-        if (!m || !m.pageId) continue;
-        try {
-          const page = await ctx.db.get(m.pageId);
-          if (page) {
-            results.push({
-              _id: page._id,
-              name: page.name || "Untitled Page",
-              slug: page.slug || "",
-              category: page.category || "General",
-              avatar: page.avatar || undefined,
-              coverImage: page.coverImage || undefined,
-              description: page.description || undefined,
-              role: m.role || "owner",
-            });
-          }
-        } catch {
-          // ignore individual page load issue
-        }
-      }
-      return results;
-    } catch (err) {
-      console.warn("[pages:listUserManagedPages] safe error fallback:", err);
+    if (!memberships || memberships.length === 0) {
       return [];
     }
+
+    const results = [];
+    for (const m of memberships) {
+      if (!m || !m.pageId) continue;
+      const page = await ctx.db.get(m.pageId);
+      if (page) {
+        results.push({
+          _id: page._id,
+          name: page.name || "Untitled Page",
+          slug: page.slug || "",
+          category: page.category || "General",
+          avatar: page.avatar || undefined,
+          coverImage: page.coverImage || undefined,
+          description: page.description || undefined,
+          role: m.role || "owner",
+        });
+      }
+    }
+    return results;
   },
 });
 
@@ -346,7 +299,6 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
-    if (!caller) throw new Error("Unauthorized.");
 
     const page = await ctx.db.get(args.pageId);
     if (!page) throw new Error("Page not found.");
@@ -389,19 +341,15 @@ export const update = mutation({
 export const toggleFollow = mutation({
   args: {
     pageId: v.id("pages"),
-    userId: v.optional(v.union(v.id("users"), v.string())),
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
-    const actingUserId = caller?._id;
-    if (!actingUserId) {
-      throw new Error("Forbidden: You must be signed in to follow a Page.");
-    }
 
     const existing = await ctx.db
       .query("pageFollows")
       .withIndex("by_page_user", (q) =>
-        q.eq("pageId", args.pageId).eq("userId", actingUserId)
+        q.eq("pageId", args.pageId).eq("userId", caller._id)
       )
       .first();
 
@@ -412,7 +360,7 @@ export const toggleFollow = mutation({
 
     await ctx.db.insert("pageFollows", {
       pageId: args.pageId,
-      userId: actingUserId,
+      userId: caller._id,
       createdAt: Date.now(),
     });
     return { following: true };

@@ -23,7 +23,7 @@ import {
 } from '../utils/pushManager';
 
 export default function NotificationSettings() {
-  const { user, updateNotificationSettings } = useAuth();
+  const { user, convexUserId, updateNotificationSettings } = useAuth();
   const [savedToast, setSavedToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Preferences saved');
   const [browserPermission, setBrowserPermission] = useState<
@@ -77,7 +77,8 @@ export default function NotificationSettings() {
 
       setIsSubscribing(true);
       try {
-        const result = await subscribeUserToPush(user.id, savePushSubscription);
+        const targetUserId = convexUserId || user.id;
+        const result = await subscribeUserToPush(targetUserId, savePushSubscription);
         setBrowserPermission(getPushPermissionState());
 
         if (result.success) {
@@ -95,7 +96,8 @@ export default function NotificationSettings() {
       // User is disabling push notifications
       setIsSubscribing(true);
       try {
-        await unsubscribeUserFromPush(user.id, clearPushSubscriptions);
+        const targetUserId = convexUserId || user.id;
+        await unsubscribeUserFromPush(targetUserId, clearPushSubscriptions);
         updateNotificationSettings({ pushEnabled: false });
         showToast('Push notifications disabled');
       } catch (err: any) {
@@ -107,13 +109,14 @@ export default function NotificationSettings() {
   };
 
   const handleSendTestNotification = async () => {
-    if (!user.id) return;
+    const targetUserId = convexUserId || user.id;
+    if (!targetUserId) return;
     setIsTestingPush(true);
     setErrorMessage(null);
     try {
       // First ensure the subscription is fresh
-      await subscribeUserToPush(user.id, savePushSubscription);
-      await sendTestPushMutation({ userId: user.id as any });
+      await subscribeUserToPush(targetUserId, savePushSubscription);
+      await sendTestPushMutation(convexUserId ? { userId: convexUserId as any } : {});
       showToast('Test notification dispatched! Check your desktop/device.');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to trigger test notification.');

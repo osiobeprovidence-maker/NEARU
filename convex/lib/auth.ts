@@ -101,6 +101,22 @@ export async function getAuthenticatedUserOrNull(ctx: MutationCtx | QueryCtx) {
     .first() ?? null;
 }
 
+/**
+ * Returns the authenticated user document if a valid Firebase JWT is present
+ * and a corresponding Convex user record exists. Returns null otherwise (does not throw).
+ * Use this for queries or public mutations where an authenticated caller is optional.
+ */
+export async function getOptionalAuthenticatedUser(ctx: MutationCtx | QueryCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) return null;
+  return (
+    (await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", identity.subject))
+      .first()) ?? null
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Admin guard — wraps getAuthenticatedUser and enforces admin role
 // ---------------------------------------------------------------------------

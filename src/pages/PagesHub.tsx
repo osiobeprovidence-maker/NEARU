@@ -24,7 +24,7 @@ import {
 import { cn } from '../lib/utils';
 
 export default function PagesHub() {
-  const { user, convexUserId, isProfileLoading } = useAuth();
+  const { user, convexUserId, isProfileLoading, isLoggedIn } = useAuth();
   const [searchParams] = useSearchParams();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(
     searchParams.get('create') === 'true'
@@ -33,13 +33,13 @@ export default function PagesHub() {
 
   const managedPages = useQuery(
     api.pages.listUserManagedPages,
-    convexUserId ? { userId: convexUserId as any } : 'skip'
+    isLoggedIn ? {} : 'skip'
   );
 
   const allPages = useQuery(api.pages.listAll, { limit: 30 });
 
-  const isLoadingManaged = convexUserId ? managedPages === undefined : isProfileLoading;
-  const userPages = convexUserId && Array.isArray(managedPages) ? managedPages : [];
+  const isLoadingManaged = isLoggedIn ? managedPages === undefined : isProfileLoading;
+  const userPages = isLoggedIn && Array.isArray(managedPages) ? managedPages : [];
 
   return (
     <PageShell title="Pages" backTo="/">

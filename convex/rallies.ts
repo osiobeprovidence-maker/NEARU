@@ -579,17 +579,7 @@ export const create = mutation({
     pageId: v.optional(v.id("pages")),
   },
   handler: async (ctx, args) => {
-    let caller = null;
-    try {
-      caller = await getAuthenticatedUser(ctx);
-    } catch {
-      if (args.creatorId) {
-        caller = await ctx.db.get(args.creatorId);
-      }
-    }
-    if (!caller) {
-      throw new Error("Forbidden: you must be signed in to create content.");
-    }
+    const caller = await getAuthenticatedUser(ctx);
     // Caller may only create content as themselves.
     if (caller._id.toString() !== args.creatorId.toString()) {
       throw new Error("Forbidden: you can only create content as yourself.");
@@ -694,17 +684,10 @@ export const saveMuxResult = mutation({
     playbackId: v.string(),
   },
   handler: async (ctx, args) => {
-    let caller = null;
-    try {
-      caller = await getAuthenticatedUser(ctx);
-    } catch {
-      if (args.requestingUserId) {
-        caller = await ctx.db.get(args.requestingUserId);
-      }
-    }
+    const caller = await getAuthenticatedUser(ctx);
     const rally = await ctx.db.get(args.rallyId);
     if (!rally) throw new Error("Rally not found");
-    if (caller && rally.creatorId.toString() !== caller._id.toString()) {
+    if (rally.creatorId.toString() !== caller._id.toString()) {
       throw new Error("Not authorised: you can only update your own posts");
     }
     await ctx.db.patch(args.rallyId, {
