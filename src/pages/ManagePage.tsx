@@ -16,7 +16,6 @@ import {
   BadgeCheck,
   MapPin,
   Globe,
-  Crown,
   Calendar,
   Building2,
   Image,
@@ -199,7 +198,7 @@ export default function ManagePage() {
             </h3>
             <p className="text-sm text-zinc-500 font-medium max-w-sm mx-auto mt-2 mb-7 leading-relaxed">
               Switch your account to an Organization or Business to get a dedicated
-              page for managing events and content. Both require lalao Pro.
+              page for managing events and content.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
@@ -208,15 +207,6 @@ export default function ManagePage() {
               >
                 Change account type
               </Link>
-              {!isPro && (
-                <Link
-                  to="/plus"
-                  className="px-6 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-800 rounded-full text-sm font-bold flex items-center gap-1.5 transition-all active:scale-95"
-                >
-                  <Crown className="w-4 h-4 text-amber-500" />
-                  Upgrade to lalao Pro
-                </Link>
-              )}
             </div>
           </div>
         </div>

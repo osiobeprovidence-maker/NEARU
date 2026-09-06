@@ -328,7 +328,7 @@ export default function NotificationSettings() {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="font-bold text-zinc-900 text-xs sm:text-sm">Product Announcements & Perks</p>
-                  <p className="text-[11px] text-zinc-500 font-medium">News on feature drops, community rewards, and RALLY+ upgrades</p>
+                  <p className="text-[11px] text-zinc-500 font-medium">News on feature drops, community rewards, and special updates</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
                   <input 

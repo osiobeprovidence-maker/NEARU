@@ -30,7 +30,7 @@ export default function AdminNotifications() {
   // Form State for Composing Broadcast
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
-  const [audience, setAudience] = useState<'ALL' | 'VERIFIED' | 'PLUS'>('ALL');
+  const [audience, setAudience] = useState<'ALL' | 'VERIFIED'>('ALL');
   const [type, setType] = useState<'SYSTEM' | 'MARKETING' | 'SAFETY' | 'UPDATE'>('SYSTEM');
   const [channels, setChannels] = useState({ inApp: true, push: true, email: false });
   const [isScheduled, setIsScheduled] = useState(false);
@@ -224,9 +224,6 @@ export default function AdminNotifications() {
                   </option>
                   <option value="VERIFIED">
                     NIN Verified Users Only ({audienceCounts?.verified?.toLocaleString() ?? '…'})
-                  </option>
-                  <option value="PLUS">
-                    RALLY+ Subscribers Only ({audienceCounts?.plus?.toLocaleString() ?? '…'})
                   </option>
                 </select>
               </div>

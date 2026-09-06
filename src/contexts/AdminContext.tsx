@@ -42,7 +42,6 @@ export interface AdminUser extends User {
   status: 'active' | 'suspended' | 'banned';
   joinedAt: string;
   lastActive: string;
-  isPlus: boolean;
   totalSpentOrShared: number;
   ralliesCreatedCount: number;
   ralliesJoinedCount: number;
@@ -253,7 +252,6 @@ function userCardToAdminUser(u: AdminUserCard): AdminUser {
     status: (u.moderationStatus || 'ACTIVE').toLowerCase() as AdminUser['status'],
     joinedAt: createdAt,
     lastActive: '',
-    isPlus: u.isPro,
     totalSpentOrShared: 0,
     ralliesCreatedCount: 0,
     ralliesJoinedCount: 0,

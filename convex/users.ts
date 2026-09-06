@@ -954,10 +954,6 @@ export const setAccountType = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
-    const professional = args.accountType === "organization" || args.accountType === "business";
-    if (professional && caller.isPro !== true) {
-      throw new Error("You need lalao Pro to create an Organization or Business account.");
-    }
     const patch: Record<string, unknown> = {
       accountType: args.accountType,
       organizationName:

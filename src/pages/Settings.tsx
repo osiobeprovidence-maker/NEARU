@@ -4,7 +4,6 @@ import {
   LogOut, 
   ChevronRight, 
   ShieldCheck, 
-  Crown, 
   Bell, 
   Lock, 
   ShieldAlert, 
@@ -32,7 +31,7 @@ import { usePwaInstall } from '../hooks/usePwaInstall';
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
 export default function Settings() {
-  const { logout, user, convexUserId, persistProfile, isPro, setAccountType } = useAuth();
+  const { logout, user, convexUserId, persistProfile, setAccountType } = useAuth();
   const navigate = useNavigate();
   const isAdmin =
     user.email === SUPER_ADMIN_EMAIL ||
@@ -55,22 +54,15 @@ export default function Settings() {
     label: string;
     desc: string;
     icon: any;
-    needsPro: boolean;
   }[] = [
-    { key: 'personal', label: 'Personal', desc: 'A standard personal profile for yourself.', icon: UserIcon, needsPro: false },
-    { key: 'organization', label: 'Organization', desc: 'Manage events, RALLYs and posts as an organization.', icon: Building2, needsPro: true },
-    { key: 'business', label: 'Business', desc: 'Promote a business and run events & offers.', icon: Store, needsPro: true },
+    { key: 'personal', label: 'Personal', desc: 'A standard personal profile for yourself.', icon: UserIcon },
+    { key: 'organization', label: 'Organization', desc: 'Manage events, RALLYs and posts as an organization.', icon: Building2 },
+    { key: 'business', label: 'Business', desc: 'Promote a business and run events & offers.', icon: Store },
   ];
 
   const currentType = user.accountType || 'personal';
 
   const requestType = async (key: 'personal' | 'organization' | 'business') => {
-    const t = accountTypes.find((a) => a.key === key)!;
-    if (t.needsPro && !isPro) {
-      showToast('lalao Pro required', 'Upgrade to create an Organization or Business account.');
-      navigate('/plus');
-      return;
-    }
     if (key === 'personal') {
       await apply(key);
     } else {
@@ -291,35 +283,9 @@ export default function Settings() {
                     <p className="font-bold text-zinc-900 text-xs sm:text-sm group-hover:text-black transition-colors truncate">
                       Manage Events
                     </p>
-                    {isPro && (
-                      <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 ring-1 ring-amber-200 shrink-0 flex items-center gap-1">
-                        <Crown className="w-2.5 h-2.5" /> Pro
-                      </span>
-                    )}
                   </div>
                   <p className="text-[11px] text-zinc-500 font-medium truncate">
                     Organize schedules, ticketing, announcements & check-ins
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
-            </Link>
-
-            {/* RALLY+ Premium */}
-            <Link
-              to="/plus"
-              className="w-full flex items-center justify-between p-3.5 sm:p-4 hover:bg-zinc-50/80 transition-colors group"
-            >
-              <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
-                  <Crown className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-zinc-900 text-xs sm:text-sm group-hover:text-black transition-colors truncate">
-                    RALLY+ Premium
-                  </p>
-                  <p className="text-[11px] text-zinc-500 font-medium truncate">
-                    Unlimited activity boosts, pro badges & advanced filters
                   </p>
                 </div>
               </div>
@@ -422,18 +388,15 @@ export default function Settings() {
           </h3>
           <div className="bg-white md:rounded-3xl border-y md:border border-zinc-200 shadow-sm p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-1">
-              <Crown className="w-4 h-4 text-amber-500" />
+              <Building2 className="w-4 h-4 text-zinc-700" />
               <h4 className="font-black text-zinc-900 text-sm">Account Mode</h4>
             </div>
             <p className="text-[11px] text-zinc-500 font-medium mb-4">
-              {isPro
-                ? 'Select how you want to act on lalao. You can switch between Personal, Organization or Business.'
-                : 'Personal accounts are free. Organizations & Businesses require lalao Pro.'}
+              Select how you want to act on lalao. You can switch between Personal, Organization or Business.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {accountTypes.map((t) => {
                 const active = currentType === t.key;
-                const locked = t.needsPro && !isPro;
                 const Icon = t.icon;
                 return (
                   <button
@@ -453,7 +416,6 @@ export default function Settings() {
                     </div>
                     <p className={`font-bold text-sm flex items-center gap-1.5 ${active ? 'text-white' : 'text-zinc-900'}`}>
                       {t.label}
-                      {locked && <Crown className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                       {active && (
                         <span className="ml-auto text-[9px] font-bold bg-white/15 px-1.5 py-0.5 rounded-full">
                           Active

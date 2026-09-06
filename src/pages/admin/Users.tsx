@@ -27,7 +27,6 @@ import {
   RotateCcw,
   Edit,
   ExternalLink,
-  Crown,
   Activity,
   History,
   MessageSquare,
@@ -184,11 +183,6 @@ export default function AdminUsers() {
         <div className="flex items-center gap-3">
           <div className="relative">
             <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-2xl object-cover border border-zinc-200" />
-            {u.isPlus && (
-              <span className="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-0.5" title="RALLY+ Member">
-                <Crown className="w-2.5 h-2.5" />
-              </span>
-            )}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
@@ -468,12 +462,6 @@ export default function AdminUsers() {
                         NIN Verified
                       </span>
                     )}
-                    {selectedUser.isPlus && (
-                      <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <Crown className="w-3 h-3" />
-                        RALLY+
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs font-bold text-zinc-400 mt-0.5">{selectedUser.username} · {selectedUser.email}</p>
                   <p className="text-xs text-zinc-500 font-medium mt-1">{selectedUser.location} · {selectedUser.phone}</p>
@@ -627,17 +615,6 @@ export default function AdminUsers() {
                     </div>
                     <span className="text-base font-black text-zinc-900">{joinedCount}</span>
                   </div>
-                  {detail && (
-                    <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-zinc-900">RALLY+ Status</p>
-                        <p className="text-[11px] text-zinc-500">{selectedUser.isPlus ? 'Active premium subscriber' : 'Standard member'}</p>
-                      </div>
-                      <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-md", selectedUser.isPlus ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-600")}>
-                        {selectedUser.isPlus ? 'RALLY+' : 'FREE'}
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
 

@@ -24,8 +24,8 @@ const FAQS = [
     answer: 'NIN verification confirms that the member is real and legally identified in the national database. Verified members have green badges and undergo automated safety screenings.'
   },
   {
-    question: 'What is RALLY+ Premium?',
-    answer: 'RALLY+ gives you unlimited activity boosts, advanced neighborhood radius filters, priority search placement, and an exclusive VIP Crown badge on your profile.'
+    question: 'How does Profile Verification work?',
+    answer: 'Profile verification gives your profile a verified badge (Blue Check for profiles, Buz for businesses, Organization badge for groups), boosting your credibility and discoverability across the community.'
   },
   {
     question: 'What should I do if a meetup feels unsafe?',

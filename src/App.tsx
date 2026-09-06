@@ -35,7 +35,6 @@ const InterestPage = React.lazy(() => import('./pages/InterestPage'));
 const RallyDetail = React.lazy(() => import('./pages/RallyDetail'));
 const EditProfile = React.lazy(() => import('./pages/EditProfile'));
 const Verification = React.lazy(() => import('./pages/Verification'));
-const Plus = React.lazy(() => import('./pages/Plus'));
 const Safety = React.lazy(() => import('./pages/Safety'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const NotificationSettings = React.lazy(() => import('./pages/NotificationSettings'));
@@ -228,7 +227,7 @@ const AppRoutes = () => {
           <Route path="rally/:id" element={<RallyDetail />} />
           <Route path="profile/edit" element={<EditProfile />} />
           <Route path="verification" element={<Verification />} />
-          <Route path="plus" element={<Plus />} />
+          <Route path="plus" element={<Navigate to="/profile" replace />} />
           <Route path="safety" element={<Safety />} />
           <Route path="settings" element={<Settings />} />
           <Route path="settings/personal-info" element={<EditProfile />} />

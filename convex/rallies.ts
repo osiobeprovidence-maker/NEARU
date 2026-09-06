@@ -657,9 +657,9 @@ export const create = mutation({
     const uniqueHashtags = [...new Set(normalizedHashtags)];
 
     if (args.type === "EVENT") {
-      const isProAccount = caller.accountType === "organization" || caller.accountType === "business";
-      if (!caller.isPro || !isProAccount) {
-        throw new Error("Creating an Event requires a lalao Pro Organization or Business account.");
+      const isOrgOrBiz = caller.accountType === "organization" || caller.accountType === "business";
+      if (!isOrgOrBiz) {
+        throw new Error("Creating an Event requires an Organization or Business account.");
       }
     }
 

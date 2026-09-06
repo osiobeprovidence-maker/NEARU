@@ -11,7 +11,6 @@ import {
   Bell, 
   User, 
   ShieldCheck, 
-  Crown, 
   Zap, 
   Shield, 
   Settings, 
@@ -176,7 +175,6 @@ export default function AppShell() {
     { label: 'Profile', icon: User, path: '/profile' },
     { label: 'My Page', icon: Building2, path: '/pages' },
     { label: 'Verification', icon: ShieldCheck, path: '/verification' },
-    { label: 'RALLY+', icon: Crown, path: '/plus' },
   ];
 
   const tertiaryNavItems = [
@@ -197,7 +195,6 @@ export default function AppShell() {
     if (path === '/manage') return 'My Page';
     if (path === '/profile/edit') return 'Edit Profile';
     if (path === '/verification') return 'Verification';
-    if (path === '/plus') return 'RALLY+';
     if (path === '/safety') return 'Safety';
     if (path === '/settings') return 'Settings';
     if (path === '/settings/personal-info') return 'Personal Info';
@@ -315,7 +312,7 @@ export default function AppShell() {
                   )
                 }
               >
-                <item.icon className={cn("w-5 h-5", item.label === 'RALLY+' ? 'text-amber-500' : '')} />
+                <item.icon className="w-5 h-5" />
                 {item.label}
               </NavLink>
             ))}
@@ -389,7 +386,6 @@ export default function AppShell() {
                 routeLocation.pathname === '/profile/edit' || 
                 routeLocation.pathname === '/verification' || 
                 routeLocation.pathname === '/manage' ||
-                routeLocation.pathname === '/plus' ||
                 routeLocation.pathname === '/safety' || 
                 routeLocation.pathname === '/terms' || 
                 routeLocation.pathname === '/privacy' ||
@@ -471,7 +467,6 @@ export default function AppShell() {
                routeLocation.pathname.startsWith('/settings/') ||
                routeLocation.pathname === '/verification' ||
                routeLocation.pathname === '/manage' ||
-               routeLocation.pathname === '/plus' ||
                routeLocation.pathname === '/safety' ||
                routeLocation.pathname === '/terms' ||
                routeLocation.pathname === '/privacy' ||
