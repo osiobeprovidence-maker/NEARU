@@ -9,6 +9,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import AppShell from './layouts/AppShell';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PermissionProvider } from './contexts/PermissionContext';
 import { LocationProvider } from './contexts/LocationContext';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import AuthErrorBoundary from './components/AuthErrorBoundary';
@@ -253,13 +254,16 @@ export default function App() {
   return (
     <AuthErrorBoundary>
       <AuthProvider>
-        <LocationProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </LocationProvider>
+        <PermissionProvider>
+          <LocationProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </LocationProvider>
+        </PermissionProvider>
       </AuthProvider>
     </AuthErrorBoundary>
   );
 }
+
 

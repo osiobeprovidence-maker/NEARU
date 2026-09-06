@@ -39,7 +39,6 @@ export default function Settings() {
     (user as any).role === 'super_admin' ||
     (user as any).role === 'admin';
   const { isInstallable, install } = usePwaInstall();
-  const [notifStatus, setNotifStatus] = useState<string | null>(null);
 
   // Account type state
   const [orgName, setOrgName] = useState(user.organizationName || '');
@@ -85,31 +84,6 @@ export default function Settings() {
       setSaving(false);
       setOrgModalOpen(false);
     }
-  };
-
-  const handleEnableNotifications = async () => {
-    if (!('Notification' in window)) {
-      setNotifStatus('Notifications not supported on this device');
-      setTimeout(() => setNotifStatus(null), 3000);
-      return;
-    }
-    if (Notification.permission === 'granted') {
-      setNotifStatus('Notifications already enabled');
-      setTimeout(() => setNotifStatus(null), 3000);
-      return;
-    }
-    if (Notification.permission === 'denied') {
-      setNotifStatus('Notifications blocked. Enable in browser settings.');
-      setTimeout(() => setNotifStatus(null), 4000);
-      return;
-    }
-    const result = await Notification.requestPermission();
-    if (result === 'granted') {
-      setNotifStatus('Notifications enabled!');
-    } else {
-      setNotifStatus('Permission denied');
-    }
-    setTimeout(() => setNotifStatus(null), 3000);
   };
 
   return (

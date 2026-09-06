@@ -23,6 +23,8 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  Camera,
+  Video,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { useMutation, useQuery } from 'convex/react';
@@ -35,6 +37,7 @@ import { RallyPricing } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
 
 export interface SelectedMediaItem {
   id: string;
@@ -122,6 +125,27 @@ export default function CreateRallyModal({
 
   const uploadedRef = useRef(false); // prevent double-upload on re-render
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoCameraInputRef = useRef<HTMLInputElement>(null);
+  const { requestWithRationale } = usePermissions();
+
+  const handleTakePhoto = async () => {
+    const res = await requestWithRationale('camera');
+    if (res.granted) {
+      cameraInputRef.current?.click();
+    }
+  };
+
+  const handleRecordVideo = async () => {
+    const camRes = await requestWithRationale('camera');
+    if (!camRes.granted) return;
+    await requestWithRationale('microphone');
+    videoCameraInputRef.current?.click();
+  };
+
+  const handlePickMedia = () => {
+    fileInputRef.current?.click();
+  };
 
   const { city, position, geoState } = useLocation();
   const { firebaseUser, convexUserId, user, isLoggedIn } = useAuth();
@@ -1037,6 +1061,22 @@ export default function CreateRallyModal({
                       onChange={handleFileSelect}
                       className="hidden"
                     />
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <input
+                      ref={videoCameraInputRef}
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
 
                     {mediaType === 'video' && localPreview ? (
                       /* Single Video Preview */
@@ -1295,15 +1335,44 @@ export default function CreateRallyModal({
                         </div>
                       </div>
                     ) : (
-                      /* Empty state: tap to add */
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-50 border-2 border-dashed border-zinc-200 hover:border-zinc-300 rounded-2xl transition-colors text-zinc-600 font-semibold text-sm"
-                      >
-                        <ImagePlus className="w-5 h-5 text-zinc-400" />
-                        Add up to 6 photos or a video
-                      </button>
+                      /* Empty state: Photo Picker, Camera, or Video */
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={handlePickMedia}
+                          className="flex flex-col items-center justify-center gap-1.5 p-3.5 bg-zinc-50 border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl transition-all text-zinc-700 active:scale-95 group cursor-pointer"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 group-hover:text-indigo-600 shadow-2xs">
+                            <ImagePlus className="w-5 h-5" />
+                          </div>
+                          <span className="text-xs font-bold text-zinc-800">Photos</span>
+                          <span className="text-[10px] text-zinc-400">Photo picker</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleTakePhoto}
+                          className="flex flex-col items-center justify-center gap-1.5 p-3.5 bg-zinc-50 border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl transition-all text-zinc-700 active:scale-95 group cursor-pointer"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 group-hover:text-indigo-600 shadow-2xs">
+                            <Camera className="w-5 h-5" />
+                          </div>
+                          <span className="text-xs font-bold text-zinc-800">Camera</span>
+                          <span className="text-[10px] text-zinc-400">Take photo</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleRecordVideo}
+                          className="flex flex-col items-center justify-center gap-1.5 p-3.5 bg-zinc-50 border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl transition-all text-zinc-700 active:scale-95 group cursor-pointer"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 group-hover:text-indigo-600 shadow-2xs">
+                            <Video className="w-5 h-5" />
+                          </div>
+                          <span className="text-xs font-bold text-zinc-800">Video</span>
+                          <span className="text-[10px] text-zinc-400">Record video</span>
+                        </button>
+                      </div>
                     )}
                   </div>
 

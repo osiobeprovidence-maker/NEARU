@@ -16,6 +16,7 @@ import {
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
 import { uploadToConvexStorage } from '../utils/imageUpload';
 
 export interface UserAvatarCropModalProps {
@@ -64,7 +65,17 @@ export default function UserAvatarCropModal({
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { requestWithRationale } = usePermissions();
+
+  const handleTakePhoto = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const res = await requestWithRationale('camera');
+    if (res.granted) {
+      cameraInputRef.current?.click();
+    }
+  };
 
   // Update container dimensions
   const updateContainerDimensions = useCallback(() => {
@@ -415,12 +426,27 @@ export default function UserAvatarCropModal({
                 <p className="text-xs text-zinc-500 max-w-xs mb-3 font-medium leading-relaxed">
                   Supports JPG, PNG, or WebP. Optimal crop is 1080 × 1080 px square.
                 </p>
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold shadow-sm hover:bg-zinc-800 transition-all active:scale-95 cursor-pointer"
-                >
-                  Select File from Device
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 text-white text-xs font-bold shadow-sm hover:bg-zinc-800 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Choose from Photos</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTakePhoto}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-100 text-zinc-800 hover:bg-zinc-200 border border-zinc-200 text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Take Photo</span>
+                  </button>
+                </div>
               </div>
             ) : (
               /* Interactive Viewport */
@@ -540,13 +566,23 @@ export default function UserAvatarCropModal({
                   <span className="text-zinc-400 font-medium">
                     Standard resolution: 1080 × 1080 px
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2 cursor-pointer"
-                  >
-                    Choose a different photo
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2 cursor-pointer"
+                    >
+                      Choose photo
+                    </button>
+                    <span className="text-zinc-300">·</span>
+                    <button
+                      type="button"
+                      onClick={handleTakePhoto}
+                      className="font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2 cursor-pointer"
+                    >
+                      Take photo
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -556,6 +592,14 @@ export default function UserAvatarCropModal({
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleInputChange}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="user"
             className="hidden"
             onChange={handleInputChange}
           />

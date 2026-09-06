@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import { cn } from '../lib/utils';
+import { usePermissions } from '../contexts/PermissionContext';
 
 const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀', '❤️', '😭', '😎', '🥳', '🚀', '👏'];
 
@@ -30,6 +31,7 @@ export default function Chat() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { requestWithRationale } = usePermissions();
   const sendMessage = useMutation(api.messages.send);
   const markRead = useMutation(api.messages.markRead);
   const generateAudioUploadUrl = useMutation(api.messages.generateUploadUrl);
@@ -164,6 +166,11 @@ export default function Chat() {
   const startRecording = async () => {
     if (isSendingAudio) return;
     try {
+      const permRes = await requestWithRationale('microphone');
+      if (!permRes.granted) {
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       mediaStreamRef.current = stream;

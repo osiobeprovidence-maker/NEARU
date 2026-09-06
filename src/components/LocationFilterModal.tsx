@@ -4,6 +4,7 @@ import { X, MapPin, MapPinOff, CheckCircle2, Crosshair, Loader2, ChevronDown } f
 import { cn } from '../lib/utils';
 import { NIGERIAN_CITIES } from '../lib/geo';
 import { useLocation } from '../contexts/LocationContext';
+import { usePermissions } from '../contexts/PermissionContext';
 
 interface LocationFilterModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export default function LocationFilterModal({ isOpen, onClose }: LocationFilterM
     useCurrentLocation,
     requestLocation,
   } = useLocation();
+  const { openSettings } = usePermissions();
 
   const [selectedRadius, setSelectedRadius] = useState(radiusKm);
 
@@ -159,7 +161,18 @@ export default function LocationFilterModal({ isOpen, onClose }: LocationFilterM
                     </button>
 
                     {error && (
-                      <p className="text-xs text-rose-500 mt-2 text-center">{error.message}</p>
+                      <div className="mt-2 text-center">
+                        <p className="text-xs text-rose-500">{error.message}</p>
+                        {error.code === 1 && (
+                          <button
+                            type="button"
+                            onClick={openSettings}
+                            className="mt-1.5 inline-block text-xs font-bold text-zinc-900 underline hover:text-black cursor-pointer"
+                          >
+                            Open Android Settings
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

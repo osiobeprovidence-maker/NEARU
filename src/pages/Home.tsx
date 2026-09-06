@@ -8,6 +8,7 @@ import { Rally } from '../types';
 import PostCard from '../components/PostCard';
 import AdCard from '../components/AdCard';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
 import { subscribeUserToPush } from '../utils/pushManager';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
@@ -22,6 +23,7 @@ export default function Home() {
     startWatching,
     openLocationModal,
   } = useLocation();
+  const { requestWithRationale, checkPermission } = usePermissions();
   const [isLoading, setIsLoading] = useState(true);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
@@ -46,11 +48,15 @@ export default function Home() {
 
   useEffect(() => {
     const dismissed = localStorage.getItem(NOTIF_DISMISSED_KEY);
-    if (!dismissed && 'Notification' in window && Notification.permission === 'default') {
-      const timer = setTimeout(() => setShowNotifPrompt(true), 2000);
-      return () => clearTimeout(timer);
+    if (!dismissed) {
+      checkPermission('notifications').then((res) => {
+        if (res.status === 'prompt') {
+          const timer = setTimeout(() => setShowNotifPrompt(true), 2000);
+          return () => clearTimeout(timer);
+        }
+      });
     }
-  }, []);
+  }, [checkPermission]);
 
   useEffect(() => {
     if (geoState === 'active' || geoState === 'manual') {
@@ -75,6 +81,13 @@ export default function Home() {
   const savePushSubscription = useMutation(api.notifications.savePushSubscription);
 
   const handleEnableNotifications = async () => {
+    const permResult = await requestWithRationale('notifications');
+    if (!permResult.granted) {
+      localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
+      setShowNotifPrompt(false);
+      return;
+    }
+
     if (convexUserId || user.id) {
       const res = await subscribeUserToPush((convexUserId || user.id) as string, savePushSubscription);
       if (res.success) {
@@ -87,8 +100,6 @@ export default function Home() {
           })
         );
       }
-    } else if ('Notification' in window) {
-      await Notification.requestPermission();
     }
     localStorage.setItem(NOTIF_DISMISSED_KEY, '1');
     setShowNotifPrompt(false);

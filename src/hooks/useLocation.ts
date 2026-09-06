@@ -15,6 +15,7 @@ import {
   getStoredLocationMode,
   formatDistance,
 } from '../lib/geo';
+import { usePermissions } from '../contexts/PermissionContext';
 
 export type LocationPermissionState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unavailable';
 
@@ -80,6 +81,7 @@ function getPermissionState(): LocationPermissionState {
 }
 
 export function useLocation(): UseLocationReturn {
+  const { requestWithRationale, checkPermission } = usePermissions();
   const [state, setState] = useState<LocationState>('idle');
   const [permissionState, setPermissionState] = useState<LocationPermissionState>('unknown');
   const [position, setPosition] = useState<GeoLocation | null>(() => getStoredLocation());
@@ -103,28 +105,18 @@ export function useLocation(): UseLocationReturn {
   }, []);
 
   useEffect(() => {
-    if (!navigator.geolocation || !window.isSecureContext) {
-      setPermissionState('unavailable');
-      return;
-    }
+    checkPermission('location').then((res) => {
+      if (!mountedRef.current) return;
+      if (res.status === 'granted') {
+        setPermissionState('granted');
+      } else if (res.status === 'denied' || res.status === 'permanently_denied') {
+        setPermissionState('denied');
+      } else {
+        setPermissionState('prompt');
+      }
+    });
+  }, [checkPermission]);
 
-    if ('permissions' in navigator) {
-      navigator.permissions
-        .query({ name: 'geolocation' })
-        .then((result) => {
-          if (!mountedRef.current) return;
-          setPermissionState(result.state as LocationPermissionState);
-          result.addEventListener('change', () => {
-            if (mountedRef.current) {
-              setPermissionState(result.state as LocationPermissionState);
-            }
-          });
-        })
-        .catch(() => {
-          if (mountedRef.current) setPermissionState('unknown');
-        });
-    }
-  }, []);
 
   const doReverseGeocode = useCallback(async (lat: number, lng: number) => {
     try {
@@ -207,28 +199,49 @@ export function useLocation(): UseLocationReturn {
     setError({ code: err.code, message: mapped.message });
   }, []);
 
-  const requestLocation = useCallback(() => {
+  const requestLocation = useCallback(async () => {
     if (!navigator.geolocation) {
       setState('unavailable');
-      setError({ code: null, message: "Your browser doesn't support location services." });
-      return;
-    }
-
-    if (!window.isSecureContext) {
-      setState('error');
-      setError({ code: null, message: 'HTTPS is required for location services. Please use HTTPS.' });
+      setError({ code: null, message: "Your device doesn't support location services." });
       return;
     }
 
     setState('requesting');
     setError(null);
 
-    navigator.geolocation.getCurrentPosition(processPosition, handleError, {
-      enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 60000,
-    });
-  }, [processPosition, handleError]);
+    try {
+      const permResult = await requestWithRationale('location');
+
+      if (!permResult.granted) {
+        if (mountedRef.current) {
+          setState('denied');
+          setPermissionState('denied');
+          if (permResult.permanentlyDenied) {
+            setError({
+              code: 1,
+              message: 'Location access is required for nearby content. You can enable it from Android Settings.',
+            });
+          }
+        }
+        return;
+      }
+
+      if (mountedRef.current) {
+        setPermissionState('granted');
+      }
+
+      navigator.geolocation.getCurrentPosition(processPosition, handleError, {
+        enableHighAccuracy: permResult.isPrecise !== false,
+        timeout: 15000,
+        maximumAge: 60000,
+      });
+    } catch (err: any) {
+      if (mountedRef.current) {
+        setState('error');
+        setError({ code: null, message: err?.message || 'Failed to request location.' });
+      }
+    }
+  }, [requestWithRationale, processPosition, handleError]);
 
   const startWatching = useCallback(() => {
     if (!navigator.geolocation || isWatching) return;

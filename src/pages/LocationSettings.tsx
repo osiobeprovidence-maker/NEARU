@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import PageShell from '../components/PageShell';
-import { MapPin, MapPinOff, Crosshair, Radio, Loader2, CheckCircle2, RefreshCw, Smartphone } from 'lucide-react';
+import { MapPin, MapPinOff, Crosshair, Radio, Loader2, CheckCircle2, RefreshCw, Smartphone, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useLocation } from '../contexts/LocationContext';
+import { usePermissions } from '../contexts/PermissionContext';
 import { NIGERIAN_CITIES, formatDistance } from '../lib/geo';
 
 const RADII = [1, 2, 5, 10, 25, 50];
@@ -24,6 +25,7 @@ export default function LocationSettings() {
     setManualLocation,
   } = useLocation();
 
+  const { openSettings, statuses } = usePermissions();
   const [selectedRadius, setSelectedRadius] = useState(radiusKm);
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export default function LocationSettings() {
 
   const hasRealLocation = geoState === 'active' || geoState === 'updating';
   const isLocating = geoState === 'requesting' || geoState === 'locating';
+  const isPermDenied = statuses.location?.status === 'permanently_denied' || (permissionState === 'denied' && error !== null);
 
   return (
     <PageShell title="Location Settings">
@@ -81,9 +84,9 @@ export default function LocationSettings() {
                       {isManual
                         ? `Using ${city || 'selected'} city`
                         : hasRealLocation
-                          ? `Accuracy: ${accuracy ? formatDistance(accuracy / 1000) : 'Unknown'}`
+                          ? `Accuracy: ${accuracy ? formatDistance(accuracy / 1000) : 'Active'}`
                           : permissionState === 'denied'
-                            ? 'Permission denied by browser'
+                            ? 'Permission denied. Tap below to enable or open settings.'
                             : 'Tap below to enable'}
                     </div>
                   </div>
@@ -100,7 +103,7 @@ export default function LocationSettings() {
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={hasRealLocation || isManual ? useCurrentLocation : requestLocation}
                 disabled={isLocating}
@@ -135,6 +138,15 @@ export default function LocationSettings() {
                   className="px-4 py-3 rounded-xl text-sm font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all"
                 >
                   Use GPS
+                </button>
+              )}
+              {isPermDenied && (
+                <button
+                  onClick={openSettings}
+                  className="px-4 py-3 rounded-xl text-sm font-bold bg-zinc-100 text-zinc-800 hover:bg-zinc-200 border border-zinc-200 transition-all flex items-center justify-center gap-2"
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                  Open Settings
                 </button>
               )}
             </div>

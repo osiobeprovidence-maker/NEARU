@@ -21,9 +21,11 @@ import {
   subscribeUserToPush,
   unsubscribeUserFromPush,
 } from '../utils/pushManager';
+import { usePermissions } from '../contexts/PermissionContext';
 
 export default function NotificationSettings() {
   const { user, convexUserId, updateNotificationSettings } = useAuth();
+  const { requestWithRationale, openSettings, statuses } = usePermissions();
   const [savedToast, setSavedToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Preferences saved');
   const [browserPermission, setBrowserPermission] = useState<
@@ -70,8 +72,16 @@ export default function NotificationSettings() {
 
     if (targetState) {
       // User is enabling push notifications
+      const permRes = await requestWithRationale('notifications');
+      if (!permRes.granted) {
+        if (permRes.permanentlyDenied) {
+          setErrorMessage('Notifications are blocked on your device. You can enable them in Android Settings.');
+        }
+        return;
+      }
+
       if (!isPushSupported()) {
-        setErrorMessage('Push notifications are not supported in this browser.');
+        setErrorMessage('Push notifications are not supported on this platform.');
         return;
       }
 
@@ -143,11 +153,15 @@ export default function NotificationSettings() {
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
             <div className="flex-1">
               <p>{errorMessage}</p>
-              {browserPermission === 'denied' && (
-                <p className="mt-1 text-[11px] text-rose-600 font-normal">
-                  To enable notifications: click the site settings / lock icon in your browser address bar and change Notifications to "Allow".
-                </p>
-              )}
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={openSettings}
+                  className="px-3 py-1.5 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  Open Settings
+                </button>
+              </div>
             </div>
           </div>
         )}

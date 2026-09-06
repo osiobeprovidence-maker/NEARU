@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
+import { AppPermissionType } from '../services/permissionManager';
 import { 
   Smartphone, 
   Moon, 
@@ -10,7 +12,13 @@ import {
   Trash2, 
   Check, 
   Wifi,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  MapPin,
+  Camera,
+  Mic,
+  Bell,
+  ExternalLink
 } from 'lucide-react';
 
 const LANGUAGES = [
@@ -22,8 +30,46 @@ const LANGUAGES = [
   { code: 'fr', name: 'Français' },
 ];
 
+const PERMISSION_ITEMS: {
+  key: AppPermissionType;
+  title: string;
+  description: string;
+  icon: any;
+  color: string;
+}[] = [
+  {
+    key: 'location',
+    title: 'Location',
+    description: 'Nearby events, map view & discovery',
+    icon: MapPin,
+    color: 'bg-indigo-50 text-indigo-600',
+  },
+  {
+    key: 'camera',
+    title: 'Camera',
+    description: 'Taking photos and recording video',
+    icon: Camera,
+    color: 'bg-rose-50 text-rose-600',
+  },
+  {
+    key: 'microphone',
+    title: 'Microphone',
+    description: 'Recording voice notes in chat',
+    icon: Mic,
+    color: 'bg-amber-50 text-amber-600',
+  },
+  {
+    key: 'notifications',
+    title: 'Notifications',
+    description: 'RALLY alerts, messages and activity updates',
+    icon: Bell,
+    color: 'bg-blue-50 text-blue-600',
+  },
+];
+
 export default function AppSettingsPage() {
   const { user, updateAppSettings, clearAppCache } = useAuth();
+  const { statuses, requestWithRationale, openSettings, isNative } = usePermissions();
   const [toastMessage, setToastMessage] = useState('');
 
   const appSettings = user.appSettings || {
@@ -188,7 +234,80 @@ export default function AppSettingsPage() {
             </button>
           </div>
 
-          {/* Section 5: App Version */}
+          {/* Section 5: Device Permissions */}
+          <div className="p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-zinc-700" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                  Device Permissions
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => openSettings()}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors hover:underline"
+              >
+                <span>Manage in Settings</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-zinc-500 font-medium leading-relaxed">
+              Permissions are requested just-in-time when you use specific features. Photos and videos use the secure Android Photo Picker without requiring storage access.
+            </p>
+
+            <div className="divide-y divide-zinc-100 border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/40">
+              {PERMISSION_ITEMS.map((item) => {
+                const status = statuses[item.key]?.status || 'prompt';
+                const isGranted = status === 'granted';
+                const isPermDenied = status === 'permanently_denied';
+                const Icon = item.icon;
+
+                return (
+                  <div
+                    key={item.key}
+                    className="p-3 sm:p-3.5 flex items-center justify-between gap-3 bg-white"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.color}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 truncate">{item.title}</p>
+                        <p className="text-[10px] text-zinc-500 truncate">{item.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isGranted ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                          <Check className="w-2.5 h-2.5" />
+                          Allowed
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isPermDenied) {
+                              openSettings();
+                            } else {
+                              requestWithRationale(item.key);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 transition-colors active:scale-95"
+                        >
+                          {isPermDenied ? 'Settings' : 'Allow'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 6: App Version */}
           <div className="p-4 sm:p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-zinc-900">App Version</p>
