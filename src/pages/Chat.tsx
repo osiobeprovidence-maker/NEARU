@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, MapPin, MoreVertical, BadgeCheck, Star, Image as ImageIcon, AlertCircle, Smile, Paperclip, Camera, Mic, Play, Users, Check, CheckCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Send, MapPin, MoreVertical, Star, Image as ImageIcon, AlertCircle, Smile, Paperclip, Camera, Mic, Play, Users, Check, CheckCheck, Loader2 } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
-import VerificationBadge from '../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import { cn } from '../lib/utils';
 
 const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀', '❤️', '😭', '😎', '🥳', '🚀', '👏'];
@@ -281,11 +281,7 @@ export default function Chat() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <h2 className="font-bold text-zinc-900 leading-tight truncate">{headerTitle}</h2>
-                {!isRally && (otherUser as any)?.isBlueVerified ? (
-                  <VerificationBadge isBlueCheck={true} size="sm" />
-                ) : !isRally && Boolean((otherUser as any)?.isVerified || otherUser?.isNINVerified) ? (
-                  <VerificationBadge type={(otherUser as any)?.verificationType} isVerified={true} size="sm" />
-                ) : null}
+                {!isRally && <ProfileVerificationCheck user={otherUser} size="sm" />}
                 {!isRally && otherUser?.badges?.map((badge: string) => (
                   <div title={badge} key={badge} className="flex items-center justify-center w-4 h-4 bg-amber-100 rounded-full text-amber-600 shrink-0">
                     <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />

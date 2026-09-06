@@ -36,7 +36,7 @@ import { useAdmin, AdminUser } from '../../contexts/AdminContext';
 import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
 import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
-import VerificationBadge from '../../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../../components/VerificationBadge';
 
 export default function AdminUsers() {
   const { 
@@ -187,11 +187,7 @@ export default function AdminUsers() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-zinc-900 truncate">{u.name}</span>
-              {(u as any).isBlueVerified ? (
-                <VerificationBadge isBlueCheck={true} size="md" />
-              ) : Boolean((u as any).isVerified || u.isNINVerified) ? (
-                <VerificationBadge type={(u as any).verificationType} isVerified={true} size="md" />
-              ) : null}
+              <ProfileVerificationCheck user={u} size="md" />
             </div>
             <span className="text-[11px] text-zinc-400 font-medium block truncate">{u.username}</span>
           </div>

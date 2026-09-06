@@ -64,6 +64,7 @@ export interface User {
   blueCheckStatus?: 'unverified' | 'pending' | 'verified' | 'rejected';
   blueVerifiedAt?: number;
   isVerified?: boolean;
+  verificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected' | string;
   verificationType?: 'lalao_buz' | 'organization' | 'personal';
   verifiedAt?: number;
   isPhoneVerified: boolean;

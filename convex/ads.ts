@@ -107,11 +107,23 @@ export const create = mutation({
     brandLogoUrl: v.optional(v.string()),
     isActive: v.boolean(),
     displayOrder: v.optional(v.number()),
+    isVerified: v.optional(v.boolean()),
+    isBlueVerified: v.optional(v.boolean()),
+    verificationStatus: v.optional(
+      v.union(
+        v.literal("unverified"),
+        v.literal("pending"),
+        v.literal("verified"),
+        v.literal("rejected")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
     return await ctx.db.insert("ads", {
       ...args,
+      isBlueVerified: args.isBlueVerified ?? (args.verificationStatus === "verified"),
+      verificationStatus: args.verificationStatus || (args.isBlueVerified ? "verified" : "unverified"),
       imageUrl: sanitizeMediaReference(args.imageUrl),
       brandLogoUrl: sanitizeMediaReference(args.brandLogoUrl),
       createdAt: now,
@@ -133,6 +145,16 @@ export const update = mutation({
     brandLogoUrl: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
     displayOrder: v.optional(v.number()),
+    isVerified: v.optional(v.boolean()),
+    isBlueVerified: v.optional(v.boolean()),
+    verificationStatus: v.optional(
+      v.union(
+        v.literal("unverified"),
+        v.literal("pending"),
+        v.literal("verified"),
+        v.literal("rejected")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const { id, ...fields } = args;

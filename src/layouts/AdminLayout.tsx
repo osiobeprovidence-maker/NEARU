@@ -31,6 +31,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdmin, AdminProvider } from '../contexts/AdminContext';
 import { AdminToastContainer } from '../components/admin/AdminToastContainer';
+import { ProfileVerificationCheck } from '../components/VerificationBadge';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
@@ -281,7 +282,7 @@ function AdminLayoutContent() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-xs font-bold text-zinc-900 truncate">{u.name}</p>
-                                    {u.isNINVerified && <BadgeCheck className="w-3.5 h-3.5 text-emerald-600" />}
+                                    <ProfileVerificationCheck user={u} size="xs" />
                                   </div>
                                   <p className="text-[11px] text-zinc-400 truncate">{u.username} · {u.location}</p>
                                 </div>

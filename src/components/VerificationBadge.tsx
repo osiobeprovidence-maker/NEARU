@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '../lib/utils';
 
-export type VerificationType = 'lalao_buz' | 'organization' | 'personal' | 'nin' | 'blue' | 'rally_blue' | string;
+export type VerificationType = 'blue' | 'rally_blue' | 'lalao_buz' | 'organization' | 'personal' | string;
 
 export interface VerificationBadgeProps {
   type?: VerificationType | null;
@@ -60,15 +60,82 @@ export const VERIFICATION_CONFIG: Record<
     fillColor: '#18181B',
     title: 'Personal Verified',
   },
-  nin: {
-    label: 'Verified',
-    bgClass: 'text-[#16A34A]', // Green default for legacy NIN
-    fillColor: '#16A34A',
-    title: 'Identity Verified',
-  },
 };
 
-export default function VerificationBadge({
+/**
+ * Robust verification validator:
+ * A user/page/organization/advertiser should ONLY display the blue verification check
+ * if their RALLY Profile Verification status is actually "verified".
+ *
+ * It will NOT return true simply because:
+ * - They are an admin.
+ * - They are a page.
+ * - They are an organization.
+ * - They are an advertiser.
+ * - They completed NIN/KYC.
+ * - They have special permissions.
+ */
+export function isEntityVerified(entity?: any): {
+  isVerified: boolean;
+  isBlueCheck: boolean;
+  type?: string;
+} {
+  if (!entity) return { isVerified: false, isBlueCheck: false };
+
+  // Explicit check for RALLY profile blue check verification
+  const isBlue = Boolean(
+    entity.isBlueVerified === true ||
+    entity.blueCheckStatus === 'verified' ||
+    entity.verificationStatus === 'verified'
+  );
+
+  if (isBlue) {
+    return { isVerified: true, isBlueCheck: true, type: 'blue' };
+  }
+
+  // Check for approved paid verification category (lalao_buz, organization, personal)
+  // NEVER use NIN or admin permissions as a substitute for verification.
+  if (
+    entity.isVerified === true &&
+    entity.verificationStatus !== 'unverified' &&
+    entity.verificationStatus !== 'rejected' &&
+    entity.verificationType !== 'nin'
+  ) {
+    return {
+      isVerified: true,
+      isBlueCheck: !entity.verificationType || entity.verificationType === 'lalao_buz',
+      type: entity.verificationType || 'lalao_buz',
+    };
+  }
+
+  return { isVerified: false, isBlueCheck: false };
+}
+
+export function ProfileVerificationCheck({
+  user,
+  size = 'md',
+  className = '',
+}: {
+  user?: any;
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
+  className?: string;
+}) {
+  if (!user) return null;
+  const { isVerified, isBlueCheck, type } = isEntityVerified(user);
+  if (!isVerified) return null;
+
+  return (
+    <VerificationBadge
+      isBlueCheck={isBlueCheck}
+      type={type}
+      isVerified={true}
+      size={size}
+      className={className}
+    />
+  );
+}
+
+export function VerificationBadge({
   type,
   isVerified = true,
   isBlueCheck = false,
@@ -111,3 +178,5 @@ export default function VerificationBadge({
     </span>
   );
 }
+
+export default VerificationBadge;

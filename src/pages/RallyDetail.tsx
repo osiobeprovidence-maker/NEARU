@@ -15,7 +15,6 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  BadgeCheck,
   Play,
   Trash2,
   Hash,
@@ -23,7 +22,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
-import VerificationBadge from '../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
@@ -62,6 +61,7 @@ function mapRally(r: any): Rally {
           isNINVerified: r.creator.isNINVerified,
           isBlueVerified: r.creator.isBlueVerified,
           isVerified: r.creator.isVerified,
+          verificationStatus: r.creator.verificationStatus,
           verificationType: r.creator.verificationType,
           isPhoneVerified: false,
           badges: r.creator.badges,
@@ -71,6 +71,9 @@ function mapRally(r: any): Rally {
           name: 'Unknown',
           username: '@unknown',
           avatar: '',
+          isBlueVerified: false,
+          isVerified: false,
+          verificationStatus: 'unverified',
           isNINVerified: false,
           isPhoneVerified: false,
         },
@@ -415,11 +418,7 @@ export default function RallyDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
               <span className="font-bold text-sm text-zinc-900 truncate">{rally.creator.name}</span>
-              {rally.creator.isBlueVerified ? (
-                <VerificationBadge isBlueCheck={true} size="md" />
-              ) : Boolean(rally.creator.isVerified || rally.creator.isNINVerified) ? (
-                <VerificationBadge type={rally.creator.verificationType} isVerified={true} size="md" />
-              ) : null}
+              <ProfileVerificationCheck user={rally.creator} size="md" />
               </div>
             <span className="text-xs text-violet-600 font-semibold flex items-center gap-1">
               <Crown className="w-3.5 h-3.5" /> Organizer
@@ -560,11 +559,7 @@ export default function RallyDetail() {
                     <div className="flex-1 min-w-0">
                       <Link to={`/user/${p._id}`} className="font-bold text-sm text-zinc-900 truncate flex items-center gap-1">
                         {p.name}
-                        {p.isBlueVerified ? (
-                          <VerificationBadge isBlueCheck={true} size="sm" />
-                        ) : Boolean((p as any).isVerified || p.isNINVerified) ? (
-                          <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
-                        ) : null}
+                        <ProfileVerificationCheck user={p} size="sm" />
                       </Link>
                       {p.role === 'organizer' && <span className="text-xs text-violet-600 font-semibold">Organizer</span>}
                     </div>

@@ -6,6 +6,8 @@ import { AdminModal } from '../../components/admin/AdminModal';
 import { AdminMediaUploader } from '../../components/admin/AdminMediaUploader';
 import { cn } from '../../lib/utils';
 
+import { VerificationBadge } from '../../components/VerificationBadge';
+
 interface AdForm {
   title: string;
   description: string;
@@ -16,6 +18,7 @@ interface AdForm {
   brandName: string;
   brandLogoUrl: string;
   isActive: boolean;
+  isBlueVerified: boolean;
   displayOrder: number;
 }
 
@@ -29,6 +32,7 @@ const emptyForm: AdForm = {
   brandName: '',
   brandLogoUrl: '',
   isActive: true,
+  isBlueVerified: false,
   displayOrder: 0,
 };
 
@@ -65,6 +69,7 @@ export default function AdminAds() {
       brandName: ad.brandName || '',
       brandLogoUrl: ad.brandLogoUrl || '',
       isActive: ad.isActive,
+      isBlueVerified: Boolean(ad.isBlueVerified || ad.verificationStatus === 'verified'),
       displayOrder: ad.displayOrder || 0,
     });
     setPreviews({ imageUrl: ad.imageUrl || '', brandLogoUrl: ad.brandLogoUrl || '' });
@@ -96,6 +101,9 @@ export default function AdminAds() {
       brandName: form.brandName.trim() || undefined,
       brandLogoUrl: cleanBrandLogoUrl,
       isActive: form.isActive,
+      isBlueVerified: form.isBlueVerified,
+      isVerified: form.isBlueVerified,
+      verificationStatus: form.isBlueVerified ? ('verified' as const) : ('unverified' as const),
       displayOrder: form.displayOrder,
     };
 
@@ -172,7 +180,14 @@ export default function AdminAds() {
                   </div>
                   <p className="text-xs text-zinc-500 font-medium line-clamp-1">{ad.description}</p>
                   <div className="flex items-center gap-3 mt-2 text-[10px] text-zinc-400 font-semibold">
-                    {ad.brandName && <span>Brand: {ad.brandName}</span>}
+                    {ad.brandName && (
+                      <span className="flex items-center gap-1 text-zinc-600">
+                        Brand: <span className="font-bold text-zinc-800">{ad.brandName}</span>
+                        {(ad.isBlueVerified || ad.verificationStatus === 'verified') && (
+                          <VerificationBadge isBlueCheck size="xs" />
+                        )}
+                      </span>
+                    )}
                     {ad.linkUrl && <span className="flex items-center gap-0.5"><ExternalLink className="w-3 h-3" /> Has link</span>}
                     <span>Order: {ad.displayOrder ?? 0}</span>
                   </div>
@@ -323,6 +338,32 @@ export default function AdminAds() {
             />
           </div>
 
+          {/* Profile Verification Toggle */}
+          <div className="p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-xl flex items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-zinc-900">RALLY Profile Verification</span>
+                <VerificationBadge isBlueCheck size="xs" />
+              </div>
+              <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                Display blue verification badge beside the advertiser name. Only approved verified entities should have this.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isBlueVerified: !form.isBlueVerified })}
+              className={cn(
+                "px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border",
+                form.isBlueVerified
+                  ? "bg-blue-50 border-blue-200 text-blue-700"
+                  : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100"
+              )}
+            >
+              {form.isBlueVerified ? <ToggleRight className="w-4 h-4 text-blue-600" /> : <ToggleLeft className="w-4 h-4" />}
+              {form.isBlueVerified ? 'Verified' : 'Unverified'}
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-zinc-700 mb-1 block">Display Order</label>
@@ -336,6 +377,7 @@ export default function AdminAds() {
             <div>
               <label className="text-xs font-bold text-zinc-700 mb-1 block">Status</label>
               <button
+                type="button"
                 onClick={() => setForm({ ...form, isActive: !form.isActive })}
                 className={cn(
                   "w-full px-4 py-2.5 border rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2",

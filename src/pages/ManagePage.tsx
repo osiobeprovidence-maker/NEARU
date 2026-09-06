@@ -13,7 +13,6 @@ import OrgSocialLinks, {
   normalizeSocialUrl,
 } from '../components/OrgSocialLinks';
 import {
-  BadgeCheck,
   MapPin,
   Globe,
   Calendar,
@@ -30,6 +29,7 @@ import {
   Check,
   AlertCircle,
 } from 'lucide-react';
+import { ProfileVerificationCheck } from '../components/VerificationBadge';
 import { cn } from '../lib/utils';
 import { Rally } from '../types';
 import {
@@ -243,9 +243,7 @@ export default function ManagePage() {
               <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
                 {displayName}
               </h2>
-              {user.isNINVerified && (
-                <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-              )}
+              <ProfileVerificationCheck user={user} size="lg" />
               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
                 {isBusiness ? 'Business' : 'Organization'}
               </span>

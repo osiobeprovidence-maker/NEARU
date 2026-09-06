@@ -10,8 +10,8 @@ import { Rally } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, ChevronRight } from 'lucide-react';
-import VerificationBadge from '../components/VerificationBadge';
+import { ChevronRight } from 'lucide-react';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 
 export default function Explore() {
   const [isLoading, setIsLoading] = useState(true);
@@ -101,6 +101,7 @@ export default function Explore() {
         isNINVerified: r.creator.isNINVerified,
         isBlueVerified: r.creator.isBlueVerified,
         isVerified: r.creator.isVerified,
+        verificationStatus: r.creator.verificationStatus,
         verificationType: r.creator.verificationType,
         isPhoneVerified: false,
         badges: r.creator.badges,
@@ -112,6 +113,9 @@ export default function Explore() {
         name: 'Unknown',
         username: '@unknown',
         avatar: '',
+        isBlueVerified: false,
+        isVerified: false,
+        verificationStatus: 'unverified',
         isNINVerified: false,
         isPhoneVerified: false,
       },
@@ -293,11 +297,7 @@ function PeoplePanel({ people, convexUserId, handleToggleFollow, handleBlock }: 
             <Link to={`/user/${p._id}`} className="flex-1 min-w-0 block">
               <div className="flex items-center gap-1">
                 <span className="font-bold text-sm text-zinc-900 truncate">{p.name}</span>
-                {(p as any).isBlueVerified ? (
-                  <VerificationBadge isBlueCheck={true} size="sm" />
-                ) : Boolean((p as any).isVerified || p.isNINVerified) ? (
-                  <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
-                ) : null}
+                <ProfileVerificationCheck user={p} size="sm" />
               </div>
               <p className="text-xs text-zinc-500 font-medium truncate">
                 @{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers

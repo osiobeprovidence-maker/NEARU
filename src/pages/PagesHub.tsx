@@ -6,7 +6,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import Avatar from '../components/Avatar';
-import VerificationBadge from '../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import CreatePageModal from '../components/CreatePageModal';
 import CreateRallyModal from '../components/CreateRallyModal';
 import EditPageModal, { EditPageData } from '../components/EditPageModal';
@@ -16,7 +16,6 @@ import {
   Flag,
   Plus,
   ChevronRight,
-  BadgeCheck,
   Building2,
   Compass,
   Loader2,
@@ -202,9 +201,7 @@ export default function PagesHub() {
                                 {page.name}
                               </Link>
 
-                              {page.isVerified && (
-                                <VerificationBadge type="lalao_buz" isVerified={true} size="md" />
-                              )}
+                              <ProfileVerificationCheck user={page} size="md" />
 
                               {/* Role Badge */}
                               <span
@@ -403,17 +400,14 @@ export default function PagesHub() {
                     <Avatar
                       src={page.avatar}
                       name={page.name}
-                      size="md"
-                      className="rounded-2xl shadow-sm ring-1 ring-zinc-200"
+                                className="rounded-2xl shadow-sm ring-1 ring-zinc-200"
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-sm text-zinc-900 truncate">
+                        <h3 className="font-bold text-sm text-zinc-900 truncate">
                           {page.name}
-                        </span>
-                        {page.isVerified && (
-                          <VerificationBadge type="lalao_buz" isVerified={true} size="md" />
-                        )}
+                        </h3>
+                        <ProfileVerificationCheck user={page} size="md" />
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600">
                           {page.category}
                         </span>

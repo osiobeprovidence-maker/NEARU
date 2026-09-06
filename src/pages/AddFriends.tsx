@@ -12,7 +12,6 @@ import {
   Users,
   Check,
   Clock,
-  BadgeCheck,
   Star,
   BookUser,
   Search,
@@ -22,6 +21,7 @@ import {
   Mail,
   AlertCircle
 } from 'lucide-react';
+import { ProfileVerificationCheck } from '../components/VerificationBadge';
 
 interface ContactInput {
   name?: string;
@@ -326,9 +326,7 @@ export default function AddFriends() {
                           <span className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">
                             {sender.name || 'Anonymous User'}
                           </span>
-                          {sender.isNINVerified && (
-                            <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                          )}
+                          <ProfileVerificationCheck user={sender} size="sm" />
                           {sender.badges?.map((b: string) => (
                             <div
                               key={b}
@@ -445,9 +443,7 @@ export default function AddFriends() {
                           <span className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">
                             {user.name || 'User'}
                           </span>
-                          {user.isNINVerified && (
-                            <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                          )}
+                          <ProfileVerificationCheck user={user} size="sm" />
                           {user.badges?.map((b: string) => (
                             <div
                               key={b}
@@ -667,9 +663,7 @@ export default function AddFriends() {
                             <span className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">
                               {contact.name || 'User'}
                             </span>
-                            {contact.isNINVerified && (
-                              <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                            )}
+                            <ProfileVerificationCheck user={contact} size="sm" />
                             {contact.badges?.map((b: string) => (
                               <div
                                 key={b}

@@ -10,7 +10,6 @@ import {
   Heart,
   Users,
   CheckCircle2,
-  BadgeCheck,
   Calendar,
   Play,
   Hash,
@@ -23,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Rally } from '../types';
 import { rallyAccess } from '../lib/rallyPricing';
+import { ProfileVerificationCheck } from './VerificationBadge';
 import { cn } from '../lib/utils';
 import Avatar from './Avatar';
 import VerificationBadge from './VerificationBadge';
@@ -338,11 +338,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             <span className="font-bold text-sm text-zinc-900 truncate">
               {rally.creator.organizationName || rally.creator.name}
             </span>
-            {rally.creator.isBlueVerified ? (
-              <VerificationBadge isBlueCheck={true} size="sm" />
-            ) : rally.creator.isNINVerified ? (
-              <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            ) : null}
+            <ProfileVerificationCheck user={rally.creator} size="sm" />
             {(rally.creator.accountType === 'organization' || rally.creator.accountType === 'business') && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
                 {rally.creator.accountType === 'business' ? 'Biz' : 'Org'}

@@ -5,11 +5,10 @@ import { api } from '../../convex/_generated/api';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
-import VerificationBadge from '../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import PostCard from '../components/PostCard';
 import CreateRallyModal from '../components/CreateRallyModal';
 import {
-  BadgeCheck,
   MapPin,
   Globe,
   Mail,
@@ -369,9 +368,7 @@ export default function PageView() {
                   <h1 className="text-xl sm:text-2xl font-black text-zinc-900 leading-tight">
                     {page.name}
                   </h1>
-                  {page.isVerified && (
-                    <VerificationBadge type="lalao_buz" isVerified={true} size="lg" />
-                  )}
+                  <ProfileVerificationCheck user={page} size="lg" />
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium mt-0.5">
                   <span>@{page.slug}</span>

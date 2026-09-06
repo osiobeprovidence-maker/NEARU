@@ -166,6 +166,7 @@ export default function Home() {
               isNINVerified: r.creator.isNINVerified,
               isBlueVerified: r.creator.isBlueVerified,
               isVerified: r.creator.isVerified,
+              verificationStatus: r.creator.verificationStatus,
               verificationType: r.creator.verificationType,
               isPhoneVerified: false,
               badges: r.creator.badges,
@@ -177,6 +178,9 @@ export default function Home() {
               name: 'Unknown',
               username: '@unknown',
               avatar: '',
+              isBlueVerified: false,
+              isVerified: false,
+              verificationStatus: 'unverified',
               isNINVerified: false,
               isPhoneVerified: false,
             },
@@ -310,6 +314,9 @@ export default function Home() {
                       ctaText={ad.ctaText}
                       brandName={ad.brandName}
                       brandLogoUrl={ad.brandLogoUrl}
+                      isVerified={ad.isVerified}
+                      isBlueVerified={ad.isBlueVerified}
+                      verificationStatus={ad.verificationStatus}
                     />
                   );
                 }

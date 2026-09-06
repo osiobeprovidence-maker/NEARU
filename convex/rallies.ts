@@ -136,7 +136,7 @@ export const listWithCreators = query({
     for (const id of creatorIds) {
       const user = await ctx.db.get(id);
       if (user) {
-        creators[id] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, isVerified: !!(user.isVerified || user.isNINVerified), verificationType: user.verificationType, isBlueVerified: !!user.isBlueVerified, blueCheckStatus: user.blueCheckStatus, badges: user.badges, accountType: user.accountType || "personal", organizationName: user.organizationName, isPro: user.isPro ?? false };
+        creators[id] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, isVerified: !!user.isVerified, verificationType: user.verificationType, isBlueVerified: Boolean(user.isBlueVerified === true || user.blueCheckStatus === "verified"), blueCheckStatus: user.blueCheckStatus || (user.isBlueVerified ? "verified" : "unverified"), verificationStatus: user.blueCheckStatus || (user.isBlueVerified ? "verified" : "unverified"), badges: user.badges, accountType: user.accountType || "personal", organizationName: user.organizationName, isPro: user.isPro ?? false };
       }
     }
 
@@ -242,7 +242,7 @@ export const listByInterest = query({
     const creators: Record<string, any> = {};
     for (const id of creatorIds) {
       const user = await ctx.db.get(id);
-      if (user) creators[id] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, isVerified: !!(user.isVerified || user.isNINVerified), verificationType: user.verificationType, isBlueVerified: !!user.isBlueVerified, blueCheckStatus: user.blueCheckStatus, badges: user.badges, accountType: user.accountType || "personal", organizationName: user.organizationName, isPro: user.isPro ?? false };
+      if (user) creators[id] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, isVerified: !!user.isVerified, verificationType: user.verificationType, isBlueVerified: Boolean(user.isBlueVerified === true || user.blueCheckStatus === "verified"), blueCheckStatus: user.blueCheckStatus || (user.isBlueVerified ? "verified" : "unverified"), verificationStatus: user.blueCheckStatus || (user.isBlueVerified ? "verified" : "unverified"), badges: user.badges, accountType: user.accountType || "personal", organizationName: user.organizationName, isPro: user.isPro ?? false };
     }
     const mediaCache: Record<string, string | undefined> = {};
     const avatarCache: Record<string, string | undefined> = {};
@@ -379,7 +379,7 @@ export const getEventPosts = query({
     const creators: Record<string, any> = {};
     for (const id of creatorIds) {
       const user = await ctx.db.get(id);
-      if (user) creators[id] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, isVerified: !!(user.isVerified || user.isNINVerified), verificationType: user.verificationType, isBlueVerified: !!user.isBlueVerified, blueCheckStatus: user.blueCheckStatus, badges: user.badges, accountType: user.accountType || "personal", organizationName: user.organizationName, isPro: user.isPro ?? false };
+      if (user) creators[id] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, isVerified: !!user.isVerified, verificationType: user.verificationType, isBlueVerified: Boolean(user.isBlueVerified === true || user.blueCheckStatus === "verified"), blueCheckStatus: user.blueCheckStatus || (user.isBlueVerified ? "verified" : "unverified"), verificationStatus: user.blueCheckStatus || (user.isBlueVerified ? "verified" : "unverified"), badges: user.badges, accountType: user.accountType || "personal", organizationName: user.organizationName, isPro: user.isPro ?? false };
     }
     const mediaCache: Record<string, string | undefined> = {};
     const avatarCache: Record<string, string | undefined> = {};

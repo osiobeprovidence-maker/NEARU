@@ -474,6 +474,16 @@ export default defineSchema({
     brandLogoUrl: v.optional(v.string()),
     isActive: v.boolean(),
     displayOrder: v.optional(v.number()),
+    isVerified: v.optional(v.boolean()),
+    isBlueVerified: v.optional(v.boolean()),
+    verificationStatus: v.optional(
+      v.union(
+        v.literal("unverified"),
+        v.literal("pending"),
+        v.literal("verified"),
+        v.literal("rejected")
+      )
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_active", ["isActive", "displayOrder"]),

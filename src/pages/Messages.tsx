@@ -2,12 +2,12 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import PageShell from '../components/PageShell';
-import { ShieldAlert, BadgeCheck, Star, Send, Users, MessageCircle, Inbox, UserPlus } from 'lucide-react';
+import { ShieldAlert, Star, Send, Users, MessageCircle, Inbox, UserPlus } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
-import VerificationBadge from '../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 
 type InboxItem = {
   key: string;
@@ -21,6 +21,8 @@ type InboxItem = {
   isRally?: boolean;
   isNINVerified?: boolean;
   isBlueVerified?: boolean;
+  isVerified?: boolean;
+  verificationStatus?: string;
   badges?: string[];
   // navigation
   navigateTo: () => void;
@@ -73,6 +75,8 @@ export default function Messages() {
         isRally,
         isNINVerified: conversation.otherParticipant?.isNINVerified,
         isBlueVerified: conversation.otherParticipant?.isBlueVerified,
+        isVerified: conversation.otherParticipant?.isVerified,
+        verificationStatus: conversation.otherParticipant?.verificationStatus,
         badges: conversation.otherParticipant?.badges,
         navigateTo: () => navigate(`/messages/${conversation._id}`),
       });
@@ -91,6 +95,8 @@ export default function Messages() {
         unread: 1,
         isNINVerified: req.sender?.isNINVerified,
         isBlueVerified: req.sender?.isBlueVerified,
+        isVerified: req.sender?.isVerified,
+        verificationStatus: req.sender?.verificationStatus,
         badges: req.sender?.badges,
         navigateTo: () => navigate(`/messages/request/${req._id}`),
       });
@@ -109,6 +115,8 @@ export default function Messages() {
         unread: 0,
         isNINVerified: req.target?.isNINVerified,
         isBlueVerified: req.target?.isBlueVerified,
+        isVerified: req.target?.isVerified,
+        verificationStatus: req.target?.verificationStatus,
         badges: req.target?.badges,
         navigateTo: () => navigate(`/user/${req.target?._id}`),
       });
@@ -186,11 +194,7 @@ export default function Messages() {
               {item.title}
             </h3>
             {item.isRally && <MessageCircle className="w-4 h-4 text-indigo-500 shrink-0" />}
-            {!item.isRally && item.isBlueVerified ? (
-              <VerificationBadge isBlueCheck={true} size="sm" />
-            ) : !item.isRally && Boolean((item as any).isVerified || item.isNINVerified) ? (
-              <VerificationBadge type={(item as any).verificationType} isVerified={true} size="sm" />
-            ) : null}
+            {!item.isRally && <ProfileVerificationCheck user={item} size="sm" />}
             {!item.isRally && item.badges?.map((b: string) => (
               <div title={b} key={b} className="flex items-center justify-center w-3.5 h-3.5 bg-amber-100 rounded-full text-amber-600 shrink-0">
                 <Star className="w-2 h-2 fill-amber-500 text-amber-500" />

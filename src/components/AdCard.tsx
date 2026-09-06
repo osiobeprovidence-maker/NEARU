@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+import VerificationBadge, { isEntityVerified } from './VerificationBadge';
+
 interface AdCardProps {
   title: string;
   description: string;
@@ -24,6 +26,9 @@ interface AdCardProps {
   ctaText?: string;
   brandName?: string;
   brandLogoUrl?: string;
+  isVerified?: boolean;
+  isBlueVerified?: boolean;
+  verificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected' | string;
 }
 
 function cleanDomain(url: string): string {
@@ -64,6 +69,9 @@ export default function AdCard({
   ctaText = 'Learn More',
   brandName,
   brandLogoUrl,
+  isVerified,
+  isBlueVerified,
+  verificationStatus,
 }: AdCardProps) {
   const [mediaError, setMediaError] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -109,6 +117,13 @@ export default function AdCard({
   const handle = brandName
     ? `@${brandName.toLowerCase().replace(/[^a-z0-9_]/g, '')}`
     : '@promoted';
+
+  // Only show blue check if explicitly verified
+  const isActuallyVerified = isEntityVerified({
+    isVerified,
+    isBlueVerified,
+    verificationStatus,
+  });
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -157,15 +172,9 @@ export default function AdCard({
 
   return (
     <article className="p-4 sm:p-5 hover:bg-zinc-50/50 transition-colors relative block text-left bg-white">
-      {/* ── 1. SPONSORED LABEL ────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">
-        <Megaphone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-        <span>Sponsored</span>
-      </div>
-
-      {/* ── 2. ADVERTISER HEADER ────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+      {/* ── 1. INTEGRATED ADVERTISER HEADER ───────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Logo / Avatar */}
           <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-100 border border-zinc-200/80 overflow-hidden shrink-0 flex items-center justify-center">
             {effectiveLogoUrl ? (
@@ -184,27 +193,34 @@ export default function AdCard({
             )}
           </div>
 
-          {/* Identity & Badges */}
-          <div className="flex-1 min-w-0">
+          {/* Identity & Badges: [Name] [Blue Check if verified] [AD/Sponsored indicator] */}
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-[15px] text-zinc-900 truncate">
                 {displayName}
               </span>
-              <BadgeCheck className="w-4 h-4 text-indigo-600 shrink-0" />
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
-                Ad
+              {isActuallyVerified && (
+                <VerificationBadge isBlueCheck={true} size="md" />
+              )}
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-200/80 shrink-0">
+                <Megaphone className="w-3 h-3 text-indigo-500 shrink-0" />
+                <span>Sponsored</span>
               </span>
             </div>
 
-            <div className="text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
+            <div className="text-[12px] sm:text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
               <span className="truncate">{handle}</span>
-              <span>·</span>
-              <span className="text-zinc-400 font-medium">Promoted</span>
+              {linkUrl && (
+                <>
+                  <span>·</span>
+                  <span className="text-zinc-400 font-medium truncate">{cleanDomain(linkUrl)}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Three-dot options menu */}
+        {/* Three-dot options menu aligned to far right */}
         <div className="relative shrink-0">
           <button
             type="button"
@@ -277,23 +293,28 @@ export default function AdCard({
         </div>
       </div>
 
-      {/* ── 3. AD HEADLINE / TITLE ───────────────────────────────────────── */}
+      {/* ── 2. AD HEADLINE / TITLE ───────────────────────────────────────── */}
       {title && title.toLowerCase() !== displayName.toLowerCase() && (
-        <h3 className="text-base sm:text-lg font-bold text-zinc-900 mt-3 leading-snug">
+        <h3 className="text-base sm:text-lg font-bold text-zinc-900 mt-2.5 leading-snug">
           {title}
         </h3>
       )}
 
-      {/* ── 4. AD DESCRIPTION ───────────────────────────────────────────── */}
+      {/* ── 3. AD DESCRIPTION ───────────────────────────────────────────── */}
       {description && (
         <p className="text-[15px] leading-relaxed text-zinc-800 whitespace-pre-wrap break-words mt-1.5">
           {description}
         </p>
       )}
 
-      {/* ── 5. MEDIA (IMAGE OR VIDEO) ───────────────────────────────────── */}
+      {/* ── 4. MEDIA (IMAGE OR VIDEO WITH SUBTLE OVERLAY AD WATERMARK) ───── */}
       {effectiveImageUrl && !mediaError && (
-        <div className="mt-3.5 rounded-2xl overflow-hidden bg-zinc-950/5 relative border border-zinc-100 flex items-center justify-center">
+        <div className="mt-3 relative w-full rounded-2xl overflow-hidden border border-zinc-100/90 bg-zinc-100 select-none">
+          {/* Small, subtle AD watermark overlay inside top-right corner of image */}
+          <div className="absolute top-2.5 right-2.5 z-10 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white font-black text-[10px] tracking-wider uppercase shadow-xs pointer-events-none select-none border border-white/20">
+            AD
+          </div>
+
           {isVideo ? (
             <video
               src={effectiveImageUrl}
@@ -301,17 +322,19 @@ export default function AdCard({
               muted
               playsInline
               preload="metadata"
-              className="w-full max-h-[520px] rounded-2xl bg-black mx-auto"
+              className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block"
               onError={() => setMediaError(true)}
             />
           ) : (
-            <img
-              src={effectiveImageUrl}
-              alt={title || displayName}
-              className="w-full max-h-[520px] object-contain rounded-2xl mx-auto"
-              loading="lazy"
-              onError={() => setMediaError(true)}
-            />
+            <div className="w-full overflow-hidden flex items-center justify-center bg-zinc-100">
+              <img
+                src={effectiveImageUrl}
+                alt={title || displayName}
+                className="w-full h-auto max-h-[480px] sm:max-h-[520px] object-cover object-center block"
+                loading="lazy"
+                onError={() => setMediaError(true)}
+              />
+            </div>
           )}
         </div>
       )}

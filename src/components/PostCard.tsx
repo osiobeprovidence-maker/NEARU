@@ -18,12 +18,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Repeat2,
+  Megaphone,
 } from 'lucide-react';
 import { Rally } from '../types';
 import { rallyAccess } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import Avatar from './Avatar';
-import VerificationBadge from './VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from './VerificationBadge';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -259,6 +260,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   // Normal social posts (POST type) have no Rally context by default.
   const isPost = post.type === 'POST';
   const isRallyContent = !isPost; // ASK / HELP / JOIN / EVENT
+  const isSponsoredPost = Boolean((post as any).isSponsored || (post as any).isAd);
   const action = post.type !== 'POST' ? RALLY_ACTION[post.type] : undefined;
   const access = rallyAccess(post);
 
@@ -476,16 +478,21 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
               onClick={(e) => e.stopPropagation()}
               className="flex-1 min-w-0 block"
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-bold text-[15px] text-zinc-900 truncate">
                   {post.pageAuthor.name}
                 </span>
-                {post.pageAuthor.isVerified && (
-                  <VerificationBadge type="lalao_buz" isVerified={true} size="md" />
+                <ProfileVerificationCheck user={post.pageAuthor} size="md" />
+                {isSponsoredPost ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-200/80 shrink-0">
+                    <Megaphone className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>Sponsored</span>
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
+                    {post.pageAuthor.category || 'Page'}
+                  </span>
                 )}
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
-                  {post.pageAuthor.category || 'Page'}
-                </span>
               </div>
               <div className="text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
                 <span className="truncate font-medium text-zinc-600">
@@ -524,24 +531,23 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
               onClick={(e) => e.stopPropagation()}
               className="flex-1 min-w-0 block"
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-bold text-[15px] text-zinc-900 truncate">
                   {post.creator?.organizationName || post.creator?.name || 'User'}
                 </span>
-                {post.creator?.isBlueVerified ? (
-                  <VerificationBadge isBlueCheck={true} size="md" />
-                ) : Boolean(post.creator?.isVerified || post.creator?.isNINVerified) ? (
-                  <VerificationBadge
-                    type={post.creator?.verificationType}
-                    isVerified={true}
-                    size="md"
-                  />
-                ) : null}
-                {(post.creator?.accountType === 'organization' ||
-                  post.creator?.accountType === 'business') && (
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
-                    {post.creator?.accountType === 'business' ? 'Biz' : 'Org'}
+                <ProfileVerificationCheck user={post.creator} size="md" />
+                {isSponsoredPost ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-200/80 shrink-0">
+                    <Megaphone className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>Sponsored</span>
                   </span>
+                ) : (
+                  (post.creator?.accountType === 'organization' ||
+                    post.creator?.accountType === 'business') && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
+                      {post.creator?.accountType === 'business' ? 'Biz' : 'Org'}
+                    </span>
+                  )
                 )}
               </div>
               <div className="text-[13px] text-zinc-500 flex items-center gap-1 mt-0.5">
@@ -656,9 +662,16 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
       {/* ── 3. MEDIA (Single image/video OR multi-image carousel) ───────────────────── */}
       {mediaList.length > 0 && !imgError && (
         <div
-          className="mt-3 rounded-2xl overflow-hidden bg-zinc-950/5 relative select-none"
+          className="mt-3 relative w-full rounded-2xl overflow-hidden border border-zinc-100/90 bg-zinc-100 select-none"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* If post is sponsored, render subtle AD watermark overlay inside top-right corner */}
+          {isSponsoredPost && (
+            <div className="absolute top-2.5 right-2.5 z-10 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white font-black text-[10px] tracking-wider uppercase shadow-xs pointer-events-none select-none border border-white/20">
+              AD
+            </div>
+          )}
+
           {mediaList.length === 1 ? (
             /* Single Media */
             post.mediaType === 'video' ||
@@ -668,19 +681,22 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
             mediaList[0].includes('stream.mux.com') ? (
               <video
                 src={mediaList[0]}
-                className="w-full max-h-[480px] object-cover bg-black"
+                className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block"
                 controls
                 playsInline
                 preload="metadata"
                 onError={() => setImgError(true)}
               />
             ) : (
-              <img
-                src={mediaList[0]}
-                alt=""
-                className="w-full max-h-[480px] object-cover"
-                onError={() => setImgError(true)}
-              />
+              <div className="w-full overflow-hidden flex items-center justify-center bg-zinc-100">
+                <img
+                  src={mediaList[0]}
+                  alt={post.title || ''}
+                  className="w-full h-auto max-h-[480px] sm:max-h-[520px] object-cover object-center block"
+                  loading="lazy"
+                  onError={() => setImgError(true)}
+                />
+              </div>
             )
           ) : (
             /* Instagram-style Multi-Image Carousel */
@@ -689,17 +705,17 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
               <div
                 ref={carouselRef}
                 onScroll={handleCarouselScroll}
-                className="w-full max-h-[480px] aspect-[4/3] sm:aspect-square flex overflow-x-auto snap-x snap-mandatory no-scrollbar touch-pan-y"
+                className="w-full max-h-[480px] sm:max-h-[520px] aspect-[4/3] sm:aspect-square flex overflow-x-auto snap-x snap-mandatory no-scrollbar touch-pan-y"
               >
                 {mediaList.map((url, i) => (
                   <div
                     key={i}
-                    className="w-full h-full shrink-0 snap-center flex items-center justify-center bg-zinc-950/10 overflow-hidden"
+                    className="w-full h-full shrink-0 snap-center flex items-center justify-center bg-zinc-100 overflow-hidden"
                   >
                     <img
                       src={url}
                       alt={`Photo ${i + 1}`}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover object-center"
                       loading={i === 0 ? 'eager' : 'lazy'}
                     />
                   </div>
@@ -887,11 +903,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                         <span className="font-bold text-xs text-zinc-900 truncate">
                           {c.user?.name || 'User'}
                         </span>
-                        {c.user?.isBlueVerified ? (
-                          <VerificationBadge isBlueCheck={true} size="xs" />
-                        ) : Boolean(c.user?.isVerified || c.user?.isNINVerified) ? (
-                          <VerificationBadge type={c.user?.verificationType} isVerified={true} size="xs" />
-                        ) : null}
+                        <ProfileVerificationCheck user={c.user} size="xs" />
                       </div>
                       <span className="text-[10px] text-zinc-400 shrink-0">
                         {new Date(c.createdAt).toLocaleDateString()}

@@ -1,9 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
-import VerificationBadge from '../components/VerificationBadge';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import {
-  BadgeCheck,
   Edit3,
   MapPin,
   MoreHorizontal,
@@ -163,6 +162,9 @@ export default function Profile() {
           name: r.creator.name,
           username: r.creator.username,
           avatar: r.creator.avatar,
+          isBlueVerified: r.creator.isBlueVerified,
+          isVerified: r.creator.isVerified,
+          verificationStatus: r.creator.verificationStatus,
           isNINVerified: r.creator.isNINVerified,
           isPhoneVerified: false,
           badges: r.creator.badges,
@@ -175,6 +177,9 @@ export default function Profile() {
           name: user.name || 'You',
           username: user.username || '',
           avatar: user.avatar || '',
+          isBlueVerified: user.isBlueVerified,
+          isVerified: user.isVerified,
+          verificationStatus: user.verificationStatus,
           isNINVerified: user.isNINVerified ?? false,
           isPhoneVerified: false,
         },
@@ -319,11 +324,7 @@ export default function Profile() {
                 <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
                   {user.name}
                 </h2>
-                {user.isBlueVerified ? (
-                  <VerificationBadge isBlueCheck={true} size="lg" />
-                ) : Boolean(user.isVerified || user.isNINVerified) ? (
-                  <VerificationBadge type={user.verificationType} isVerified={true} size="lg" />
-                ) : null}
+                <ProfileVerificationCheck user={user} size="lg" />
               </div>
               <p className="text-sm font-semibold text-zinc-400 mb-1.5">
                 {user.username ? `@${user.username.replace(/^@+/, '')}` : ''}
@@ -667,9 +668,7 @@ export default function Profile() {
                                   <span className="font-bold text-zinc-900 text-sm truncate">
                                     {r.rater?.name || 'Anonymous Neighbor'}
                                   </span>
-                                  {Boolean(r.rater?.isVerified || r.rater?.isNINVerified) && (
-                                    <VerificationBadge type={r.rater?.verificationType} isVerified={true} size="sm" />
-                                  )}
+                                  <ProfileVerificationCheck user={r.rater} size="sm" />
                                 </div>
                                 <p className="text-xs text-zinc-400 font-medium truncate">
                                   {r.rater?.username ? `@${r.rater.username.replace(/^@+/, '')}` : ''}
@@ -851,11 +850,7 @@ function UserRow({
             <h4 className="font-bold text-zinc-900 text-sm group-hover:text-indigo-600 transition-colors truncate">
               {targetUser.name}
             </h4>
-            {targetUser.isBlueVerified ? (
-              <VerificationBadge isBlueCheck={true} size="md" />
-            ) : Boolean(targetUser.isVerified || targetUser.isNINVerified) ? (
-              <VerificationBadge type={targetUser.verificationType} isVerified={true} size="md" />
-            ) : null}
+            <ProfileVerificationCheck user={targetUser} size="md" />
           </div>
           <p className="text-xs text-zinc-400 font-medium truncate">
             {targetUser.username ? `@${targetUser.username.replace(/^@+/, '')}` : ''}

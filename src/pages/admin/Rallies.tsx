@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useAdmin, AdminRally } from '../../contexts/AdminContext';
 import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
+import { ProfileVerificationCheck } from '../../components/VerificationBadge';
 import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
 import { rallyAccess } from '../../lib/rallyPricing';
@@ -167,9 +168,7 @@ export default function AdminRallies() {
         <div className="flex items-center gap-2">
           <img src={r.creator.avatar} alt={r.creator.name} className="w-6 h-6 rounded-full object-cover" />
           <span className="text-xs font-bold text-zinc-800 truncate">{r.creator.name}</span>
-          {r.creator.isNINVerified && (
-            <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          )}
+          <ProfileVerificationCheck user={r.creator} size="xs" />
         </div>
       ),
     },
@@ -429,9 +428,7 @@ export default function AdminRallies() {
                   <div>
                     <div className="flex items-center gap-1.5">
                       <p className="text-xs font-bold text-zinc-900">{selectedRally.creator.name}</p>
-                      {selectedRally.creator.isNINVerified && (
-                        <BadgeCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      )}
+                      <ProfileVerificationCheck user={selectedRally.creator} size="xs" />
                     </div>
                     <p className="text-[11px] text-zinc-400 font-medium">{selectedRally.creator.username}</p>
                   </div>

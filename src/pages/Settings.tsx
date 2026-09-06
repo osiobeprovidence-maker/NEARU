@@ -27,6 +27,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { usePwaInstall } from '../hooks/usePwaInstall';
+import { ProfileVerificationCheck } from '../components/VerificationBadge';
 
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
@@ -147,9 +148,10 @@ export default function Settings() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <h2 className="font-black text-zinc-900 text-base sm:text-lg truncate">{user.name}</h2>
+                    <ProfileVerificationCheck user={user} size="sm" />
                     {user.isNINVerified && (
                       <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 shrink-0">
-                        Verified
+                        NIN Verified
                       </span>
                     )}
                   </div>

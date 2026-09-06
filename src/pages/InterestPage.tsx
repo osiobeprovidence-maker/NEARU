@@ -7,8 +7,8 @@ import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import Avatar from '../components/Avatar';
-import VerificationBadge from '../components/VerificationBadge';
-import { Tag, BadgeCheck, Users } from 'lucide-react';
+import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
+import { Tag, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function InterestPage() {
@@ -66,10 +66,11 @@ export default function InterestPage() {
       isNINVerified: r.creator.isNINVerified,
       isBlueVerified: r.creator.isBlueVerified,
       isVerified: r.creator.isVerified,
+      verificationStatus: r.creator.verificationStatus,
       verificationType: r.creator.verificationType,
       isPhoneVerified: false,
       badges: r.creator.badges,
-    } : { id: '', name: 'User', username: '', avatar: '', isNINVerified: false, isPhoneVerified: false },
+    } : { id: '', name: 'User', username: '', avatar: '', isBlueVerified: false, isVerified: false, verificationStatus: 'unverified', isNINVerified: false, isPhoneVerified: false },
     status: r.status,
     createdAt: new Date(r.createdAt).toISOString(),
     city: r.city,
@@ -125,11 +126,7 @@ export default function InterestPage() {
                 <Link to={`/user/${p._id}`} className="flex-1 min-w-0 block">
                   <div className="flex items-center gap-1">
                     <span className="font-bold text-sm text-zinc-900 truncate">{p.name}</span>
-                    {(p as any).isBlueVerified ? (
-                      <VerificationBadge isBlueCheck={true} size="sm" />
-                    ) : Boolean((p as any).isVerified || p.isNINVerified) ? (
-                      <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
-                    ) : null}
+                    <ProfileVerificationCheck user={p} size="sm" />
                   </div>
                   <p className="text-xs text-zinc-500 font-medium truncate">@{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers</p>
                 </Link>
