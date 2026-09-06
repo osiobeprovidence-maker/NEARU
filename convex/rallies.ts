@@ -269,11 +269,14 @@ export const listByInterest = query({
 
 export const listByCreator = query({
   args: {
-    creatorId: v.id("users"),
-    userId: v.optional(v.id("users")),
-    tab: v.optional(v.union(v.literal("Created"), v.literal("Interested"), v.literal("Completed"))),
+    creatorId: v.union(v.id("users"), v.string()),
+    userId: v.optional(v.union(v.id("users"), v.string(), v.null())),
+    tab: v.optional(v.union(v.literal("Created"), v.literal("Interested"), v.literal("Completed"), v.string())),
   },
   handler: async (ctx, args) => {
+    const creatorId = ctx.db.normalizeId("users", args.creatorId);
+    if (!creatorId) return [];
+
     const tab = args.tab || "Created";
     const mediaCache: Record<string, string | undefined> = {};
     const avatarCache: Record<string, string | undefined> = {};
@@ -283,19 +286,19 @@ export const listByCreator = query({
       // Find rallies the user joined/helped
       const userRsvps = await ctx.db
         .query("rsvps")
-        .withIndex("by_user_rally", (q) => q.eq("userId", args.creatorId))
+        .withIndex("by_user_rally", (q) => q.eq("userId", creatorId))
         .collect();
       const rallyIds = userRsvps.map((r) => r.rallyId);
       for (const rid of rallyIds) {
         const r = await ctx.db.get(rid);
-        if (r && r.creatorId.toString() !== args.creatorId.toString()) {
+        if (r && r.creatorId && r.creatorId.toString() !== creatorId.toString()) {
           targetRallies.push(r);
         }
       }
     } else {
       const rallies = await ctx.db
         .query("rallies")
-        .withIndex("by_creator", (q) => q.eq("creatorId", args.creatorId))
+        .withIndex("by_creator", (q) => q.eq("creatorId", creatorId))
         .order("desc")
         .collect();
       const personalRallies = rallies.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
@@ -307,14 +310,17 @@ export const listByCreator = query({
     }
 
     const creatorCache: Record<string, any> = {};
+    const rawViewerId = args.userId ? ctx.db.normalizeId("users", args.userId) : null;
+    const viewerId = rawViewerId ?? (args.userId === undefined && !args.tab ? creatorId : null);
 
     return await Promise.all(
       targetRallies.map(async (rally) => {
         const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
         const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
 
-        let creatorInfo = creatorCache[rally.creatorId.toString()];
-        if (!creatorInfo) {
+        const rallyCreatorIdStr = rally.creatorId?.toString();
+        let creatorInfo = rallyCreatorIdStr ? creatorCache[rallyCreatorIdStr] : undefined;
+        if (!creatorInfo && rally.creatorId) {
           const creatorDoc: any = await ctx.db.get(rally.creatorId);
           if (creatorDoc) {
             let avatar = creatorDoc.avatar || "";
@@ -335,14 +341,15 @@ export const listByCreator = query({
               organizationName: creatorDoc.organizationName,
               isPro: creatorDoc.isPro ?? false,
             };
-            creatorCache[rally.creatorId.toString()] = creatorInfo;
+            if (rallyCreatorIdStr) {
+              creatorCache[rallyCreatorIdStr] = creatorInfo;
+            }
           }
         }
 
         const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
         const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
         const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
-        const viewerId = args.userId ?? args.creatorId;
 
         return {
           ...rally,
@@ -352,8 +359,8 @@ export const listByCreator = query({
           likesCount: likes.length,
           commentsCount,
           rsvpsCount: rsvps.length,
-          isLiked: likes.some((l) => l.userId.toString() === viewerId.toString()),
-          isRsvpd: rsvps.some((r) => r.userId.toString() === viewerId.toString()),
+          isLiked: viewerId ? likes.some((l) => l.userId?.toString() === viewerId.toString()) : false,
+          isRsvpd: viewerId ? rsvps.some((r) => r.userId?.toString() === viewerId.toString()) : false,
         };
       })
     );
@@ -361,14 +368,19 @@ export const listByCreator = query({
 });
 
 export const listByPage = query({
-  args: { pageId: v.id("pages"), userId: v.optional(v.id("users")) },
+  args: {
+    pageId: v.union(v.id("pages"), v.string()),
+    userId: v.optional(v.union(v.id("users"), v.string(), v.null())),
+  },
   handler: async (ctx, args) => {
-    const page = await ctx.db.get(args.pageId);
+    const pageId = ctx.db.normalizeId("pages", args.pageId);
+    if (!pageId) return [];
+    const page = await ctx.db.get(pageId);
     if (!page) return [];
 
     const rallies = await ctx.db
       .query("rallies")
-      .withIndex("by_page", (q) => q.eq("pageId", args.pageId))
+      .withIndex("by_page", (q) => q.eq("pageId", pageId))
       .order("desc")
       .collect();
 
@@ -401,6 +413,8 @@ export const listByPage = query({
       isPro: false,
     };
 
+    const viewerId = args.userId ? ctx.db.normalizeId("users", args.userId) : null;
+
     return await Promise.all(
       rallies.map(async (rally) => {
         const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
@@ -408,7 +422,6 @@ export const listByPage = query({
         const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
         const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
         const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
-        const viewerId = args.userId;
 
         return {
           ...rally,
@@ -419,8 +432,8 @@ export const listByPage = query({
           likesCount: likes.length,
           commentsCount,
           rsvpsCount: rsvps.length,
-          isLiked: viewerId ? likes.some((l) => l.userId === viewerId) : false,
-          isRsvpd: viewerId ? rsvps.some((r) => r.userId === viewerId) : false,
+          isLiked: viewerId ? likes.some((l) => l.userId?.toString() === viewerId.toString()) : false,
+          isRsvpd: viewerId ? rsvps.some((r) => r.userId?.toString() === viewerId.toString()) : false,
         };
       })
     );

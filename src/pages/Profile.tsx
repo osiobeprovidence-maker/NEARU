@@ -42,7 +42,7 @@ type ProfileTab = 'posts' | 'followers' | 'following' | 'rated' | 'done';
 
 const VALID_TABS: ProfileTab[] = ['posts', 'followers', 'following', 'rated', 'done'];
 
-export default function Profile() {
+function ProfileContent() {
   const { user, convexUserId, updateUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const coverRef = useRef<CoverBannerHandle>(null);
@@ -259,8 +259,7 @@ export default function Profile() {
   ];
 
   return (
-    <QueryErrorBoundary message="Your profile couldn't be loaded right now. Please try again.">
-      <PageShell title="Profile">
+    <PageShell title="Profile">
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
           
           {/* =============================================================== */}
@@ -774,6 +773,13 @@ export default function Profile() {
           onClose={() => setIsGetVerifiedOpen(false)}
         />
       </PageShell>
+  );
+}
+
+export default function Profile() {
+  return (
+    <QueryErrorBoundary message="Your profile couldn't be loaded right now. Please try again.">
+      <ProfileContent />
     </QueryErrorBoundary>
   );
 }

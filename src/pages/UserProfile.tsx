@@ -38,7 +38,7 @@ import {
   logUploadStage,
 } from '../utils/imageUpload';
 
-export default function UserProfile() {
+function UserProfileContent() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user: me, convexUserId, updateUser, blockUser } = useAuth();
@@ -356,7 +356,6 @@ export default function UserProfile() {
   }
 
   return (
-    <QueryErrorBoundary message="We couldn't load this profile right now. Please try again.">
     <PageShell title={profile?.name || target?.name ? `${profile?.name || target?.name}'s profile` : 'Profile'}>
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden max-w-2xl mx-auto">
 
@@ -793,6 +792,13 @@ export default function UserProfile() {
         />
       )}
     </PageShell>
+  );
+}
+
+export default function UserProfile() {
+  return (
+    <QueryErrorBoundary message="We couldn't load this profile right now. Please try again.">
+      <UserProfileContent />
     </QueryErrorBoundary>
   );
 }
