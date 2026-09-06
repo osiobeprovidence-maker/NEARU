@@ -5,6 +5,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
+import VerificationBadge from '../components/VerificationBadge';
 import { cn } from '../lib/utils';
 
 const EMOJIS = ['😀', '😂', '😍', '🙏', '👍', '🔥', '✨', '🎉', '💔', '💯', '🙌', '👀', '❤️', '😭', '😎', '🥳', '🚀', '👏'];
@@ -280,8 +281,8 @@ export default function Chat() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <h2 className="font-bold text-zinc-900 leading-tight truncate">{headerTitle}</h2>
-                {!isRally && otherUser?.isNINVerified && (
-                  <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                {!isRally && Boolean((otherUser as any)?.isVerified || otherUser?.isNINVerified) && (
+                  <VerificationBadge type={(otherUser as any)?.verificationType} isVerified={true} size="sm" />
                 )}
                 {!isRally && otherUser?.badges?.map((badge: string) => (
                   <div title={badge} key={badge} className="flex items-center justify-center w-4 h-4 bg-amber-100 rounded-full text-amber-600 shrink-0">

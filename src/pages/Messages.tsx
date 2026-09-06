@@ -7,6 +7,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
+import VerificationBadge from '../components/VerificationBadge';
 
 type InboxItem = {
   key: string;
@@ -181,8 +182,8 @@ export default function Messages() {
               {item.title}
             </h3>
             {item.isRally && <MessageCircle className="w-4 h-4 text-indigo-500 shrink-0" />}
-            {!item.isRally && item.isNINVerified && (
-              <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            {!item.isRally && Boolean((item as any).isVerified || item.isNINVerified) && (
+              <VerificationBadge type={(item as any).verificationType} isVerified={true} size="sm" />
             )}
             {!item.isRally && item.badges?.map((b: string) => (
               <div title={b} key={b} className="flex items-center justify-center w-3.5 h-3.5 bg-amber-100 rounded-full text-amber-600 shrink-0">

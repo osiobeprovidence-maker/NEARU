@@ -23,6 +23,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
+import VerificationBadge from '../components/VerificationBadge';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
@@ -411,7 +412,9 @@ export default function RallyDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
               <span className="font-bold text-sm text-zinc-900 truncate">{rally.creator.name}</span>
-              {rally.creator.isNINVerified && <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />}
+              {Boolean(rally.creator.isVerified || rally.creator.isNINVerified) && (
+                <VerificationBadge type={rally.creator.verificationType} isVerified={true} size="md" />
+              )}
               </div>
             <span className="text-xs text-violet-600 font-semibold flex items-center gap-1">
               <Crown className="w-3.5 h-3.5" /> Organizer
@@ -552,7 +555,9 @@ export default function RallyDetail() {
                     <div className="flex-1 min-w-0">
                       <Link to={`/user/${p._id}`} className="font-bold text-sm text-zinc-900 truncate flex items-center gap-1">
                         {p.name}
-                        {p.isNINVerified && <BadgeCheck className="w-3.5 h-3.5 text-emerald-600" />}
+                        {Boolean((p as any).isVerified || p.isNINVerified) && (
+                          <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
+                        )}
                       </Link>
                       {p.role === 'organizer' && <span className="text-xs text-violet-600 font-semibold">Organizer</span>}
                     </div>

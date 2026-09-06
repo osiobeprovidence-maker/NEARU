@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { Link } from 'react-router-dom';
 import { BadgeCheck, ChevronRight } from 'lucide-react';
+import VerificationBadge from '../components/VerificationBadge';
 
 export default function Explore() {
   const [isLoading, setIsLoading] = useState(true);
@@ -289,7 +290,9 @@ function PeoplePanel({ people, convexUserId, handleToggleFollow, handleBlock }: 
             <Link to={`/user/${p._id}`} className="flex-1 min-w-0 block">
               <div className="flex items-center gap-1">
                 <span className="font-bold text-sm text-zinc-900 truncate">{p.name}</span>
-                {p.isNINVerified && <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />}
+                {Boolean((p as any).isVerified || p.isNINVerified) && (
+                  <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
+                )}
               </div>
               <p className="text-xs text-zinc-500 font-medium truncate">
                 @{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers

@@ -31,6 +31,15 @@ export default defineSchema({
     // is only ever used for recommendations/personalization.
     publicInterests: v.optional(v.array(v.string())),
     isNINVerified: v.boolean(),
+    isVerified: v.optional(v.boolean()),
+    verificationType: v.optional(
+      v.union(
+        v.literal("lalao_buz"),
+        v.literal("organization"),
+        v.literal("personal")
+      )
+    ),
+    verifiedAt: v.optional(v.number()),
     isPhoneVerified: v.boolean(),
     isEmailVerified: v.optional(v.boolean()),
     passwordHash: v.optional(v.string()),
@@ -695,4 +704,102 @@ export default defineSchema({
     recipientCount: v.number(),
     createdAt: v.number(),
   }).index("by_created", ["createdAt"]),
+
+  // Verification Pricing (controlled by Admin)
+  verificationPricing: defineTable({
+    type: v.union(
+      v.literal("lalao_buz"),
+      v.literal("organization"),
+      v.literal("personal")
+    ),
+    name: v.string(), // "Lalao Buz", "Organization", "Personal"
+    badgeColor: v.string(), // "blue", "green", "black"
+    badgeLabel: v.string(), // "Lalao Buz — Blue", etc.
+    description: v.string(),
+    priceNaira: v.number(),
+    isEnabled: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.id("users")),
+  }).index("by_type", ["type"]),
+
+  // Verification Applications & Paid Workflow
+  verificationApplications: defineTable({
+    userId: v.id("users"),
+    verificationType: v.union(
+      v.literal("lalao_buz"),
+      v.literal("organization"),
+      v.literal("personal")
+    ),
+    applicantName: v.string(),
+    username: v.string(),
+    contactEmail: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    // Entity / Identity Details
+    entityName: v.optional(v.string()), // business or organization name
+    registrationNumber: v.optional(v.string()), // CAC / RC or ID number
+    websiteUrl: v.optional(v.string()),
+    socialHandle: v.optional(v.string()),
+    documentUrls: v.optional(v.array(v.string())),
+    documentStorageIds: v.optional(v.array(v.string())),
+    additionalInfo: v.optional(v.string()),
+    
+    // Financial & Payment
+    priceAmountNaira: v.number(),
+    paymentReference: v.string(),
+    paymentProofUrl: v.optional(v.string()),
+    paymentProofStorageId: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+
+    // Status lifecycle
+    status: v.union(
+      v.literal("Payment Pending"),
+      v.literal("Payment Submitted"),
+      v.literal("Payment Confirmed"),
+      v.literal("Under Review"),
+      v.literal("Approved"),
+      v.literal("Rejected"),
+      v.literal("Payment Failed"),
+      v.literal("Cancelled")
+    ),
+
+    // Timestamps
+    paymentSubmittedAt: v.optional(v.number()),
+    paymentConfirmedAt: v.optional(v.number()),
+    reviewedAt: v.optional(v.number()),
+    approvedAt: v.optional(v.number()),
+    rejectedAt: v.optional(v.number()),
+    cancelledAt: v.optional(v.number()),
+
+    // Admin review fields
+    reviewedByAdminId: v.optional(v.id("users")),
+    reviewerAdminName: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+    adminNotes: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_type", ["userId", "verificationType"])
+    .index("by_status", ["status"])
+    .index("by_type", ["verificationType"])
+    .index("by_payment_ref", ["paymentReference"])
+    .index("by_created", ["createdAt"]),
+
+  // Admin Audit Log specifically for Verification actions
+  verificationAuditLogs: defineTable({
+    adminId: v.id("users"),
+    adminName: v.string(),
+    applicationId: v.optional(v.id("verificationApplications")),
+    applicantId: v.optional(v.id("users")),
+    applicantName: v.optional(v.string()),
+    action: v.string(), // "CONFIRM_PAYMENT" | "REJECT_PAYMENT" | "START_REVIEW" | "APPROVE_VERIFICATION" | "REJECT_VERIFICATION" | "UPDATE_PRICING"
+    previousStatus: v.optional(v.string()),
+    newStatus: v.string(),
+    details: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_application", ["applicationId"])
+    .index("by_admin", ["adminId"])
+    .index("by_created", ["createdAt"]),
 });

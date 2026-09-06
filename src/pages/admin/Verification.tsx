@@ -1,426 +1,1174 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import {
   BadgeCheck,
-  RefreshCw,
-  Eye,
-  Search,
-  Banknote,
-  Landmark,
-  Wallet,
-  TrendingUp,
-  ShieldAlert,
-  AlertTriangle,
-  X,
   CheckCircle2,
+  XCircle,
   Clock,
+  Search,
+  Eye,
+  RefreshCw,
   Loader2,
-  Fingerprint,
+  DollarSign,
+  Shield,
+  FileText,
+  AlertTriangle,
+  History,
+  Sliders,
+  Building2,
+  Users,
+  User as UserIcon,
+  ExternalLink,
+  Save,
+  Check,
 } from 'lucide-react';
-import { AdminDataTable, Column } from '../../components/admin/AdminDataTable';
-import { AdminModal } from '../../components/admin/AdminModal';
 import { cn } from '../../lib/utils';
-import {
-  AdminVerificationTx,
-  AdminVerificationReport,
-  getAdminVerifications,
-  getAdminVerificationReport,
-  formatNaira,
-  formatDate,
-  getPaymentStatusLabel,
-  getVerificationStatusLabel,
-} from '../../lib/adminVerification';
+import Avatar from '../../components/Avatar';
+import VerificationBadge from '../../components/VerificationBadge';
+import { AdminModal } from '../../components/admin/AdminModal';
 
-type FilterKey =
+type AdminTab = 'applications' | 'pricing' | 'audit_log';
+type StatusFilter =
   | 'ALL'
-  | 'PAYMENT_PENDING'
-  | 'PAYMENT_SUCCESS'
-  | 'VERIFICATION_PENDING'
-  | 'VERIFIED'
-  | 'FAILED'
-  | 'VERIFICATION_FAILED'
-  | 'PROVIDER_ERROR';
+  | 'Payment Pending'
+  | 'Payment Submitted'
+  | 'Payment Confirmed'
+  | 'Under Review'
+  | 'Approved'
+  | 'Rejected'
+  | 'Payment Failed';
 
-const FILTERS: { id: FilterKey; label: string }[] = [
-  { id: 'ALL', label: 'All' },
-  { id: 'PAYMENT_PENDING', label: 'Payment Pending' },
-  { id: 'PAYMENT_SUCCESS', label: 'Paid' },
-  { id: 'VERIFICATION_PENDING', label: 'Verification Pending' },
-  { id: 'VERIFIED', label: 'Verified' },
-  { id: 'VERIFICATION_FAILED', label: 'Verification Failed' },
-  { id: 'PROVIDER_ERROR', label: 'Provider Error' },
-];
+export default function AdminVerification() {
+  const [activeTab, setActiveTab] = useState<AdminTab>('applications');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
-function filterMatches(tx: AdminVerificationTx, filter: FilterKey): boolean {
-  switch (filter) {
-    case 'ALL': return true;
-    case 'PAYMENT_PENDING': return tx.paymentStatus === 'PAYMENT_PENDING';
-    case 'PAYMENT_SUCCESS': return tx.paymentStatus === 'PAYMENT_SUCCESS';
-    case 'VERIFICATION_PENDING':
-      return tx.paymentStatus === 'PAYMENT_SUCCESS' && tx.verificationStatus === 'VERIFICATION_PENDING';
-    case 'VERIFIED': return tx.verificationStatus === 'VERIFIED';
-    case 'VERIFICATION_FAILED': return tx.verificationStatus === 'VERIFICATION_FAILED';
-    case 'PROVIDER_ERROR': return tx.verificationStatus === 'PROVIDER_ERROR';
-    default: return true;
-  }
-}
+  // Queries
+  const applications = useQuery(api.verificationWorkflow.adminListApplications, {
+    status: statusFilter === 'ALL' ? undefined : statusFilter,
+    type: typeFilter === 'ALL' ? undefined : typeFilter,
+    search: searchQuery.trim() || undefined,
+  });
 
-function statusPill(paymentStatus: string, verificationStatus: string) {
-  // Primary status shown to admins: prefer verification outcome once paid.
-  if (verificationStatus === 'VERIFIED') {
-    return { label: 'Verified', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-  }
-  if (verificationStatus === 'VERIFICATION_FAILED') {
-    return { label: 'Verification Failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
-  }
-  if (verificationStatus === 'PROVIDER_ERROR') {
-    return { label: 'Provider Error', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
-  }
-  if (paymentStatus === 'PAYMENT_SUCCESS') {
-    return { label: 'Paid · Verifying', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
-  }
-  if (paymentStatus === 'PAYMENT_FAILED') {
-    return { label: 'Payment Failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
-  }
-  return { label: 'Payment Initialised', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' };
-}
+  const pricingList = useQuery(api.verificationWorkflow.getPricing);
+  const auditLogs = useQuery(api.verificationWorkflow.adminListAuditLogs, { limit: 100 });
 
-export default function AdminVerificationPage() {
-  const [verifications, setVerifications] = useState<AdminVerificationTx[]>([]);
-  const [report, setReport] = useState<AdminVerificationReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filter, setFilter] = useState<FilterKey>('ALL');
-  const [selected, setSelected] = useState<AdminVerificationTx | null>(null);
+  // Mutations
+  const updatePricingMut = useMutation(api.verificationWorkflow.updatePricing);
+  const confirmPaymentMut = useMutation(api.verificationWorkflow.adminConfirmPayment);
+  const rejectPaymentMut = useMutation(api.verificationWorkflow.adminRejectPayment);
+  const startReviewMut = useMutation(api.verificationWorkflow.adminStartReview);
+  const approveVerificationMut = useMutation(api.verificationWorkflow.adminApproveVerification);
+  const rejectVerificationMut = useMutation(api.verificationWorkflow.adminRejectVerification);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [listRes, reportRes] = await Promise.all([
-        getAdminVerifications(),
-        getAdminVerificationReport(),
-      ]);
-      setVerifications(listRes.verifications || []);
-      setReport(reportRes.report);
-    } catch (err: any) {
-      setError(err.message || 'Could not load verification records.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Modals state
+  const [selectedApp, setSelectedApp] = useState<any | null>(null);
+  const [confirmPaymentModal, setConfirmPaymentModal] = useState<any | null>(null);
+  const [approveModal, setApproveModal] = useState<any | null>(null);
+  const [rejectPaymentModal, setRejectPaymentModal] = useState<any | null>(null);
+  const [rejectVerificationModal, setRejectVerificationModal] = useState<any | null>(null);
 
-  useEffect(() => { load(); }, [load]);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const filteredList = useMemo(
-    () => verifications.filter((v) => filterMatches(v, filter)),
-    [verifications, filter]
-  );
+  // Pricing edit local state
+  const [pricingEdits, setPricingEdits] = useState<
+    Record<string, { priceNaira: number; isEnabled: boolean }>
+  >({});
+  const [pricingSaving, setPricingSaving] = useState<Record<string, boolean>>({});
+  const [pricingSavedToast, setPricingSavedToast] = useState<string | null>(null);
 
+  // Quick stats
   const stats = useMemo(() => {
-    const paid = verifications.filter((v) => v.paymentStatus === 'PAYMENT_SUCCESS').length;
-    const verified = verifications.filter((v) => v.verificationStatus === 'VERIFIED').length;
-    const failed = verifications.filter(
-      (v) => v.verificationStatus === 'VERIFICATION_FAILED' || v.verificationStatus === 'PROVIDER_ERROR'
-    ).length;
-    const pendingPayment = verifications.filter((v) => v.paymentStatus === 'PAYMENT_PENDING').length;
-    return { paid, verified, failed, pendingPayment };
-  }, [verifications]);
+    if (!applications) return { total: 0, submitted: 0, underReview: 0, approved: 0 };
+    return {
+      total: applications.length,
+      submitted: applications.filter((a) => a.status === 'Payment Submitted').length,
+      underReview: applications.filter((a) => a.status === 'Under Review' || a.status === 'Payment Confirmed').length,
+      approved: applications.filter((a) => a.status === 'Approved').length,
+    };
+  }, [applications]);
 
-  const columns: Column<AdminVerificationTx>[] = [
-    {
-      key: 'transactionId',
-      header: 'Transaction',
-      render: (v) => (
-        <div className="min-w-0">
-          <span className="font-bold text-zinc-900 block truncate text-xs">{v.transactionId}</span>
-          <span className="text-[11px] text-zinc-400 font-medium">{v.type || 'NIN_VERIFICATION'}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'paymentReference',
-      header: 'Payment Ref',
-      render: (v) => (
-        <span className="font-mono text-xs font-bold text-zinc-700">{v.paymentReference}</span>
-      ),
-    },
-    {
-      key: 'amount',
-      header: 'Amount',
-      render: (v) => (
-        <span className="text-xs font-black text-zinc-900">{formatNaira(v.amount)}</span>
-      ),
-    },
-    {
-      key: 'paymentStatus',
-      header: 'Payment',
-      sortable: true,
-      render: (v) => (
-        <span className={cn(
-          "text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-block whitespace-nowrap",
-          v.paymentStatus === 'PAYMENT_SUCCESS' ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-          v.paymentStatus === 'PAYMENT_FAILED' ? "bg-rose-50 text-rose-700 border border-rose-200" :
-          "bg-zinc-100 text-zinc-600 border border-zinc-200"
-        )}>
-          {getPaymentStatusLabel(v.paymentStatus)}
-        </span>
-      ),
-    },
-    {
-      key: 'verificationStatus',
-      header: 'Verification',
-      sortable: true,
-      render: (v) => {
-        const pill = statusPill(v.paymentStatus, v.verificationStatus);
-        return (
-          <span className={cn(
-            "text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border inline-block whitespace-nowrap",
-            pill.cls
-          )}>
-            {pill.label}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'ninHashMasked',
-      header: 'NIN (masked)',
-      render: (v) => (
-        <span className="font-mono text-xs font-bold text-zinc-500">{v.ninHashMasked || '—'}</span>
-      ),
-    },
-    {
-      key: 'createdAt',
-      header: 'Created',
-      sortable: true,
-      render: (v) => (
-        <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">{formatDate(v.createdAt)}</span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      align: 'right',
-      render: (v) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); setSelected(v); }}
-          className="p-1.5 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
-          title="View details"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-      ),
-    },
-  ];
+  // Actions
+  const handleConfirmPayment = async () => {
+    if (!confirmPaymentModal) return;
+    setActionLoading(true);
+    try {
+      await confirmPaymentMut({ applicationId: confirmPaymentModal._id });
+      setConfirmPaymentModal(null);
+      if (selectedApp?._id === confirmPaymentModal._id) {
+        setSelectedApp(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to confirm payment.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectPayment = async () => {
+    if (!rejectPaymentModal || !rejectionReason.trim()) {
+      alert('Please provide a rejection reason.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await rejectPaymentMut({
+        applicationId: rejectPaymentModal._id,
+        reason: rejectionReason.trim(),
+      });
+      setRejectPaymentModal(null);
+      setRejectionReason('');
+      if (selectedApp?._id === rejectPaymentModal._id) setSelectedApp(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject payment.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStartReview = async (appId: any) => {
+    setActionLoading(true);
+    try {
+      await startReviewMut({ applicationId: appId });
+      if (selectedApp?._id === appId) {
+        setSelectedApp((prev: any) => (prev ? { ...prev, status: 'Under Review' } : null));
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to start review.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApproveVerification = async () => {
+    if (!approveModal) return;
+    setActionLoading(true);
+    try {
+      await approveVerificationMut({ applicationId: approveModal._id });
+      setApproveModal(null);
+      if (selectedApp?._id === approveModal._id) {
+        setSelectedApp(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to approve verification.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectVerification = async () => {
+    if (!rejectVerificationModal || !rejectionReason.trim()) {
+      alert('Please provide a rejection reason.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await rejectVerificationMut({
+        applicationId: rejectVerificationModal._id,
+        reason: rejectionReason.trim(),
+      });
+      setRejectVerificationModal(null);
+      setRejectionReason('');
+      if (selectedApp?._id === rejectVerificationModal._id) setSelectedApp(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject verification.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSavePrice = async (type: 'lalao_buz' | 'organization' | 'personal') => {
+    const current = pricingList?.find((p) => p.type === type);
+    const edits = pricingEdits[type];
+    const priceNaira = edits?.priceNaira ?? current?.priceNaira ?? 0;
+    const isEnabled = edits?.isEnabled ?? current?.isEnabled ?? true;
+
+    setPricingSaving((prev) => ({ ...prev, [type]: true }));
+    try {
+      await updatePricingMut({ type, priceNaira, isEnabled });
+      setPricingSavedToast(`Saved price for ${type.replace('_', ' ').toUpperCase()}`);
+      setTimeout(() => setPricingSavedToast(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Could not save pricing.');
+    } finally {
+      setPricingSaving((prev) => ({ ...prev, [type]: false }));
+    }
+  };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">Identity Verification</h2>
-          <p className="text-zinc-500 font-medium text-xs sm:text-sm mt-1">
-            Paid NIN verification transactions from the live backend.
+          <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight">
+            Verification Management
+          </h1>
+          <p className="text-xs sm:text-sm text-zinc-500 font-medium mt-1">
+            Review paid applications, confirm transactions, and control verification pricing.
           </p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-50"
-        >
-          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Refresh
-        </button>
-      </div>
 
-      {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs font-bold">
-          {error}
-        </div>
-      )}
-
-      {/* Report / Overview */}
-      {report && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-          <div className="p-4 rounded-2xl bg-zinc-900 text-white">
-            <div className="flex items-center gap-2 text-white/70">
-              <Banknote className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Gross Margin</span>
-            </div>
-            <p className="text-xl sm:text-2xl font-black mt-2">{formatNaira(report.grossMargin, true)}</p>
-            <p className="text-[10px] text-white/50 font-medium mt-1">Est. · {report.unit}</p>
-          </div>
-          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
-            <div className="flex items-center gap-2 text-emerald-700">
-              <Wallet className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Revenue</span>
-            </div>
-            <p className="text-xl sm:text-2xl font-black text-emerald-900 mt-2">{formatNaira(report.totalRevenue, true)}</p>
-            <p className="text-[10px] font-bold text-emerald-600 mt-1">{report.totalSuccessfulPayments} payments</p>
-          </div>
-          <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200">
-            <div className="flex items-center gap-2 text-zinc-700">
-              <Landmark className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Provider Cost</span>
-            </div>
-            <p className="text-xl sm:text-2xl font-black text-zinc-900 mt-2">{formatNaira(report.totalProviderCost, true)}</p>
-            <p className="text-[10px] font-bold text-zinc-500 mt-1">Ninja verification</p>
-          </div>
-          <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
-            <div className="flex items-center gap-2 text-indigo-700">
-              <BadgeCheck className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Verified</span>
-            </div>
-            <p className="text-xl sm:text-2xl font-black text-indigo-900 mt-2">{report.totalSuccessfulVerifications}</p>
-            <p className="text-[10px] font-bold text-indigo-600 mt-1">of {report.totalTransactions} txn</p>
-          </div>
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200">
-            <div className="flex items-center gap-2 text-rose-700">
-              <ShieldAlert className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Failed / Errors</span>
-            </div>
-            <p className="text-xl sm:text-2xl font-black text-rose-900 mt-2">{report.failedVerifications + report.providerErrors}</p>
-            <p className="text-[10px] font-bold text-rose-600 mt-1">{report.providerErrors} provider errors</p>
-          </div>
-        </div>
-      )}
-
-      {/* Quick status tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
-          <span className="text-[11px] font-bold text-amber-700">Payment Pending</span>
-          <span className="text-lg font-black text-amber-900">{stats.pendingPayment}</span>
-        </div>
-        <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
-          <span className="text-[11px] font-bold text-indigo-700">Paid</span>
-          <span className="text-lg font-black text-indigo-900">{stats.paid}</span>
-        </div>
-        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-          <span className="text-[11px] font-bold text-emerald-700">Verified</span>
-          <span className="text-lg font-black text-emerald-900">{stats.verified}</span>
-        </div>
-        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between">
-          <span className="text-[11px] font-bold text-rose-700">Failed</span>
-          <span className="text-lg font-black text-rose-900">{stats.failed}</span>
+        {/* Tab switcher */}
+        <div className="flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200">
+          <button
+            onClick={() => setActiveTab('applications')}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs font-bold transition-all',
+              activeTab === 'applications'
+                ? 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-600 hover:text-zinc-900'
+            )}
+          >
+            Applications ({stats.submitted + stats.underReview})
+          </button>
+          <button
+            onClick={() => setActiveTab('pricing')}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5',
+              activeTab === 'pricing'
+                ? 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-600 hover:text-zinc-900'
+            )}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            Verification Pricing
+          </button>
+          <button
+            onClick={() => setActiveTab('audit_log')}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5',
+              activeTab === 'audit_log'
+                ? 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-600 hover:text-zinc-900'
+            )}
+          >
+            <History className="w-3.5 h-3.5" />
+            Audit Log
+          </button>
         </div>
       </div>
 
-      {/* Data table */}
-      {loading && verifications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-zinc-300" />
-          <p className="text-xs font-bold">Loading verification records...</p>
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* TAB 1: APPLICATIONS LIST */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'applications' && (
+        <div className="space-y-6">
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-white border border-zinc-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Total Applications</span>
+              <p className="text-2xl font-black text-zinc-900 mt-1">{stats.total}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Payment Submitted</span>
+              <p className="text-2xl font-black text-blue-900 mt-1">{stats.submitted}</p>
+              <span className="text-[10px] font-bold text-blue-600 mt-0.5 block">Needs Payment Confirmation</span>
+            </div>
+            <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Under Review</span>
+              <p className="text-2xl font-black text-purple-900 mt-1">{stats.underReview}</p>
+              <span className="text-[10px] font-bold text-purple-600 mt-0.5 block">Awaiting Verification Decision</span>
+            </div>
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Approved Badges</span>
+              <p className="text-2xl font-black text-emerald-900 mt-1">{stats.approved}</p>
+              <span className="text-[10px] font-bold text-emerald-600 mt-0.5 block">Active across Lalao</span>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-zinc-200 flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search applicant, username, ref..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-zinc-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-zinc-900"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 bg-white"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="Payment Submitted">Payment Submitted</option>
+                <option value="Payment Confirmed">Payment Confirmed</option>
+                <option value="Under Review">Under Review</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Payment Pending">Payment Pending</option>
+                <option value="Payment Failed">Payment Failed</option>
+              </select>
+
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 bg-white"
+              >
+                <option value="ALL">All Types</option>
+                <option value="lalao_buz">Lalao Buz (Blue)</option>
+                <option value="organization">Organization (Green)</option>
+                <option value="personal">Personal (Black)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Applications Table */}
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden">
+            {!applications ? (
+              <div className="py-20 text-center text-zinc-400">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-zinc-300" />
+                <span className="text-xs font-bold">Loading applications...</span>
+              </div>
+            ) : applications.length === 0 ? (
+              <div className="py-20 text-center text-zinc-400">
+                <Shield className="w-10 h-10 mx-auto mb-2 text-zinc-300" />
+                <h4 className="font-bold text-zinc-700 text-sm">No verification applications found</h4>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Applications matching your filters will show up here.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="px-5 py-3.5">Applicant</th>
+                      <th className="px-5 py-3.5">Type</th>
+                      <th className="px-5 py-3.5">Price Paid</th>
+                      <th className="px-5 py-3.5">Payment Ref</th>
+                      <th className="px-5 py-3.5">Current Status</th>
+                      <th className="px-5 py-3.5">Date</th>
+                      <th className="px-5 py-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
+                    {applications.map((app) => {
+                      const isSubmitted = app.status === 'Payment Submitted';
+                      const isConfirmed = app.status === 'Payment Confirmed';
+                      const isReview = app.status === 'Under Review';
+                      const isApprovable = isReview || isConfirmed;
+
+                      return (
+                        <tr
+                          key={app._id}
+                          className="hover:bg-zinc-50/60 transition-colors cursor-pointer"
+                          onClick={() => setSelectedApp(app)}
+                        >
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar src={app.userAvatar} name={app.applicantName} size="sm" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-zinc-900 block truncate">
+                                  {app.applicantName}
+                                </span>
+                                <span className="text-[11px] text-zinc-400 block truncate">
+                                  @{app.username?.replace(/^@+/, '')}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-1.5">
+                              <VerificationBadge type={app.verificationType} isVerified={true} size="sm" />
+                              <span className="font-bold text-zinc-800 capitalize">
+                                {app.verificationType === 'lalao_buz'
+                                  ? 'Lalao Buz'
+                                  : app.verificationType === 'organization'
+                                  ? 'Organization'
+                                  : 'Personal'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 font-black text-zinc-900">
+                            ₦{app.priceAmountNaira?.toLocaleString()}
+                          </td>
+
+                          <td className="px-5 py-4 font-mono text-[11px] font-bold text-zinc-600">
+                            {app.paymentReference}
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <span
+                              className={cn(
+                                'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border whitespace-nowrap',
+                                app.status === 'Payment Pending' && 'bg-amber-50 text-amber-800 border-amber-200',
+                                app.status === 'Payment Submitted' && 'bg-blue-50 text-blue-800 border-blue-200',
+                                app.status === 'Payment Confirmed' && 'bg-indigo-50 text-indigo-800 border-indigo-200',
+                                app.status === 'Under Review' && 'bg-purple-50 text-purple-800 border-purple-200',
+                                app.status === 'Approved' && 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                                app.status === 'Rejected' && 'bg-rose-50 text-rose-800 border-rose-200',
+                                app.status === 'Payment Failed' && 'bg-rose-50 text-rose-700 border-rose-200'
+                              )}
+                            >
+                              {app.status}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4 text-zinc-500 whitespace-nowrap text-[11px]">
+                            {new Date(app.createdAt).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </td>
+
+                          <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Step 1: Confirm Payment */}
+                              {isSubmitted && (
+                                <>
+                                  <button
+                                    onClick={() => setConfirmPaymentModal(app)}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm"
+                                  >
+                                    Confirm Payment
+                                  </button>
+                                  <button
+                                    onClick={() => setRejectPaymentModal(app)}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] border border-rose-200"
+                                  >
+                                    Reject Payment
+                                  </button>
+                                </>
+                              )}
+
+                              {/* Intermediate: Start Review */}
+                              {isConfirmed && (
+                                <button
+                                  onClick={() => handleStartReview(app._id)}
+                                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-sm"
+                                >
+                                  Start Review
+                                </button>
+                              )}
+
+                              {/* Step 2: Approve Verification */}
+                              {isApprovable && (
+                                <>
+                                  <button
+                                    onClick={() => setApproveModal(app)}
+                                    className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[11px] shadow-sm"
+                                  >
+                                    Approve Verification
+                                  </button>
+                                  <button
+                                    onClick={() => setRejectVerificationModal(app)}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] border border-rose-200"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+
+                              <button
+                                onClick={() => setSelectedApp(app)}
+                                className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
+                                title="View Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
-      ) : (
-        <AdminDataTable
-          data={filteredList}
-          columns={columns}
-          keyExtractor={(v) => v.transactionId}
-          searchPlaceholder="Search transaction or payment reference..."
-          searchFields={['transactionId', 'paymentReference', 'paystackReference', 'ninHashMasked']}
-          exportFileName="verification-transactions"
-          onRowClick={(v) => setSelected(v)}
-          emptyTitle="No verification transactions"
-          emptySubtitle="Paid NIN verification records will appear here once customers go through the flow."
-          filters={[
-            {
-              id: 'status',
-              label: 'Status',
-              value: filter,
-              onChange: (v) => setFilter(v as FilterKey),
-              options: FILTERS.map((f) => ({ label: f.label, value: f.id })),
-            },
-          ]}
-        />
       )}
 
-      {/* Detail modal */}
-      <AdminModal
-        isOpen={Boolean(selected)}
-        onClose={() => setSelected(null)}
-        title="Verification Transaction"
-        subtitle={selected ? `ID: ${selected.transactionId}` : ''}
-        maxWidth="2xl"
-      >
-        {selected && (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-2xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <BadgeCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 block uppercase">Overall Status</span>
-                  {(() => { const p = statusPill(selected.paymentStatus, selected.verificationStatus); return (
-                    <span className={cn("text-[11px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border inline-block mt-1", p.cls)}>{p.label}</span>
-                  ); })()}
-                </div>
-              </div>
-              <span className="text-2xl font-black text-zinc-900">{formatNaira(selected.amount)}</span>
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* TAB 2: VERIFICATION PRICING */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'pricing' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-zinc-200 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-xl font-black text-zinc-900">Verification Pricing Settings</h2>
+              <p className="text-xs text-zinc-500 font-medium mt-1">
+                Configure prices and availability for each verification type. Changes are saved directly to the database and reflected immediately in the user app.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
-                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Payment Status</span>
-                <span className="font-bold text-zinc-900 block mt-1">{getPaymentStatusLabel(selected.paymentStatus)}</span>
-              </div>
-              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
-                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Verification Status</span>
-                <span className="font-bold text-zinc-900 block mt-1">{getVerificationStatusLabel(selected.verificationStatus)}</span>
-              </div>
-              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
-                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Payment Reference</span>
-                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.paymentReference}</span>
-              </div>
-              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
-                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Paystack Reference</span>
-                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.paystackReference || '—'}</span>
-              </div>
-              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
-                <span className="text-[10px] font-bold text-zinc-400 block uppercase">Ninja Reference</span>
-                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.ninjaReference || '—'}</span>
-              </div>
-              <div className="bg-zinc-50 rounded-2xl p-3.5 border border-zinc-200">
-                <span className="text-[10px] font-bold text-zinc-400 block uppercase">NIN (masked)</span>
-                <span className="font-mono text-xs font-bold text-zinc-800 block mt-1 break-all">{selected.ninHashMasked || '—'}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div className="flex items-center gap-2 text-xs text-zinc-600">
-                <Clock className="w-4 h-4 text-zinc-400" />
-                <div>
-                  <span className="block text-[10px] font-bold text-zinc-400 uppercase">Created</span>
-                  <span className="font-bold text-zinc-900">{formatDate(selected.createdAt)}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-zinc-600">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                <div>
-                  <span className="block text-[10px] font-bold text-zinc-400 uppercase">Paid</span>
-                  <span className="font-bold text-zinc-900">{formatDate(selected.paidAt)}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-zinc-600">
-                <BadgeCheck className="w-4 h-4 text-emerald-500" />
-                <div>
-                  <span className="block text-[10px] font-bold text-zinc-400 uppercase">Verified</span>
-                  <span className="font-bold text-zinc-900">{formatDate(selected.verifiedAt)}</span>
-                </div>
-              </div>
-            </div>
-
-            {selected.failureReason && (
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2 text-xs text-amber-800 font-medium">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span><b>Failure reason:</b> {selected.failureReason}</span>
+            {pricingSavedToast && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                {pricingSavedToast}
               </div>
             )}
 
-            <p className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
-              <X className="w-3.5 h-3.5" />
-              Raw NIN is never stored; only a masked hash {selected.ninHashMasked ? `(${selected.ninHashMasked})` : ''} is shown.
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Lalao Buz Card */}
+              {(() => {
+                const item = pricingList?.find((p) => p.type === 'lalao_buz');
+                const edits = pricingEdits['lalao_buz'];
+                const priceNaira = edits?.priceNaira ?? item?.priceNaira ?? 25000;
+                const isEnabled = edits?.isEnabled ?? item?.isEnabled ?? true;
+                const saving = pricingSaving['lalao_buz'];
+
+                return (
+                  <div className="p-6 rounded-3xl border-2 border-blue-200 bg-blue-50/10 space-y-4 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                          Blue Badge
+                        </span>
+                        <VerificationBadge type="lalao_buz" isVerified={true} size="lg" />
+                      </div>
+                      <h3 className="text-lg font-black text-zinc-900">Lalao Buz</h3>
+                      <p className="text-xs text-zinc-500 font-medium mt-1">
+                        For businesses, commercial entities, stores, and companies.
+                      </p>
+
+                      <div className="mt-6 space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-700 mb-1">
+                            Price (₦ Naira)
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-500 text-sm">₦</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={priceNaira}
+                              onChange={(e) =>
+                                setPricingEdits((prev) => ({
+                                  ...prev,
+                                  lalao_buz: {
+                                    priceNaira: Number(e.target.value),
+                                    isEnabled,
+                                  },
+                                }))
+                              }
+                              className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-black text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-xs font-bold text-zinc-700">Open For Applications</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={(e) =>
+                                setPricingEdits((prev) => ({
+                                  ...prev,
+                                  lalao_buz: {
+                                    priceNaira,
+                                    isEnabled: e.target.checked,
+                                  },
+                                }))
+                              }
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleSavePrice('lalao_buz')}
+                      disabled={saving}
+                      className="w-full mt-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      Save Lalao Buz Price
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Organization Card */}
+              {(() => {
+                const item = pricingList?.find((p) => p.type === 'organization');
+                const edits = pricingEdits['organization'];
+                const priceNaira = edits?.priceNaira ?? item?.priceNaira ?? 15000;
+                const isEnabled = edits?.isEnabled ?? item?.isEnabled ?? true;
+                const saving = pricingSaving['organization'];
+
+                return (
+                  <div className="p-6 rounded-3xl border-2 border-emerald-200 bg-emerald-50/10 space-y-4 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Green Badge
+                        </span>
+                        <VerificationBadge type="organization" isVerified={true} size="lg" />
+                      </div>
+                      <h3 className="text-lg font-black text-zinc-900">Organization</h3>
+                      <p className="text-xs text-zinc-500 font-medium mt-1">
+                        For organizations, community groups, clubs, associations, and NGOs.
+                      </p>
+
+                      <div className="mt-6 space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-700 mb-1">
+                            Price (₦ Naira)
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-500 text-sm">₦</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={priceNaira}
+                              onChange={(e) =>
+                                setPricingEdits((prev) => ({
+                                  ...prev,
+                                  organization: {
+                                    priceNaira: Number(e.target.value),
+                                    isEnabled,
+                                  },
+                                }))
+                              }
+                              className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-black text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-xs font-bold text-zinc-700">Open For Applications</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={(e) =>
+                                setPricingEdits((prev) => ({
+                                  ...prev,
+                                  organization: {
+                                    priceNaira,
+                                    isEnabled: e.target.checked,
+                                  },
+                                }))
+                              }
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleSavePrice('organization')}
+                      disabled={saving}
+                      className="w-full mt-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      Save Organization Price
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Personal Card */}
+              {(() => {
+                const item = pricingList?.find((p) => p.type === 'personal');
+                const edits = pricingEdits['personal'];
+                const priceNaira = edits?.priceNaira ?? item?.priceNaira ?? 5000;
+                const isEnabled = edits?.isEnabled ?? item?.isEnabled ?? true;
+                const saving = pricingSaving['personal'];
+
+                return (
+                  <div className="p-6 rounded-3xl border-2 border-zinc-300 bg-zinc-50 space-y-4 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-zinc-200 text-zinc-800 border border-zinc-300">
+                          Black Badge
+                        </span>
+                        <VerificationBadge type="personal" isVerified={true} size="lg" />
+                      </div>
+                      <h3 className="text-lg font-black text-zinc-900">Personal</h3>
+                      <p className="text-xs text-zinc-500 font-medium mt-1">
+                        For individuals, creators, journalists, influencers, and public figures.
+                      </p>
+
+                      <div className="mt-6 space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-700 mb-1">
+                            Price (₦ Naira)
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-500 text-sm">₦</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={priceNaira}
+                              onChange={(e) =>
+                                setPricingEdits((prev) => ({
+                                  ...prev,
+                                  personal: {
+                                    priceNaira: Number(e.target.value),
+                                    isEnabled,
+                                  },
+                                }))
+                              }
+                              className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-black text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-xs font-bold text-zinc-700">Open For Applications</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={(e) =>
+                                setPricingEdits((prev) => ({
+                                  ...prev,
+                                  personal: {
+                                    priceNaira,
+                                    isEnabled: e.target.checked,
+                                  },
+                                }))
+                              }
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-zinc-900"></div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleSavePrice('personal')}
+                      disabled={saving}
+                      className="w-full mt-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      Save Personal Price
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* TAB 3: ADMIN AUDIT LOG */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'audit_log' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden space-y-4 p-6">
+          <div>
+            <h2 className="text-lg font-black text-zinc-900">Verification Audit Trail</h2>
+            <p className="text-xs text-zinc-500 font-medium">
+              Permanent immutable log of all verification status transitions, pricing changes, and admin decisions.
             </p>
+          </div>
+
+          {!auditLogs ? (
+            <div className="py-12 text-center text-zinc-400">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-zinc-300" />
+              <span className="text-xs font-bold">Loading audit logs...</span>
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div className="py-12 text-center text-zinc-400">
+              <History className="w-8 h-8 mx-auto mb-2 text-zinc-300" />
+              <p className="text-xs font-bold text-zinc-600">No audit records found yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="px-4 py-3">Admin</th>
+                    <th className="px-4 py-3">Action</th>
+                    <th className="px-4 py-3">Applicant</th>
+                    <th className="px-4 py-3">Previous Status</th>
+                    <th className="px-4 py-3">New Status</th>
+                    <th className="px-4 py-3">Details</th>
+                    <th className="px-4 py-3">Date / Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
+                  {auditLogs.map((log) => (
+                    <tr key={log._id} className="hover:bg-zinc-50/60">
+                      <td className="px-4 py-3 font-bold text-zinc-900">{log.adminName}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-700">
+                          {log.action.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-zinc-800">{log.applicantName || '—'}</td>
+                      <td className="px-4 py-3 text-zinc-500">{log.previousStatus || '—'}</td>
+                      <td className="px-4 py-3 font-bold text-zinc-900">{log.newStatus}</td>
+                      <td className="px-4 py-3 text-zinc-500 max-w-xs truncate">{log.details || '—'}</td>
+                      <td className="px-4 py-3 text-zinc-400 whitespace-nowrap text-[11px]">
+                        {new Date(log.createdAt).toLocaleString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 1: CONFIRM PAYMENT (Exact required prompt) */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(confirmPaymentModal)}
+        onClose={() => setConfirmPaymentModal(null)}
+        title="Confirm Payment?"
+        subtitle="Verify that the payment has been credited to the corporate account before confirming."
+        maxWidth="md"
+      >
+        {confirmPaymentModal && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Payment Reference:</span>
+                <span className="font-mono font-bold text-zinc-900">{confirmPaymentModal.paymentReference}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Amount:</span>
+                <span className="font-black text-zinc-900 text-base">
+                  ₦{confirmPaymentModal.priceAmountNaira?.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Applicant:</span>
+                <span className="font-bold text-zinc-800">{confirmPaymentModal.applicantName}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-500 leading-relaxed font-medium">
+              Confirming payment moves the application to <b>Payment Confirmed</b> so that documents can be reviewed. It does <b>NOT</b> activate the verification badge.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setConfirmPaymentModal(null)}
+                disabled={actionLoading}
+                className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmPayment}
+                disabled={actionLoading}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Confirm Payment
+              </button>
+            </div>
+          </div>
+        )}
+      </AdminModal>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 2: APPROVE VERIFICATION (Exact required prompt) */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(approveModal)}
+        onClose={() => setApproveModal(null)}
+        title="Approve Verification?"
+        subtitle="This action will officially activate the verification badge."
+        maxWidth="md"
+      >
+        {approveModal && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Applicant:</span>
+                <span className="font-bold text-zinc-900">{approveModal.applicantName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Username:</span>
+                <span className="font-bold text-zinc-800">@{approveModal.username?.replace(/^@+/, '')}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500 font-bold">Type:</span>
+                <div className="flex items-center gap-1.5">
+                  <VerificationBadge type={approveModal.verificationType} isVerified={true} size="sm" />
+                  <span className="font-bold text-zinc-900 capitalize">
+                    {approveModal.verificationType === 'lalao_buz'
+                      ? 'Lalao Buz (Blue)'
+                      : approveModal.verificationType === 'organization'
+                      ? 'Organization (Green)'
+                      : 'Personal (Black)'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 leading-relaxed">
+              "Approving this application will activate the verification badge."
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setApproveModal(null)}
+                disabled={actionLoading}
+                className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApproveVerification}
+                disabled={actionLoading}
+                className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BadgeCheck className="w-3.5 h-3.5 text-emerald-400" />}
+                Approve Verification
+              </button>
+            </div>
+          </div>
+        )}
+      </AdminModal>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 3: REJECT PAYMENT / REJECT VERIFICATION */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(rejectPaymentModal || rejectVerificationModal)}
+        onClose={() => {
+          setRejectPaymentModal(null);
+          setRejectVerificationModal(null);
+          setRejectionReason('');
+        }}
+        title={rejectPaymentModal ? 'Reject Payment' : 'Reject Verification'}
+        subtitle="Explain why this application or payment cannot be approved."
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-zinc-700 mb-1">
+              Rejection Reason *
+            </label>
+            <textarea
+              rows={3}
+              required
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g. Payment reference not found in bank statement / Document unreadable..."
+              className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => {
+                setRejectPaymentModal(null);
+                setRejectVerificationModal(null);
+                setRejectionReason('');
+              }}
+              className="px-4 py-2.5 rounded-xl bg-zinc-100 text-zinc-700 font-bold text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={rejectPaymentModal ? handleRejectPayment : handleRejectVerification}
+              disabled={actionLoading || !rejectionReason.trim()}
+              className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm disabled:opacity-50"
+            >
+              {actionLoading ? 'Processing…' : 'Submit Rejection'}
+            </button>
+          </div>
+        </div>
+      </AdminModal>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 4: FULL APPLICATION DETAILS */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(selectedApp)}
+        onClose={() => setSelectedApp(null)}
+        title="Application Details"
+        subtitle={selectedApp ? `Ref: ${selectedApp.paymentReference}` : ''}
+        maxWidth="2xl"
+      >
+        {selectedApp && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-200">
+              <div className="flex items-center gap-3">
+                <Avatar src={selectedApp.userAvatar} name={selectedApp.applicantName} size="lg" />
+                <div>
+                  <h3 className="text-base font-black text-zinc-900">{selectedApp.applicantName}</h3>
+                  <span className="text-xs text-zinc-500 font-medium">@{selectedApp.username}</span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-xl font-black text-zinc-900">
+                  ₦{selectedApp.priceAmountNaira?.toLocaleString()}
+                </span>
+                <span className="text-[11px] text-zinc-500 block">
+                  {selectedApp.status}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 font-bold uppercase block text-[10px]">Verification Type</span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <VerificationBadge type={selectedApp.verificationType} isVerified={true} size="sm" />
+                  <span className="font-bold text-zinc-900 capitalize">{selectedApp.verificationType}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 font-bold uppercase block text-[10px]">Payment Reference</span>
+                <span className="font-mono font-bold text-zinc-900 block mt-1">{selectedApp.paymentReference}</span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 font-bold uppercase block text-[10px]">Contact Email</span>
+                <span className="font-bold text-zinc-900 block mt-1">{selectedApp.contactEmail || '—'}</span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                <span className="text-zinc-400 font-bold uppercase block text-[10px]">Contact Phone</span>
+                <span className="font-bold text-zinc-900 block mt-1">{selectedApp.contactPhone || '—'}</span>
+              </div>
+
+              {selectedApp.entityName && (
+                <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                  <span className="text-zinc-400 font-bold uppercase block text-[10px]">Entity / Org Name</span>
+                  <span className="font-bold text-zinc-900 block mt-1">{selectedApp.entityName}</span>
+                </div>
+              )}
+
+              {selectedApp.registrationNumber && (
+                <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100">
+                  <span className="text-zinc-400 font-bold uppercase block text-[10px]">Registration / ID Number</span>
+                  <span className="font-mono font-bold text-zinc-900 block mt-1">{selectedApp.registrationNumber}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Document Attachments */}
+            {selectedApp.resolvedDocUrls && selectedApp.resolvedDocUrls.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-bold text-xs text-zinc-700 uppercase tracking-wider">
+                  Submitted Verification Documents
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedApp.resolvedDocUrls.map((url: string, i: number) => (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 rounded-xl border border-zinc-200 hover:border-zinc-300 flex items-center justify-between group transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span className="font-bold text-xs text-zinc-800 truncate">Document {i + 1}</span>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-700 shrink-0" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Payment Proof Attachment */}
+            {selectedApp.paymentProofUrl && (
+              <div className="space-y-2">
+                <h4 className="font-bold text-xs text-zinc-700 uppercase tracking-wider">
+                  Payment Receipt / Transfer Proof
+                </h4>
+                <a
+                  href={selectedApp.paymentProofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3 rounded-xl border border-zinc-200 hover:border-zinc-300 flex items-center justify-between group transition-colors bg-zinc-50"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="font-bold text-xs text-zinc-800">View Attached Payment Receipt</span>
+                  </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-700" />
+                </a>
+              </div>
+            )}
+
+            {selectedApp.additionalInfo && (
+              <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100 text-xs">
+                <span className="text-zinc-400 font-bold uppercase block text-[10px] mb-1">Additional Information</span>
+                <p className="text-zinc-700 leading-relaxed font-medium">{selectedApp.additionalInfo}</p>
+              </div>
+            )}
+
+            {/* Admin Actions Bar inside Modal */}
+            <div className="pt-4 border-t border-zinc-100 flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs text-zinc-500 font-medium">
+                Status: <b>{selectedApp.status}</b>
+              </span>
+
+              <div className="flex gap-2">
+                {selectedApp.status === 'Payment Submitted' && (
+                  <>
+                    <button
+                      onClick={() => setConfirmPaymentModal(selectedApp)}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm"
+                    >
+                      Confirm Payment
+                    </button>
+                    <button
+                      onClick={() => setRejectPaymentModal(selectedApp)}
+                      className="px-4 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200"
+                    >
+                      Reject Payment
+                    </button>
+                  </>
+                )}
+
+                {selectedApp.status === 'Payment Confirmed' && (
+                  <button
+                    onClick={() => handleStartReview(selectedApp._id)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm"
+                  >
+                    Start Review
+                  </button>
+                )}
+
+                {(selectedApp.status === 'Under Review' || selectedApp.status === 'Payment Confirmed') && (
+                  <>
+                    <button
+                      onClick={() => setApproveModal(selectedApp)}
+                      className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs shadow-sm"
+                    >
+                      Approve Verification
+                    </button>
+                    <button
+                      onClick={() => setRejectVerificationModal(selectedApp)}
+                      className="px-4 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200"
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </AdminModal>

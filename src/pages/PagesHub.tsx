@@ -6,6 +6,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import Avatar from '../components/Avatar';
+import VerificationBadge from '../components/VerificationBadge';
 import CreatePageModal from '../components/CreatePageModal';
 import CreateRallyModal from '../components/CreateRallyModal';
 import EditPageModal, { EditPageData } from '../components/EditPageModal';
@@ -202,7 +203,7 @@ export default function PagesHub() {
                               </Link>
 
                               {page.isVerified && (
-                                <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <VerificationBadge type="lalao_buz" isVerified={true} size="md" />
                               )}
 
                               {/* Role Badge */}
@@ -411,7 +412,7 @@ export default function PagesHub() {
                           {page.name}
                         </span>
                         {page.isVerified && (
-                          <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <VerificationBadge type="lalao_buz" isVerified={true} size="md" />
                         )}
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600">
                           {page.category}

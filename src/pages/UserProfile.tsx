@@ -7,6 +7,7 @@ import { api } from '../../convex/_generated/api';
 import Avatar from '../components/Avatar';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import OrgSocialLinks from '../components/OrgSocialLinks';
+import VerificationBadge from '../components/VerificationBadge';
 import {
   BadgeCheck,
   MapPin,
@@ -413,8 +414,12 @@ export default function UserProfile() {
             <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
               {profile?.name || target?.name || 'Loading…'}
             </h1>
-            {(profile?.badge?.isNINVerified ?? target?.isNINVerified) && (
-              <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+            {Boolean(profile?.isVerified || profile?.badge?.isVerified || profile?.badge?.isNINVerified || target?.isVerified || target?.isNINVerified) && (
+              <VerificationBadge
+                type={profile?.verificationType || profile?.badge?.verificationType || (target as any)?.verificationType}
+                isVerified={true}
+                size="lg"
+              />
             )}
             {(isOrgBiz) && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">

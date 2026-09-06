@@ -23,6 +23,7 @@ import { Rally } from '../types';
 import { rallyAccess } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import Avatar from './Avatar';
+import VerificationBadge from './VerificationBadge';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -480,7 +481,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                   {post.pageAuthor.name}
                 </span>
                 {post.pageAuthor.isVerified && (
-                  <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <VerificationBadge type="lalao_buz" isVerified={true} size="md" />
                 )}
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200 shrink-0">
                   {post.pageAuthor.category || 'Page'}
@@ -527,8 +528,12 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                 <span className="font-bold text-[15px] text-zinc-900 truncate">
                   {post.creator?.organizationName || post.creator?.name || 'User'}
                 </span>
-                {post.creator?.isNINVerified && (
-                  <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                {Boolean(post.creator?.isVerified || post.creator?.isNINVerified) && (
+                  <VerificationBadge
+                    type={post.creator?.verificationType}
+                    isVerified={true}
+                    size="md"
+                  />
                 )}
                 {(post.creator?.accountType === 'organization' ||
                   post.creator?.accountType === 'business') && (

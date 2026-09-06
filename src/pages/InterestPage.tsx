@@ -7,6 +7,7 @@ import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
 import RallyCardSkeleton from '../components/RallyCardSkeleton';
 import Avatar from '../components/Avatar';
+import VerificationBadge from '../components/VerificationBadge';
 import { Tag, BadgeCheck, Users } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -121,7 +122,9 @@ export default function InterestPage() {
                 <Link to={`/user/${p._id}`} className="flex-1 min-w-0 block">
                   <div className="flex items-center gap-1">
                     <span className="font-bold text-sm text-zinc-900 truncate">{p.name}</span>
-                    {p.isNINVerified && <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />}
+                    {Boolean((p as any).isVerified || p.isNINVerified) && (
+                      <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
+                    )}
                   </div>
                   <p className="text-xs text-zinc-500 font-medium truncate">@{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers</p>
                 </Link>

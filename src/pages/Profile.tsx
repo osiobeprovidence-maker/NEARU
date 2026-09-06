@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import PageShell from '../components/PageShell';
 import { useAuth } from '../contexts/AuthContext';
+import VerificationBadge from '../components/VerificationBadge';
 import {
   BadgeCheck,
   Edit3,
@@ -315,8 +316,8 @@ export default function Profile() {
                 <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
                   {user.name}
                 </h2>
-                {user.isNINVerified && (
-                  <BadgeCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                {Boolean(user.isVerified || user.isNINVerified) && (
+                  <VerificationBadge type={user.verificationType} isVerified={true} size="lg" />
                 )}
               </div>
               <p className="text-sm font-semibold text-zinc-400 mb-1.5">
@@ -605,8 +606,8 @@ export default function Profile() {
                                   <span className="font-bold text-zinc-900 text-sm truncate">
                                     {r.rater?.name || 'Anonymous Neighbor'}
                                   </span>
-                                  {r.rater?.isNINVerified && (
-                                    <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  {Boolean(r.rater?.isVerified || r.rater?.isNINVerified) && (
+                                    <VerificationBadge type={r.rater?.verificationType} isVerified={true} size="sm" />
                                   )}
                                 </div>
                                 <p className="text-xs text-zinc-400 font-medium truncate">
@@ -726,6 +727,8 @@ function UserRow({
     avatar?: string;
     bio?: string;
     isNINVerified?: boolean;
+    isVerified?: boolean;
+    verificationType?: any;
     isFollowing?: boolean;
   };
   currentViewerId?: string | null;
@@ -780,8 +783,8 @@ function UserRow({
             <h4 className="font-bold text-zinc-900 text-sm group-hover:text-indigo-600 transition-colors truncate">
               {targetUser.name}
             </h4>
-            {targetUser.isNINVerified && (
-              <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            {Boolean(targetUser.isVerified || targetUser.isNINVerified) && (
+              <VerificationBadge type={targetUser.verificationType} isVerified={true} size="md" />
             )}
           </div>
           <p className="text-xs text-zinc-400 font-medium truncate">
