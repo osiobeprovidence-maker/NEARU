@@ -492,7 +492,10 @@ export default function AppShell() {
 
       {/* Main Content Area */}
       <main className="flex-1 md:ml-64 pt-[53px] md:pt-0 min-h-screen">
-        <div className="max-w-3xl mx-auto w-full">
+        <div className={cn(
+          "mx-auto w-full",
+          routeLocation.pathname.startsWith('/explore') ? "max-w-6xl px-3 sm:px-6" : "max-w-3xl"
+        )}>
           <Outlet />
         </div>
       </main>

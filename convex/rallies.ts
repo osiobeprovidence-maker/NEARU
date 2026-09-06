@@ -1342,3 +1342,222 @@ export const submitRating = mutation({
     return await ctx.db.insert("ratings", { raterId: caller._id, ratedUserId: args.ratedUserId, rallyId: args.rallyId, score: args.score, review: args.review, createdAt: Date.now() });
   },
 });
+
+// ---------------------------------------------------------------------------
+// Explore Feed Query
+// ---------------------------------------------------------------------------
+
+export const getExploreFeed = query({
+  args: {
+    userId: v.optional(v.union(v.id("users"), v.string(), v.null())),
+    searchQuery: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const rawUserId = args.userId ? ctx.db.normalizeId("users", args.userId) : null;
+    let viewer: any = null;
+    let viewerFollowing = new Set<string>();
+    let viewerBlocked = new Set<string>();
+    let userInterests: string[] = [];
+
+    if (rawUserId) {
+      viewer = await ctx.db.get(rawUserId);
+      if (viewer) {
+        userInterests = viewer.interests ?? viewer.publicInterests ?? [];
+        viewerBlocked = new Set((viewer.blockedUsers ?? []).map((b: any) => b.id));
+      }
+      const follows = await ctx.db
+        .query("follows")
+        .withIndex("by_follower", (q) => q.eq("followerId", rawUserId))
+        .collect();
+      viewerFollowing = new Set(follows.map((f) => f.followingId.toString()));
+    }
+
+    const allItems = await ctx.db
+      .query("rallies")
+      .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
+      .order("desc")
+      .collect();
+
+    const creatorIds = [...new Set(allItems.map((r) => r.creatorId))];
+    const creators: Record<string, any> = {};
+    const avatarCache: Record<string, string | undefined> = {};
+    const mediaCache: Record<string, string | undefined> = {};
+
+    for (const cid of creatorIds) {
+      const u = await ctx.db.get(cid);
+      if (u) {
+        let avatar = u.avatar || "";
+        if (avatar && isStorageId(avatar)) {
+          avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+        }
+        creators[cid.toString()] = {
+          _id: u._id,
+          name: u.name,
+          username: u.username,
+          avatar,
+          isNINVerified: u.isNINVerified,
+          isBlueVerified: Boolean(u.isBlueVerified === true || u.blueCheckStatus === "verified"),
+          blueCheckStatus: u.blueCheckStatus || (u.isBlueVerified ? "verified" : "unverified"),
+          verificationStatus: u.blueCheckStatus || (u.isBlueVerified ? "verified" : "unverified"),
+          badges: u.badges,
+          location: u.location,
+          interests: u.interests ?? [],
+          accountType: u.accountType || "personal",
+          organizationName: u.organizationName,
+          isPro: u.isPro ?? false,
+        };
+      }
+    }
+
+    const resolvedItems = await Promise.all(
+      allItems.map(async (item) => {
+        if (viewerBlocked.has(item.creatorId.toString())) return null;
+
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, item);
+        const mediaUrls = await resolveMediaUrls(ctx, mediaCache, item);
+        const creator = creators[item.creatorId.toString()] || null;
+
+        const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", item._id)).collect();
+        const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", item._id)).collect()).length;
+        const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", item._id)).collect();
+
+        const isLiked = rawUserId ? likes.some((l) => l.userId?.toString() === rawUserId.toString()) : false;
+        const isRsvpd = rawUserId ? rsvps.some((r) => r.userId?.toString() === rawUserId.toString()) : false;
+
+        const isVideo = Boolean(
+          item.mediaType === "video" ||
+          (mediaUrl && (mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".webm") || mediaUrl.endsWith(".mov") || mediaUrl.includes("stream.mux.com"))) ||
+          item.muxPlaybackId
+        );
+
+        return {
+          ...item,
+          mediaUrl,
+          mediaUrls,
+          creator,
+          likesCount: likes.length,
+          commentsCount,
+          rsvpsCount: rsvps.length,
+          isLiked,
+          isRsvpd,
+          isVideo,
+        };
+      })
+    );
+
+    const validItems = resolvedItems.filter((i): i is NonNullable<typeof i> => i !== null);
+
+    const posts = validItems.filter((i) => i.type === "POST");
+    const rallies = validItems.filter((i) => i.type !== "POST");
+    const videos = validItems.filter((i) => i.isVideo);
+
+    const trendingPosts = [...posts].sort((a, b) => {
+      const scoreA = (a.likesCount ?? 0) + (a.commentsCount ?? 0) * 2;
+      const scoreB = (b.likesCount ?? 0) + (b.commentsCount ?? 0) * 2;
+      return scoreB - scoreA;
+    });
+
+    const trendingRallies = [...rallies].sort((a, b) => {
+      const scoreA = (a.likesCount ?? 0) + (a.rsvpsCount ?? 0) * 3 + (a.peopleInterested ?? 0);
+      const scoreB = (b.likesCount ?? 0) + (b.rsvpsCount ?? 0) * 3 + (b.peopleInterested ?? 0);
+      return scoreB - scoreA;
+    });
+
+    const trendingVideos = [...videos].sort((a, b) => {
+      const scoreA = (a.likesCount ?? 0) + (a.commentsCount ?? 0) * 2;
+      const scoreB = (b.likesCount ?? 0) + (b.commentsCount ?? 0) * 2;
+      return scoreB - scoreA;
+    });
+
+    const topicCounts = new Map<string, { label: string; count: number; type: 'hashtag' | 'interest' }>();
+    for (const item of validItems) {
+      if (item.interest) {
+        const key = item.interest.trim().toLowerCase();
+        const existing = topicCounts.get(key);
+        if (existing) existing.count += 1;
+        else topicCounts.set(key, { label: item.interest.trim(), count: 1, type: 'interest' });
+      }
+      if (item.hashtags) {
+        for (const h of item.hashtags) {
+          const clean = h.replace(/^#/, '').trim();
+          if (!clean) continue;
+          const key = clean.toLowerCase();
+          const existing = topicCounts.get(key);
+          if (existing) existing.count += 1;
+          else topicCounts.set(key, { label: `#${clean}`, count: 1, type: 'hashtag' });
+        }
+      }
+    }
+
+    const trendingTopics = Array.from(topicCounts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const allUsers = await ctx.db.query("users").collect();
+    const suggestedPeople: any[] = [];
+
+    for (const u of allUsers) {
+      if (rawUserId && u._id.toString() === rawUserId.toString()) continue;
+      if (viewerBlocked.has(u._id.toString())) continue;
+      const isFollowing = rawUserId ? viewerFollowing.has(u._id.toString()) : false;
+
+      let avatar = u.avatar || "";
+      if (avatar && isStorageId(avatar)) {
+        avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+      }
+
+      const userFollowers = await ctx.db
+        .query("follows")
+        .withIndex("by_following", (q) => q.eq("followingId", u._id))
+        .collect();
+
+      suggestedPeople.push({
+        _id: u._id,
+        name: u.name,
+        username: u.username,
+        avatar,
+        location: u.location,
+        bio: u.bio,
+        isNINVerified: u.isNINVerified,
+        isBlueVerified: Boolean(u.isBlueVerified === true || u.blueCheckStatus === "verified"),
+        blueCheckStatus: u.blueCheckStatus || (u.isBlueVerified ? "verified" : "unverified"),
+        verificationStatus: u.blueCheckStatus || (u.isBlueVerified ? "verified" : "unverified"),
+        interests: u.interests ?? [],
+        followersCount: userFollowers.length,
+        isFollowing,
+      });
+    }
+
+    suggestedPeople.sort((a, b) => {
+      if (a.isFollowing !== b.isFollowing) return a.isFollowing ? 1 : -1;
+      if (a.isBlueVerified !== b.isBlueVerified) return a.isBlueVerified ? -1 : 1;
+      return b.followersCount - a.followersCount;
+    });
+
+    const popularInterests = Array.from(topicCounts.values())
+      .filter((t) => t.type === 'interest')
+      .map((t) => ({ label: t.label, count: t.count }));
+
+    return {
+      posts,
+      rallies,
+      videos,
+      trendingPosts,
+      trendingRallies,
+      trendingVideos,
+      trendingTopics,
+      suggestedPeople: suggestedPeople.slice(0, 15),
+      popularInterests: popularInterests.length > 0 ? popularInterests : [
+        { label: "Gaming", count: 12 },
+        { label: "Football", count: 18 },
+        { label: "Music", count: 9 },
+        { label: "Technology", count: 14 },
+        { label: "Food", count: 7 },
+        { label: "Fitness", count: 6 },
+        { label: "Fashion", count: 8 },
+        { label: "Business", count: 11 },
+      ],
+      userInterests,
+    };
+  },
+});

@@ -1,385 +1,486 @@
 import React, { useState, useMemo } from 'react';
-import PageShell from '../components/PageShell';
-import { Search, Tag, Users, Hash } from 'lucide-react';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
-import { cn } from '../lib/utils';
-import { Rally } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import QueryErrorBoundary from '../components/QueryErrorBoundary';
+import RallyCardSkeleton from '../components/RallyCardSkeleton';
+import PostCard from '../components/PostCard';
 import Avatar from '../components/Avatar';
+import { ProfileVerificationCheck } from '../components/VerificationBadge';
+import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
-import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 
-export default function Explore() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('Nearby');
+// Reusable Explore Components
+import ExploreHeader, { SearchCategory } from '../components/explore/ExploreHeader';
+import ExploreTabs, { ExploreTabType } from '../components/explore/ExploreTabs';
+import DiscoverySection from '../components/explore/DiscoverySection';
+import SuggestedPeople from '../components/explore/SuggestedPeople';
+import RallyDiscoveryCard from '../components/explore/RallyDiscoveryCard';
+import VideoDiscoveryGrid from '../components/explore/VideoDiscoveryGrid';
+import TrendingSection from '../components/explore/TrendingSection';
+import InterestChannel from '../components/explore/InterestChannel';
+import ExploreRightSidebar from '../components/explore/ExploreRightSidebar';
+
+import {
+  MessageSquare,
+  Users,
+  HandMetal,
+  Play,
+  Flame,
+  Tag,
+  Sparkles,
+  Filter,
+  Search,
+} from 'lucide-react';
+
+function ExploreContent() {
+  const { convexUserId, user } = useAuth();
+
+  // Navigation & Search State
+  const [activeTab, setActiveTab] = useState<ExploreTabType>('explore');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('Newest');
+  const [searchCategory, setSearchCategory] = useState<SearchCategory>('all');
+  const [rallyFilter, setRallyFilter] = useState<'Nearby' | 'Popular' | 'Newest' | 'Paid' | 'Free'>('Nearby');
 
-  const { convexUserId, user, blockUser } = useAuth();
-  const followingIds = useQuery(
-    api.follows.listFollowingIds,
-    convexUserId ? { userId: convexUserId as any } : 'skip'
-  );
-  const convexRallies = useQuery(
-    api.rallies.listWithCreators,
-    convexUserId
-      ? {
-          userId: convexUserId as any,
-          userInterests: user?.interests?.length ? user.interests : undefined,
-          followingIds: (followingIds ?? []) as any,
-        }
-      : { userId: undefined }
-  );
-  const people = useQuery(
-    api.users.listPeople,
-    convexUserId
-      ? { viewerId: convexUserId as any, query: searchQuery.trim() ? searchQuery.trim() : undefined }
-      : 'skip'
-  );
-  const interests = useQuery(
-    api.rallies.listInterests,
-    convexUserId ? { userId: convexUserId as any } : 'skip'
+  // Main Explore Reactive Feed
+  const feed = useQuery(
+    api.rallies.getExploreFeed,
+    convexUserId ? { userId: convexUserId as any } : {}
   );
 
-  const followMut = useMutation(api.follows.follow);
-  const unfollowMut = useMutation(api.follows.unfollow);
+  // Compute personalized interest tabs from user profile or feed
+  const personalizedInterests = useMemo(() => {
+    const fromUser = (user?.interests?.length ? user.interests : user?.publicInterests) || [];
+    if (fromUser.length >= 2) return fromUser.slice(0, 2);
 
-  const categories = ['Nearby', 'Trending', 'Events', 'Help', 'Paid', 'Free', 'People', 'Interests'];
+    const fromFeed = (feed?.popularInterests || []).map((i: any) => i.label);
+    const combined = Array.from(new Set([...fromUser, ...fromFeed]));
+    return combined.slice(0, 2);
+  }, [user, feed]);
 
-  const showToast = (title: string, subtitle: string) =>
-    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title, subtitle } }));
+  // Loading state
+  const isLoading = feed === undefined;
 
-  const handleToggleFollow = async (personId: string, isFollowing: boolean) => {
-    if (!convexUserId) return;
-    try {
-      if (isFollowing) {
-        await unfollowMut({ followerId: convexUserId as any, followingId: personId as any });
-      } else {
-        await followMut({ followerId: convexUserId as any, followingId: personId as any });
-      }
-    } catch {
-      showToast('Error', 'Could not update follow status.');
-    }
-  };
-
-  const handleBlock = (p: any) => {
-    blockUser(p._id, p.name, p.username, p.avatar);
-    showToast('User blocked', `${p.name} has been blocked.`);
-  };
-
-  React.useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [activeCategory, sortBy]);
-
-  const allRallies: Rally[] = useMemo(() => {
-    if (!convexRallies) return [];
-    return convexRallies.map((r) => ({
-      id: r._id,
-      type: r.type,
-      title: r.title,
-      description: r.description,
-      distance: 0,
-      time: r.time,
-      peopleNeeded: r.peopleNeeded,
-      peopleInterested: r.peopleInterested,
-      isPaid: r.isPaid,
-      price: r.price,
-      pricing: r.pricing,
-      creator: r.creator ? {
-        id: r.creator._id,
-        name: r.creator.name,
-        username: r.creator.username,
-        avatar: r.creator.avatar,
-        isNINVerified: r.creator.isNINVerified,
-        isBlueVerified: r.creator.isBlueVerified,
-        isVerified: r.creator.isVerified,
-        verificationStatus: r.creator.verificationStatus,
-        verificationType: r.creator.verificationType,
-        isPhoneVerified: false,
-        badges: r.creator.badges,
-        accountType: r.creator.accountType || 'personal',
-        organizationName: r.creator.organizationName,
-        isPro: r.creator.isPro,
-      } : {
-        id: 'unknown',
-        name: 'Unknown',
-        username: '@unknown',
-        avatar: '',
-        isBlueVerified: false,
-        isVerified: false,
-        verificationStatus: 'unverified',
-        isNINVerified: false,
-        isPhoneVerified: false,
-      },
-      status: r.status,
-      createdAt: new Date(r.createdAt).toISOString(),
-      city: r.city,
-      locationLabel: r.locationLabel,
-      rallyLatitude: r.rallyLatitude,
-      rallyLongitude: r.rallyLongitude,
-      category: r.category as Rally['category'],
-      hashtags: r.hashtags,
-      eventDate: r.eventDate,
-      mediaUrl: r.mediaUrl,
-      mediaUrls: r.mediaUrls && r.mediaUrls.length > 0 ? r.mediaUrls : (r.mediaUrl ? [r.mediaUrl] : []),
-      mediaType: r.mediaType as Rally['mediaType'],
-      capacity: r.capacity,
-      authorType: r.authorType,
-      pageId: r.pageId,
-      created_by_user_id: r.created_by_user_id,
-      pageAuthor: r.pageAuthor,
-      likesCount: r.likesCount,
-      commentsCount: r.commentsCount,
-      rsvpsCount: r.rsvpsCount,
-      isLiked: r.isLiked,
-      isRsvpd: r.isRsvpd,
-    }));
-  }, [convexRallies]);
-
+  // Filtered RALLYS for dedicated RALLYS tab
   const filteredRallies = useMemo(() => {
-    let result = [...allRallies];
+    if (!feed?.rallies) return [];
+    let list = [...feed.rallies];
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().replace(/^#/, '');
-      result = result.filter(r =>
-        r.title.toLowerCase().includes(q) ||
-        r.description.toLowerCase().includes(q) ||
-        r.creator.name.toLowerCase().includes(q) ||
-        (r.hashtags && r.hashtags.some((t) => t.toLowerCase().includes(q)))
-      );
+    if (rallyFilter === 'Paid') {
+      list = list.filter((r) => r.isPaid || (r.rewardAmount && r.rewardAmount > 0));
+    } else if (rallyFilter === 'Free') {
+      list = list.filter((r) => !r.isPaid && (!r.rewardAmount || r.rewardAmount === 0));
+    } else if (rallyFilter === 'Popular') {
+      list = list.sort((a, b) => (b.rsvpsCount || 0) - (a.rsvpsCount || 0));
+    } else if (rallyFilter === 'Newest') {
+      list = list.sort((a, b) => b.createdAt - a.createdAt);
+    } else if (rallyFilter === 'Nearby') {
+      list = list.sort((a, b) => (a.distance || 0) - (b.distance || 0));
     }
 
-    if (activeCategory === 'Help') {
-      result = result.filter(r => r.type === 'HELP' || r.type === 'ASK');
-    } else if (activeCategory === 'Paid') {
-      result = result.filter(r => r.isPaid);
-    } else if (activeCategory === 'Free') {
-      result = result.filter(r => !r.isPaid);
-    } else if (activeCategory === 'Events') {
-      result = result.filter(r => r.type === 'EVENT');
-    } else if (activeCategory === 'Activities') {
-      result = result.filter(r => r.type === 'JOIN');
-    } else if (activeCategory === 'Trending') {
-      result = result.sort((a, b) => (b.likesCount ?? 0) - (a.likesCount ?? 0));
-    } else if (activeCategory === 'Nearby') {
-      result = result.sort((a, b) => a.distance - b.distance);
-    }
+    return list;
+  }, [feed?.rallies, rallyFilter]);
 
-    if (sortBy === 'Newest') {
-      result = result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } else if (sortBy === 'Most interested') {
-      result = result.sort((a, b) => b.peopleInterested - a.peopleInterested);
-    } else if (sortBy === 'Nearest') {
-      result = result.sort((a, b) => a.distance - b.distance);
-    }
+  // Multi-Category Search Results
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || !feed) return null;
+    const q = searchQuery.toLowerCase().trim().replace(/^#/, '');
 
-    return result;
-  }, [activeCategory, searchQuery, sortBy, allRallies]);
+    const matchingPeople = (feed.suggestedPeople || []).filter(
+      (p: any) =>
+        p.name?.toLowerCase().includes(q) ||
+        p.username?.toLowerCase().includes(q) ||
+        p.bio?.toLowerCase().includes(q) ||
+        p.location?.toLowerCase().includes(q) ||
+        (p.interests || []).some((i: string) => i.toLowerCase().includes(q))
+    );
+
+    const matchingRallies = (feed.rallies || []).filter(
+      (r: any) =>
+        r.title?.toLowerCase().includes(q) ||
+        r.description?.toLowerCase().includes(q) ||
+        r.locationLabel?.toLowerCase().includes(q) ||
+        r.creator?.name?.toLowerCase().includes(q) ||
+        (r.hashtags || []).some((h: string) => h.toLowerCase().includes(q))
+    );
+
+    const matchingPosts = (feed.posts || []).filter(
+      (p: any) =>
+        p.title?.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.creator?.name?.toLowerCase().includes(q) ||
+        (p.hashtags || []).some((h: string) => h.toLowerCase().includes(q))
+    );
+
+    const matchingVideos = (feed.videos || []).filter(
+      (v: any) =>
+        v.title?.toLowerCase().includes(q) ||
+        v.description?.toLowerCase().includes(q) ||
+        v.creator?.name?.toLowerCase().includes(q)
+    );
+
+    const matchingTopics = (feed.trendingTopics || []).filter((t: any) =>
+      t.label?.toLowerCase().includes(q)
+    );
+
+    return {
+      people: matchingPeople,
+      rallies: matchingRallies,
+      posts: matchingPosts,
+      videos: matchingVideos,
+      topics: matchingTopics,
+    };
+  }, [searchQuery, feed]);
+
+  // Topic click helper
+  const handleSelectTopic = (topic: string) => {
+    setSearchQuery(topic);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Select Interest helper
+  const handleSelectInterest = (interest: string) => {
+    setActiveTab(`interest:${interest.toLowerCase()}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
-    <PageShell title="Explore RALLY">
-      <div className="px-4 sm:px-6 md:px-0 pt-3.5 sm:pt-4 md:pt-0">
-        <div className="relative mb-3.5 sm:mb-4">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="w-5 h-5 text-zinc-400" />
-          </div>
-          <input 
-            type="text" 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search for something..." 
-            className="w-full pl-11 pr-4 py-3 bg-white border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-all font-medium text-zinc-900 placeholder:text-zinc-400 shadow-sm shadow-zinc-100 text-sm"
-          />
-        </div>
+    <div className="w-full pb-20 md:pb-12">
+      {/* 1. TOP SEARCH BAR */}
+      <ExploreHeader
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchCategory={searchCategory}
+        onCategoryChange={setSearchCategory}
+      />
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar overscroll-x-contain mb-5 sm:mb-6">
-          {categories.map((category) => (
-            <button 
-              key={category}
-              type="button"
-              onClick={() => setActiveCategory(category)}
-              className={cn(
-                "px-4 py-2 rounded-full text-sm font-semibold transition-all shrink-0 whitespace-nowrap touch-manipulation active:scale-95",
-                activeCategory === category
-                  ? "bg-zinc-900 text-white shadow-xs shadow-zinc-900/20 font-bold"
-                  : "bg-white border border-zinc-200/80 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-300"
+      {/* 2. HORIZONTAL NAVIGATION TABS (Shown when not searching) */}
+      {!searchQuery.trim() && (
+        <ExploreTabs
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          personalizedInterests={personalizedInterests}
+        />
+      )}
+
+      {/* 3. MAIN 3-COLUMN LAYOUT CONTAINER */}
+      <div className="mt-4 sm:mt-5 lg:flex lg:gap-8 items-start">
+        {/* CENTER DISCOVERY COLUMN */}
+        <div className="flex-1 min-w-0 max-w-3xl">
+          {/* SEARCH ACTIVE VIEW */}
+          {searchQuery.trim() && searchResults ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-sm font-bold text-zinc-900">
+                  Search results for &ldquo;{searchQuery}&rdquo;
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs font-bold text-indigo-600 hover:underline"
+                >
+                  Clear search
+                </button>
+              </div>
+
+              {/* People Results */}
+              {(searchCategory === 'all' || searchCategory === 'people') &&
+                searchResults.people.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 px-1">
+                      People
+                    </h4>
+                    <SuggestedPeople
+                      people={searchResults.people}
+                      currentUserId={convexUserId}
+                      layout="horizontal"
+                    />
+                  </div>
+                )}
+
+              {/* RALLYS Results */}
+              {(searchCategory === 'all' || searchCategory === 'rallies') &&
+                searchResults.rallies.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 px-1">
+                      RALLYS
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {searchResults.rallies.map((rally: any) => (
+                        <RallyDiscoveryCard
+                          key={rally._id}
+                          rally={rally}
+                          currentUserId={convexUserId}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Videos Results */}
+              {(searchCategory === 'all' || searchCategory === 'videos') &&
+                searchResults.videos.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 px-1">
+                      Videos
+                    </h4>
+                    <VideoDiscoveryGrid videos={searchResults.videos} layout="carousel" />
+                  </div>
+                )}
+
+              {/* Posts / Conversations Results */}
+              {(searchCategory === 'all' || searchCategory === 'posts') &&
+                searchResults.posts.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider px-1">
+                      Conversations
+                    </h4>
+                    {searchResults.posts.map((post: any) => (
+                      <PostCard key={post._id} post={post} />
+                    ))}
+                  </div>
+                )}
+
+              {/* Empty Search State */}
+              {searchResults.people.length === 0 &&
+                searchResults.rallies.length === 0 &&
+                searchResults.posts.length === 0 &&
+                searchResults.videos.length === 0 && (
+                  <div className="p-12 text-center bg-white rounded-3xl border border-zinc-200 text-zinc-500">
+                    <Search className="w-8 h-8 text-zinc-300 mx-auto mb-3" />
+                    <p className="font-bold text-zinc-900 text-base mb-1">
+                      No results found for &ldquo;{searchQuery}&rdquo;
+                    </p>
+                    <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                      Try searching with different keywords, locations, or topics.
+                    </p>
+                  </div>
+                )}
+            </div>
+          ) : isLoading ? (
+            /* SKELETON LOADING STATE */
+            <div className="space-y-4">
+              <div className="h-44 bg-zinc-100 rounded-3xl animate-pulse" />
+              <div className="h-64 bg-zinc-100 rounded-3xl animate-pulse" />
+              <div className="h-64 bg-zinc-100 rounded-3xl animate-pulse" />
+            </div>
+          ) : activeTab === 'explore' ? (
+            /* ========================================================================= */
+            /* TAB 1: CURATED DEFAULT EXPLORE                                            */
+            /* ========================================================================= */
+            <div className="space-y-4 sm:space-y-6">
+              {/* 1. WHAT'S HAPPENING (Conversations & Questions from non-followed people) */}
+              <DiscoverySection
+                title="What's Happening"
+                subtitle="Interesting conversations and questions from around your community"
+                icon={MessageSquare}
+                actionLabel={feed.posts.length > 2 ? 'See all' : undefined}
+                onAction={() => setActiveTab('trending')}
+              >
+                {feed.posts.length > 0 ? (
+                  <div className="space-y-3">
+                    {feed.posts.slice(0, 3).map((post: any) => (
+                      <PostCard key={post._id} post={post} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center bg-white rounded-2xl border border-zinc-200/80">
+                    <p className="text-sm font-semibold text-zinc-600">No conversations yet</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Start a conversation by posting a question or story!</p>
+                  </div>
+                )}
+              </DiscoverySection>
+
+              {/* 2. PEOPLE YOU MIGHT WANT TO KNOW */}
+              <DiscoverySection
+                title="People You Might Want to Know"
+                subtitle="Discover active creators and community members"
+                icon={Users}
+                badge="Connect"
+              >
+                <SuggestedPeople
+                  people={feed.suggestedPeople}
+                  currentUserId={convexUserId}
+                  layout="horizontal"
+                />
+              </DiscoverySection>
+
+              {/* 3. RALLYS TO DISCOVER */}
+              <DiscoverySection
+                title="RALLYS to Discover"
+                subtitle="Active requests, help, and community activities you can join"
+                icon={HandMetal}
+                actionLabel="View all RALLYS"
+                onAction={() => setActiveTab('rallies')}
+              >
+                {feed.rallies.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {feed.rallies.slice(0, 4).map((rally: any) => (
+                      <RallyDiscoveryCard
+                        key={rally._id}
+                        rally={rally}
+                        currentUserId={convexUserId}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center bg-white rounded-2xl border border-zinc-200/80">
+                    <p className="text-sm font-semibold text-zinc-600">No active RALLYS right now</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Create a RALLY to get help or bring people together!</p>
+                  </div>
+                )}
+              </DiscoverySection>
+
+              {/* 4. VIDEOS YOU MIGHT LIKE */}
+              <DiscoverySection
+                title="Videos You Might Like"
+                subtitle="Watch moments, highlights, and stories from creators"
+                icon={Play}
+                actionLabel="More videos"
+                onAction={() => setActiveTab('videos')}
+              >
+                <VideoDiscoveryGrid videos={feed.videos} layout="carousel" />
+              </DiscoverySection>
+
+              {/* 5. DISCOVER INTERESTS */}
+              <DiscoverySection
+                title="Discover Interests"
+                subtitle="Topics you can explore and connect around"
+                icon={Tag}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {feed.popularInterests.map((item: any) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => handleSelectInterest(item.label)}
+                      className="px-4 py-2 rounded-2xl bg-white hover:bg-indigo-50 border border-zinc-200/80 hover:border-indigo-200 text-zinc-800 hover:text-indigo-700 text-xs sm:text-sm font-bold transition-all active:scale-95 shadow-2xs flex items-center gap-2 group"
+                    >
+                      <span>{item.label}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-zinc-100 group-hover:bg-indigo-100 text-[10px] text-zinc-500 group-hover:text-indigo-600 font-semibold">
+                        {item.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </DiscoverySection>
+            </div>
+          ) : activeTab === 'trending' ? (
+            /* ========================================================================= */
+            /* TAB 2: TRENDING INSIDE LALAO                                              */
+            /* ========================================================================= */
+            <TrendingSection
+              trendingTopics={feed.trendingTopics}
+              trendingRallies={feed.trendingRallies}
+              trendingPosts={feed.trendingPosts}
+              trendingVideos={feed.trendingVideos}
+              currentUserId={convexUserId}
+              onSelectTopic={handleSelectTopic}
+            />
+          ) : activeTab === 'rallies' ? (
+            /* ========================================================================= */
+            /* TAB 3: DEDICATED RALLYS DISCOVERY                                         */
+            /* ========================================================================= */
+            <div className="space-y-4">
+              {/* Filters Header */}
+              <div className="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar pb-1">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {(['Nearby', 'Popular', 'Newest', 'Paid', 'Free'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setRallyFilter(filter)}
+                      className={cn(
+                        "px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 shrink-0 whitespace-nowrap",
+                        rallyFilter === filter
+                          ? "bg-zinc-900 text-white shadow-xs"
+                          : "bg-white border border-zinc-200/80 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                      )}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+
+                <span className="text-xs text-zinc-400 font-medium shrink-0">
+                  {filteredRallies.length} active
+                </span>
+              </div>
+
+              {filteredRallies.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {filteredRallies.map((rally: any) => (
+                    <RallyDiscoveryCard
+                      key={rally._id}
+                      rally={rally}
+                      currentUserId={convexUserId}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="p-12 text-center bg-white rounded-3xl border border-zinc-200 text-zinc-500">
+                  <HandMetal className="w-8 h-8 text-zinc-300 mx-auto mb-3" />
+                  <p className="font-bold text-zinc-900 text-base mb-1">
+                    No {rallyFilter} RALLYS found
+                  </p>
+                  <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                    Try switching filters or be the first to create one!
+                  </p>
+                </div>
               )}
-            >
-              {category}
-            </button>
-          ))}
+            </div>
+          ) : activeTab === 'videos' ? (
+            /* ========================================================================= */
+            /* TAB 4: DEDICATED VIDEOS DISCOVERY                                         */
+            /* ========================================================================= */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-sm font-bold text-zinc-900">
+                  Discover Videos
+                </h3>
+                <span className="text-xs text-zinc-400 font-medium">
+                  {feed.videos.length} videos
+                </span>
+              </div>
+              <VideoDiscoveryGrid videos={feed.videos} layout="grid" columns={3} />
+            </div>
+          ) : activeTab.startsWith('interest:') ? (
+            /* ========================================================================= */
+            /* TABS 5 & 6: PERSONALIZED INTEREST CHANNELS                                */
+            /* ========================================================================= */
+            <InterestChannel
+              interest={activeTab.replace(/^interest:/, '')}
+              posts={feed.posts}
+              rallies={feed.rallies}
+              videos={feed.videos}
+              creators={feed.suggestedPeople}
+              currentUserId={convexUserId}
+            />
+          ) : null}
         </div>
 
-        {activeCategory !== 'People' && activeCategory !== 'Interests' && (
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <h3 className="font-bold text-zinc-900 text-sm sm:text-base min-w-0 truncate">
-              {activeCategory} RALLYS {filteredRallies.length > 0 && <span className="text-zinc-400 font-normal text-xs ml-1">({filteredRallies.length})</span>}
-            </h3>
-            <select 
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent text-xs sm:text-sm font-semibold text-zinc-500 focus:outline-none cursor-pointer shrink-0 min-w-0"
-            >
-              <option value="Nearest">Nearest</option>
-              <option value="Newest">Newest</option>
-              <option value="Most interested">Most interested</option>
-              <option value="Ending soon">Ending soon</option>
-            </select>
+        {/* RIGHT DISCOVERY SIDEBAR (Desktop only) */}
+        {!isLoading && (
+          <div className="hidden lg:block">
+            <ExploreRightSidebar
+              suggestedPeople={feed.suggestedPeople}
+              trendingTopics={feed.trendingTopics}
+              popularInterests={feed.popularInterests}
+              currentUserId={convexUserId}
+              onSelectTopic={handleSelectTopic}
+              onSelectInterest={handleSelectInterest}
+            />
           </div>
         )}
       </div>
-
-      {activeCategory === 'People' ? (
-        <PeoplePanel
-          people={people}
-          convexUserId={convexUserId}
-          handleToggleFollow={handleToggleFollow}
-          handleBlock={handleBlock}
-        />
-      ) : activeCategory === 'Interests' ? (
-        <InterestsPanel interests={interests} />
-      ) : (
-        <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-          {isLoading || convexRallies === undefined ? (
-            <>
-              <RallyCardSkeleton />
-              <RallyCardSkeleton />
-              <RallyCardSkeleton />
-            </>
-          ) : filteredRallies.length > 0 ? (
-            filteredRallies.map(rally => (
-              <RallyCard key={rally.id} rally={rally} />
-            ))
-          ) : (
-            <div className="p-12 text-center text-zinc-500">
-              <p className="font-bold text-zinc-900 text-base mb-1">No RALLYS found</p>
-              <p className="text-xs text-zinc-500">Try selecting another category or adjusting your search query.</p>
-            </div>
-          )}
-        </div>
-      )}
-    </PageShell>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// People discovery panel
-// ---------------------------------------------------------------------------
-function PeoplePanel({ people, convexUserId, handleToggleFollow, handleBlock }: {
-  people: any;
-  convexUserId: string | null;
-  handleToggleFollow: (id: string, isFollowing: boolean) => void;
-  handleBlock: (p: any) => void;
-}) {
-  if (people === undefined) {
-    return (
-      <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-        {[0, 1, 2].map((i) => <RallyCardSkeleton key={i} />)}
-      </div>
-    );
-  }
-  return (
-    <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-      {people.length > 0 ? (
-        people.map((p: any) => (
-          <div key={p._id} className="flex items-center gap-3 p-4 hover:bg-zinc-50/60 transition-colors">
-            <Link to={`/user/${p._id}`} className="shrink-0">
-              <Avatar src={p.avatar} name={p.name} size="lg" className="border-2 border-white shadow-sm" />
-            </Link>
-            <Link to={`/user/${p._id}`} className="flex-1 min-w-0 block">
-              <div className="flex items-center gap-1">
-                <span className="font-bold text-sm text-zinc-900 truncate">{p.name}</span>
-                <ProfileVerificationCheck user={p} size="sm" />
-              </div>
-              <p className="text-xs text-zinc-500 font-medium truncate">
-                @{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers
-              </p>
-              {p.bio && <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">{p.bio}</p>}
-            </Link>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {convexUserId && p._id !== convexUserId && (
-                <>
-                  <button
-                    onClick={() => handleToggleFollow(p._id, p.isFollowing)}
-                    className={cn(
-                      'px-3.5 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95',
-                      p.isFollowing
-                        ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                        : 'bg-zinc-900 hover:bg-zinc-700 text-white'
-                    )}
-                  >
-                    {p.isFollowing ? 'Following' : 'Follow'}
-                  </button>
-                  <button
-                    onClick={() => handleBlock(p)}
-                    className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors"
-                    title="Block"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/></svg>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ))
-      ) : (
-        <div className="p-12 text-center text-zinc-500">
-          <Users className="w-8 h-8 text-zinc-300 mx-auto mb-3" />
-          <p className="font-bold text-zinc-900 text-base mb-1">No people found</p>
-          <p className="text-xs text-zinc-500">Try a different search or come back later.</p>
-        </div>
-      )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Interests discovery panel
-// ---------------------------------------------------------------------------
-function InterestsPanel({ interests }: { interests: any }) {
-  if (interests === undefined) {
-    return (
-      <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-        {[0, 1, 2].map((i) => <RallyCardSkeleton key={i} />)}
-      </div>
-    );
-  }
+export default function Explore() {
   return (
-    <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-      {interests.length > 0 ? (
-        interests.map((it: any) => (
-          <Link
-            key={it.label}
-            to={`/interest/${encodeURIComponent(it.label)}`}
-            className="flex items-center justify-between p-4 hover:bg-zinc-50/60 transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <Tag className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="font-bold text-zinc-900 text-sm">{it.label}</p>
-                <p className="text-xs text-zinc-400 font-medium">{it.count} post{it.count === 1 ? '' : 's'}</p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-500 group-hover:translate-x-0.5 transition-all" />
-          </Link>
-        ))
-      ) : (
-        <div className="p-12 text-center text-zinc-500">
-          <Hash className="w-8 h-8 text-zinc-300 mx-auto mb-3" />
-          <p className="font-bold text-zinc-900 text-base mb-1">No interests yet</p>
-          <p className="text-xs text-zinc-500">Posts tagged with interests will show up here.</p>
-        </div>
-      )}
-    </div>
+    <QueryErrorBoundary message="Could not load Explore right now. Please try again.">
+      <ExploreContent />
+    </QueryErrorBoundary>
   );
 }
