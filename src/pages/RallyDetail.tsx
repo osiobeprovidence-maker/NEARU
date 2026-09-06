@@ -60,6 +60,9 @@ function mapRally(r: any): Rally {
           username: r.creator.username,
           avatar: r.creator.avatar,
           isNINVerified: r.creator.isNINVerified,
+          isBlueVerified: r.creator.isBlueVerified,
+          isVerified: r.creator.isVerified,
+          verificationType: r.creator.verificationType,
           isPhoneVerified: false,
           badges: r.creator.badges,
         }
@@ -412,9 +415,11 @@ export default function RallyDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
               <span className="font-bold text-sm text-zinc-900 truncate">{rally.creator.name}</span>
-              {Boolean(rally.creator.isVerified || rally.creator.isNINVerified) && (
+              {rally.creator.isBlueVerified ? (
+                <VerificationBadge isBlueCheck={true} size="md" />
+              ) : Boolean(rally.creator.isVerified || rally.creator.isNINVerified) ? (
                 <VerificationBadge type={rally.creator.verificationType} isVerified={true} size="md" />
-              )}
+              ) : null}
               </div>
             <span className="text-xs text-violet-600 font-semibold flex items-center gap-1">
               <Crown className="w-3.5 h-3.5" /> Organizer
@@ -555,9 +560,11 @@ export default function RallyDetail() {
                     <div className="flex-1 min-w-0">
                       <Link to={`/user/${p._id}`} className="font-bold text-sm text-zinc-900 truncate flex items-center gap-1">
                         {p.name}
-                        {Boolean((p as any).isVerified || p.isNINVerified) && (
+                        {p.isBlueVerified ? (
+                          <VerificationBadge isBlueCheck={true} size="sm" />
+                        ) : Boolean((p as any).isVerified || p.isNINVerified) ? (
                           <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
-                        )}
+                        ) : null}
                       </Link>
                       {p.role === 'organizer' && <span className="text-xs text-violet-600 font-semibold">Organizer</span>}
                     </div>

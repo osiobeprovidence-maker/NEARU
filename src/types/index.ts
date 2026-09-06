@@ -60,6 +60,9 @@ export interface User {
    *  Distinct from `interests` which is the private/personalization list. */
   publicInterests?: string[];
   isNINVerified: boolean;
+  isBlueVerified?: boolean;
+  blueCheckStatus?: 'unverified' | 'pending' | 'verified' | 'rejected';
+  blueVerifiedAt?: number;
   isVerified?: boolean;
   verificationType?: 'lalao_buz' | 'organization' | 'personal';
   verifiedAt?: number;

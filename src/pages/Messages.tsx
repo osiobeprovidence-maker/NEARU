@@ -20,6 +20,7 @@ type InboxItem = {
   unread: number;
   isRally?: boolean;
   isNINVerified?: boolean;
+  isBlueVerified?: boolean;
   badges?: string[];
   // navigation
   navigateTo: () => void;
@@ -71,6 +72,7 @@ export default function Messages() {
         unread: conversation.myUnread ?? 0,
         isRally,
         isNINVerified: conversation.otherParticipant?.isNINVerified,
+        isBlueVerified: conversation.otherParticipant?.isBlueVerified,
         badges: conversation.otherParticipant?.badges,
         navigateTo: () => navigate(`/messages/${conversation._id}`),
       });
@@ -88,6 +90,7 @@ export default function Messages() {
         avatarName: name,
         unread: 1,
         isNINVerified: req.sender?.isNINVerified,
+        isBlueVerified: req.sender?.isBlueVerified,
         badges: req.sender?.badges,
         navigateTo: () => navigate(`/messages/request/${req._id}`),
       });
@@ -105,6 +108,7 @@ export default function Messages() {
         avatarName: name,
         unread: 0,
         isNINVerified: req.target?.isNINVerified,
+        isBlueVerified: req.target?.isBlueVerified,
         badges: req.target?.badges,
         navigateTo: () => navigate(`/user/${req.target?._id}`),
       });
@@ -182,9 +186,11 @@ export default function Messages() {
               {item.title}
             </h3>
             {item.isRally && <MessageCircle className="w-4 h-4 text-indigo-500 shrink-0" />}
-            {!item.isRally && Boolean((item as any).isVerified || item.isNINVerified) && (
+            {!item.isRally && item.isBlueVerified ? (
+              <VerificationBadge isBlueCheck={true} size="sm" />
+            ) : !item.isRally && Boolean((item as any).isVerified || item.isNINVerified) ? (
               <VerificationBadge type={(item as any).verificationType} isVerified={true} size="sm" />
-            )}
+            ) : null}
             {!item.isRally && item.badges?.map((b: string) => (
               <div title={b} key={b} className="flex items-center justify-center w-3.5 h-3.5 bg-amber-100 rounded-full text-amber-600 shrink-0">
                 <Star className="w-2 h-2 fill-amber-500 text-amber-500" />

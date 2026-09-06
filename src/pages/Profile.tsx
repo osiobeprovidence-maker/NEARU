@@ -18,10 +18,12 @@ import {
   Loader2,
   Calendar,
   Compass,
+  Clock,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import UserAvatarCropModal from '../components/UserAvatarCropModal';
+import GetVerifiedModal from '../components/GetVerifiedModal';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
 import RallyCard from '../components/RallyCard';
@@ -67,6 +69,7 @@ export default function Profile() {
 
   const [isCropModalOpen, setIsCropModalOpen] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
+  const [isGetVerifiedOpen, setIsGetVerifiedOpen] = useState(false);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -316,9 +319,11 @@ export default function Profile() {
                 <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
                   {user.name}
                 </h2>
-                {Boolean(user.isVerified || user.isNINVerified) && (
+                {user.isBlueVerified ? (
+                  <VerificationBadge isBlueCheck={true} size="lg" />
+                ) : Boolean(user.isVerified || user.isNINVerified) ? (
                   <VerificationBadge type={user.verificationType} isVerified={true} size="lg" />
-                )}
+                ) : null}
               </div>
               <p className="text-sm font-semibold text-zinc-400 mb-1.5">
                 {user.username ? `@${user.username.replace(/^@+/, '')}` : ''}
@@ -398,6 +403,62 @@ export default function Profile() {
                 </div>
               </div>
             </div>
+
+            {/* Blue Check Verification Banner for Pending State */}
+            {user.blueCheckStatus === 'pending' && (
+              <div className="mx-4 sm:mx-6 mb-4 p-4 rounded-2xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                    <Clock className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-950">
+                      Verification Under Review
+                    </h3>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      Your RALLY profile verification request is being reviewed by our team.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsGetVerifiedOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-amber-900/10 hover:bg-amber-900/20 text-amber-900 text-xs font-bold transition-colors shrink-0 text-center cursor-pointer"
+                >
+                  View Status →
+                </button>
+              </div>
+            )}
+
+            {/* Blue Check Unverified Promotional Card */}
+            {!user.isBlueVerified && user.blueCheckStatus !== 'pending' && (
+              <div className="mx-4 sm:mx-6 mb-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-indigo-50/80 border border-blue-100 shadow-sm relative overflow-hidden group">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 relative z-10">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-2xl bg-[#1D9BF0] flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0 mt-0.5 sm:mt-0">
+                      <VerificationBadge isBlueCheck={true} size="md" className="brightness-125" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-zinc-900 tracking-tight">
+                        You aren’t verified yet
+                      </h3>
+                      <p className="text-xs sm:text-sm text-zinc-600 mt-0.5 leading-relaxed font-medium">
+                        Get verified to unlock <strong className="font-bold text-zinc-900">boosted replies, profile analytics, ad-free browsing, and more.</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsGetVerifiedOpen(true)}
+                    className="px-5 py-2.5 rounded-xl bg-[#1D9BF0] hover:bg-blue-600 active:scale-95 text-white text-xs sm:text-sm font-bold transition-all shadow-md shadow-blue-500/20 shrink-0 inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Get Verified</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* =============================================================== */}
@@ -708,6 +769,11 @@ export default function Profile() {
           currentImageUrl={user.avatar}
           userName={user.name}
         />
+
+        <GetVerifiedModal
+          isOpen={isGetVerifiedOpen}
+          onClose={() => setIsGetVerifiedOpen(false)}
+        />
       </PageShell>
     </QueryErrorBoundary>
   );
@@ -727,6 +793,8 @@ function UserRow({
     avatar?: string;
     bio?: string;
     isNINVerified?: boolean;
+    isBlueVerified?: boolean;
+    blueCheckStatus?: string;
     isVerified?: boolean;
     verificationType?: any;
     isFollowing?: boolean;
@@ -783,9 +851,11 @@ function UserRow({
             <h4 className="font-bold text-zinc-900 text-sm group-hover:text-indigo-600 transition-colors truncate">
               {targetUser.name}
             </h4>
-            {Boolean(targetUser.isVerified || targetUser.isNINVerified) && (
+            {targetUser.isBlueVerified ? (
+              <VerificationBadge isBlueCheck={true} size="md" />
+            ) : Boolean(targetUser.isVerified || targetUser.isNINVerified) ? (
               <VerificationBadge type={targetUser.verificationType} isVerified={true} size="md" />
-            )}
+            ) : null}
           </div>
           <p className="text-xs text-zinc-400 font-medium truncate">
             {targetUser.username ? `@${targetUser.username.replace(/^@+/, '')}` : ''}

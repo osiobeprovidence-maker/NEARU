@@ -31,6 +31,17 @@ export default defineSchema({
     // is only ever used for recommendations/personalization.
     publicInterests: v.optional(v.array(v.string())),
     isNINVerified: v.boolean(),
+    // Dedicated RALLY Blue Check Profile Verification (strictly separate from NIN/KYC)
+    isBlueVerified: v.optional(v.boolean()),
+    blueCheckStatus: v.optional(
+      v.union(
+        v.literal("unverified"),
+        v.literal("pending"),
+        v.literal("verified"),
+        v.literal("rejected")
+      )
+    ),
+    blueVerifiedAt: v.optional(v.number()),
     isVerified: v.optional(v.boolean()),
     verificationType: v.optional(
       v.union(
@@ -801,5 +812,28 @@ export default defineSchema({
   })
     .index("by_application", ["applicationId"])
     .index("by_admin", ["adminId"])
+    .index("by_created", ["createdAt"]),
+
+  // Dedicated RALLY Profile Blue Check Verification Requests
+  blueCheckRequests: defineTable({
+    userId: v.id("users"),
+    fullName: v.string(),
+    username: v.string(),
+    category: v.string(), // e.g. "Creator", "Public Figure", "Brand / Business", "Community Leader", "Tech & Founder", "Journalist", "Other"
+    links: v.array(v.string()), // profile, portfolio, articles, external socials
+    evidenceNote: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("verified"),
+      v.literal("rejected")
+    ),
+    reviewedBy: v.optional(v.id("users")),
+    reviewerName: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
     .index("by_created", ["createdAt"]),
 });

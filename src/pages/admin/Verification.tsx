@@ -28,7 +28,7 @@ import Avatar from '../../components/Avatar';
 import VerificationBadge from '../../components/VerificationBadge';
 import { AdminModal } from '../../components/admin/AdminModal';
 
-type AdminTab = 'applications' | 'pricing' | 'audit_log';
+type AdminTab = 'blue_check' | 'applications' | 'pricing' | 'audit_log';
 type StatusFilter =
   | 'ALL'
   | 'Payment Pending'
@@ -79,6 +79,72 @@ export default function AdminVerification() {
   >({});
   const [pricingSaving, setPricingSaving] = useState<Record<string, boolean>>({});
   const [pricingSavedToast, setPricingSavedToast] = useState<string | null>(null);
+
+  // Blue Check Requests state
+  const [blueCheckStatusFilter, setBlueCheckStatusFilter] = useState<'ALL' | 'pending' | 'verified' | 'rejected'>('ALL');
+  const [blueCheckSearch, setBlueCheckSearch] = useState('');
+  const blueCheckRequests = useQuery(api.blueCheck.adminListRequests, {
+    status: blueCheckStatusFilter === 'ALL' ? undefined : blueCheckStatusFilter,
+    search: blueCheckSearch.trim() || undefined,
+  });
+
+  const approveBlueCheckMut = useMutation(api.blueCheck.adminApproveRequest);
+  const rejectBlueCheckMut = useMutation(api.blueCheck.adminRejectRequest);
+
+  const [approveBlueModal, setApproveBlueModal] = useState<any | null>(null);
+  const [rejectBlueModal, setRejectBlueModal] = useState<any | null>(null);
+  const [viewBlueModal, setViewBlueModal] = useState<any | null>(null);
+  const [blueRejectionReason, setBlueRejectionReason] = useState('');
+  const [blueActionLoading, setBlueActionLoading] = useState(false);
+
+  const blueStats = useMemo(() => {
+    if (!blueCheckRequests) return { total: 0, pending: 0, verified: 0, rejected: 0 };
+    return {
+      total: blueCheckRequests.length,
+      pending: blueCheckRequests.filter((r) => r.status === 'pending').length,
+      verified: blueCheckRequests.filter((r) => r.status === 'verified').length,
+      rejected: blueCheckRequests.filter((r) => r.status === 'rejected').length,
+    };
+  }, [blueCheckRequests]);
+
+  const handleApproveBlue = async () => {
+    if (!approveBlueModal) return;
+    setBlueActionLoading(true);
+    try {
+      await approveBlueCheckMut({ requestId: approveBlueModal._id });
+      setApproveBlueModal(null);
+      if (viewBlueModal?._id === approveBlueModal._id) {
+        setViewBlueModal(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to approve verification.');
+    } finally {
+      setBlueActionLoading(false);
+    }
+  };
+
+  const handleRejectBlue = async () => {
+    if (!rejectBlueModal || !blueRejectionReason.trim()) {
+      alert('Please provide a reason for rejecting the request.');
+      return;
+    }
+    setBlueActionLoading(true);
+    try {
+      await rejectBlueCheckMut({
+        requestId: rejectBlueModal._id,
+        reason: blueRejectionReason.trim(),
+      });
+      setRejectBlueModal(null);
+      setBlueRejectionReason('');
+      if (viewBlueModal?._id === rejectBlueModal._id) {
+        setViewBlueModal(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject verification.');
+    } finally {
+      setBlueActionLoading(false);
+    }
+  };
 
   // Quick stats
   const stats = useMemo(() => {
@@ -212,17 +278,34 @@ export default function AdminVerification() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200">
+        <div className="flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('blue_check')}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap',
+              activeTab === 'blue_check'
+                ? 'bg-white text-zinc-900 shadow-sm'
+                : 'text-zinc-600 hover:text-zinc-900'
+            )}
+          >
+            <VerificationBadge isBlueCheck size="xs" />
+            Blue Check Requests
+            {blueStats.pending > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-[#1D9BF0] text-white text-[10px] font-bold">
+                {blueStats.pending}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setActiveTab('applications')}
             className={cn(
-              'px-4 py-2 rounded-xl text-xs font-bold transition-all',
+              'px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap',
               activeTab === 'applications'
                 ? 'bg-white text-zinc-900 shadow-sm'
                 : 'text-zinc-600 hover:text-zinc-900'
             )}
           >
-            Applications ({stats.submitted + stats.underReview})
+            Paid Applications ({stats.submitted + stats.underReview})
           </button>
           <button
             onClick={() => setActiveTab('pricing')}
@@ -250,6 +333,233 @@ export default function AdminVerification() {
           </button>
         </div>
       </div>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* TAB 0: BLUE CHECK PROFILE VERIFICATION REQUESTS */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'blue_check' && (
+        <div className="space-y-6">
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-white border border-zinc-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Total Requests</span>
+              <p className="text-2xl font-black text-zinc-900 mt-1">{blueStats.total}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Pending Review</span>
+              <p className="text-2xl font-black text-amber-900 mt-1">{blueStats.pending}</p>
+              <span className="text-[10px] font-bold text-amber-700 mt-0.5 block">Requires Decision</span>
+            </div>
+            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#1D9BF0]">Verified Active</span>
+              <p className="text-2xl font-black text-blue-900 mt-1">{blueStats.verified}</p>
+              <span className="text-[10px] font-bold text-[#1D9BF0] mt-0.5 block">Blue Badge Live</span>
+            </div>
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Rejected</span>
+              <p className="text-2xl font-black text-rose-900 mt-1">{blueStats.rejected}</p>
+              <span className="text-[10px] font-bold text-rose-700 mt-0.5 block">Not Approved</span>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-zinc-200 flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={blueCheckSearch}
+                onChange={(e) => setBlueCheckSearch(e.target.value)}
+                placeholder="Search by applicant, username, category..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-zinc-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#1D9BF0]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={blueCheckStatusFilter}
+                onChange={(e) => setBlueCheckStatusFilter(e.target.value as any)}
+                className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 bg-white"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="pending">Pending Review ({blueStats.pending})</option>
+                <option value="verified">Verified ({blueStats.verified})</option>
+                <option value="rejected">Rejected ({blueStats.rejected})</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Requests Table / Cards */}
+          <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-xs">
+            {blueCheckRequests === undefined ? (
+              <div className="p-12 text-center">
+                <Loader2 className="w-8 h-8 text-[#1D9BF0] animate-spin mx-auto mb-3" />
+                <p className="text-xs font-bold text-zinc-400">Loading Blue Check requests…</p>
+              </div>
+            ) : blueCheckRequests.length === 0 ? (
+              <div className="p-12 text-center space-y-2">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-100 flex items-center justify-center mx-auto text-zinc-400">
+                  <VerificationBadge isBlueCheck size="md" />
+                </div>
+                <p className="text-sm font-bold text-zinc-700">No verification requests found</p>
+                <p className="text-xs text-zinc-400">
+                  {blueCheckSearch ? 'Try a different search keyword.' : 'When users submit Blue Check requests, they will appear here.'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-200 bg-zinc-50/70 text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="p-4">Applicant</th>
+                      <th className="p-4">Category</th>
+                      <th className="p-4">Links / Portfolio</th>
+                      <th className="p-4">Submitted Date</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {blueCheckRequests.map((req) => (
+                      <tr key={req._id} className="hover:bg-zinc-50/60 transition-colors">
+                        {/* Applicant */}
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar src={req.user?.avatar} name={req.fullName} size="md" />
+                            <div>
+                              <div className="flex items-center gap-1.5 font-bold text-zinc-900 text-sm">
+                                <span>{req.fullName}</span>
+                                {req.status === 'verified' && <VerificationBadge isBlueCheck size="sm" />}
+                              </div>
+                              <p className="text-[11px] text-zinc-400 font-medium">
+                                @{req.username?.replace(/^@+/, '')}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Category */}
+                        <td className="p-4">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-[#1D9BF0] border border-blue-100 whitespace-nowrap">
+                            {req.category}
+                          </span>
+                        </td>
+
+                        {/* Links */}
+                        <td className="p-4">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {req.links.map((link, i) => (
+                              <a
+                                key={i}
+                                href={link.startsWith('http') ? link : `https://${link}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-100 hover:bg-blue-50 hover:text-[#1D9BF0] text-zinc-600 text-[11px] font-medium transition-colors"
+                              >
+                                <span>Link {i + 1}</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Date */}
+                        <td className="p-4 text-zinc-500 font-medium whitespace-nowrap">
+                          {new Date(req.createdAt).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </td>
+
+                        {/* Status */}
+                        <td className="p-4 whitespace-nowrap">
+                          {req.status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Clock className="w-3 h-3 text-amber-600" /> Pending Review
+                            </span>
+                          )}
+                          {req.status === 'verified' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-[#1D9BF0] border border-blue-200">
+                              <CheckCircle2 className="w-3 h-3 text-[#1D9BF0]" /> Verified
+                            </span>
+                          )}
+                          {req.status === 'rejected' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                              <XCircle className="w-3 h-3 text-rose-600" /> Rejected
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="p-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setViewBlueModal(req)}
+                              className="px-2.5 py-1.5 rounded-xl border border-zinc-200 hover:bg-zinc-100 text-zinc-700 text-xs font-bold transition-colors inline-flex items-center gap-1"
+                              title="View Details"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Details</span>
+                            </button>
+
+                            {req.status === 'pending' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setApproveBlueModal(req)}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs inline-flex items-center gap-1"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Approve</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectBlueModal(req);
+                                    setBlueRejectionReason('');
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+
+                            {req.status === 'rejected' && (
+                              <button
+                                type="button"
+                                onClick={() => setApproveBlueModal(req)}
+                                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-colors"
+                              >
+                                Re-approve
+                              </button>
+                            )}
+
+                            {req.status === 'verified' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRejectBlueModal(req);
+                                  setBlueRejectionReason('Revoked verification status');
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors"
+                              >
+                                Revoke
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ────────────────────────────────────────────────────────────────────── */}
       {/* TAB 1: APPLICATIONS LIST */}
@@ -1168,6 +1478,226 @@ export default function AdminVerification() {
                   </>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+      </AdminModal>
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* BLUE CHECK APPROVE MODAL */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(approveBlueModal)}
+        onClose={() => setApproveBlueModal(null)}
+        title="Approve Blue Check Verification?"
+        subtitle="This action activates the official RALLY blue check badge across their profile and posts."
+        maxWidth="md"
+      >
+        {approveBlueModal && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Applicant:</span>
+                <span className="font-bold text-zinc-900">{approveBlueModal.fullName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Username:</span>
+                <span className="font-bold text-zinc-800">@{approveBlueModal.username?.replace(/^@+/, '')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-zinc-500 font-bold">Category:</span>
+                <span className="font-bold text-[#1D9BF0]">{approveBlueModal.category}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500 font-bold">Badge to Activate:</span>
+                <div className="flex items-center gap-1.5">
+                  <VerificationBadge isBlueCheck size="sm" />
+                  <span className="font-bold text-[#1D9BF0]">RALLY Profile Verification (Blue)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-xs font-bold text-blue-950 leading-relaxed">
+              "Approving this request will immediately activate the Blue Check badge on the user's account, display it beside their name across RALLY, and remove any unverified banner from their profile."
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setApproveBlueModal(null)}
+                disabled={blueActionLoading}
+                className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveBlue}
+                disabled={blueActionLoading}
+                className="px-5 py-2.5 rounded-xl bg-[#1D9BF0] hover:bg-blue-600 text-white font-bold text-xs transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {blueActionLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <VerificationBadge isBlueCheck size="xs" />
+                )}
+                Confirm Approval & Activate Blue Check
+              </button>
+            </div>
+          </div>
+        )}
+      </AdminModal>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* BLUE CHECK REJECT MODAL */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(rejectBlueModal)}
+        onClose={() => {
+          setRejectBlueModal(null);
+          setBlueRejectionReason('');
+        }}
+        title="Reject Verification Request"
+        subtitle="Provide a reason explaining why the request was not approved."
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-zinc-700 mb-1">
+              Rejection Reason *
+            </label>
+            <textarea
+              rows={3}
+              required
+              value={blueRejectionReason}
+              onChange={(e) => setBlueRejectionReason(e.target.value)}
+              placeholder="e.g. Profile links could not be verified / insufficient public presence..."
+              className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRejectBlueModal(null);
+                setBlueRejectionReason('');
+              }}
+              disabled={blueActionLoading}
+              className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRejectBlue}
+              disabled={blueActionLoading || !blueRejectionReason.trim()}
+              className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {blueActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+              Confirm Rejection
+            </button>
+          </div>
+        </div>
+      </AdminModal>
+
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      {/* BLUE CHECK DETAILS MODAL */}
+      {/* ────────────────────────────────────────────────────────────────────── */}
+      <AdminModal
+        isOpen={Boolean(viewBlueModal)}
+        onClose={() => setViewBlueModal(null)}
+        title="Blue Check Request Details"
+        subtitle="Review submitted information for RALLY profile verification."
+        maxWidth="lg"
+      >
+        {viewBlueModal && (
+          <div className="space-y-5 text-xs">
+            <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 flex items-center gap-3.5">
+              <Avatar src={viewBlueModal.user?.avatar} name={viewBlueModal.fullName} size="lg" />
+              <div>
+                <h4 className="text-base font-bold text-zinc-900 flex items-center gap-1.5">
+                  {viewBlueModal.fullName}
+                  {viewBlueModal.status === 'verified' && <VerificationBadge isBlueCheck size="sm" />}
+                </h4>
+                <p className="text-zinc-500 font-medium">@{viewBlueModal.username?.replace(/^@+/, '')}</p>
+                {viewBlueModal.user?.email && (
+                  <p className="text-zinc-400 text-[11px] mt-0.5">{viewBlueModal.user.email}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200">
+                <span className="text-[10px] uppercase font-bold text-zinc-400">Category</span>
+                <p className="font-bold text-zinc-900 mt-0.5">{viewBlueModal.category}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200">
+                <span className="text-[10px] uppercase font-bold text-zinc-400">Status</span>
+                <p className="font-bold mt-0.5 capitalize text-zinc-900">{viewBlueModal.status}</p>
+              </div>
+            </div>
+
+            {viewBlueModal.evidenceNote && (
+              <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Supporting Bio / Note</span>
+                <p className="text-zinc-700 leading-relaxed font-medium">{viewBlueModal.evidenceNote}</p>
+              </div>
+            )}
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1.5">Submitted Links</span>
+              <div className="space-y-1.5">
+                {viewBlueModal.links.map((link: string, i: number) => (
+                  <a
+                    key={i}
+                    href={link.startsWith('http') ? link : `https://${link}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 hover:bg-blue-50 text-blue-600 font-medium transition-colors"
+                  >
+                    <span className="truncate">{link}</span>
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0 ml-2 text-zinc-400" />
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {viewBlueModal.rejectionReason && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800">
+                <span className="text-[10px] uppercase font-bold text-rose-600 block mb-0.5">Rejection Reason</span>
+                <p className="font-medium">{viewBlueModal.rejectionReason}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setViewBlueModal(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold"
+              >
+                Close
+              </button>
+              {viewBlueModal.status === 'pending' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectBlueModal(viewBlueModal);
+                      setBlueRejectionReason('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApproveBlueModal(viewBlueModal)}
+                    className="px-5 py-2 rounded-xl bg-[#1D9BF0] hover:bg-blue-600 text-white font-bold"
+                  >
+                    Approve
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

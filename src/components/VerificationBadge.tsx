@@ -1,11 +1,12 @@
 import React from 'react';
 import { cn } from '../lib/utils';
 
-export type VerificationType = 'lalao_buz' | 'organization' | 'personal' | 'nin' | string;
+export type VerificationType = 'lalao_buz' | 'organization' | 'personal' | 'nin' | 'blue' | 'rally_blue' | string;
 
 export interface VerificationBadgeProps {
   type?: VerificationType | null;
   isVerified?: boolean;
+  isBlueCheck?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
   className?: string;
   showTitle?: boolean;
@@ -23,6 +24,24 @@ export const VERIFICATION_CONFIG: Record<
   string,
   { label: string; bgClass: string; fillColor: string; title: string }
 > = {
+  blue: {
+    label: 'Verified Profile',
+    bgClass: 'text-[#1D9BF0]', // Official Vibrant Blue Check
+    fillColor: '#1D9BF0',
+    title: 'Verified Profile',
+  },
+  rally_blue: {
+    label: 'Verified Profile',
+    bgClass: 'text-[#1D9BF0]',
+    fillColor: '#1D9BF0',
+    title: 'Verified Profile',
+  },
+  blue_check: {
+    label: 'Verified Profile',
+    bgClass: 'text-[#1D9BF0]',
+    fillColor: '#1D9BF0',
+    title: 'Verified Profile',
+  },
   lalao_buz: {
     label: 'Lalao Buz',
     bgClass: 'text-[#2563EB]', // Blue
@@ -52,14 +71,15 @@ export const VERIFICATION_CONFIG: Record<
 export default function VerificationBadge({
   type,
   isVerified = true,
+  isBlueCheck = false,
   size = 'md',
   className = '',
   showTitle = true,
 }: VerificationBadgeProps) {
-  if (!isVerified) return null;
+  if (!isVerified && !isBlueCheck) return null;
 
-  // Determine configuration (default to green/organization or personal)
-  const normalizedType = (type || 'organization').toLowerCase();
+  // Determine configuration (prefer explicit isBlueCheck, fallback to type)
+  const normalizedType = isBlueCheck ? 'blue' : (type || 'organization').toLowerCase();
   const config =
     VERIFICATION_CONFIG[normalizedType] || VERIFICATION_CONFIG.organization;
 

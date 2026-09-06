@@ -528,13 +528,15 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                 <span className="font-bold text-[15px] text-zinc-900 truncate">
                   {post.creator?.organizationName || post.creator?.name || 'User'}
                 </span>
-                {Boolean(post.creator?.isVerified || post.creator?.isNINVerified) && (
+                {post.creator?.isBlueVerified ? (
+                  <VerificationBadge isBlueCheck={true} size="md" />
+                ) : Boolean(post.creator?.isVerified || post.creator?.isNINVerified) ? (
                   <VerificationBadge
                     type={post.creator?.verificationType}
                     isVerified={true}
                     size="md"
                   />
-                )}
+                ) : null}
                 {(post.creator?.accountType === 'organization' ||
                   post.creator?.accountType === 'business') && (
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
@@ -881,10 +883,17 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                   <Avatar src={c.user?.avatar} name={c.user?.name} size="sm" />
                   <div className="flex-1 bg-zinc-50 p-2.5 rounded-xl rounded-tl-none relative group/comment">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="font-bold text-xs text-zinc-900">
-                        {c.user?.name || 'User'}
-                      </span>
-                      <span className="text-[10px] text-zinc-400">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="font-bold text-xs text-zinc-900 truncate">
+                          {c.user?.name || 'User'}
+                        </span>
+                        {c.user?.isBlueVerified ? (
+                          <VerificationBadge isBlueCheck={true} size="xs" />
+                        ) : Boolean(c.user?.isVerified || c.user?.isNINVerified) ? (
+                          <VerificationBadge type={c.user?.verificationType} isVerified={true} size="xs" />
+                        ) : null}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 shrink-0">
                         {new Date(c.createdAt).toLocaleDateString()}
                       </span>
                     </div>

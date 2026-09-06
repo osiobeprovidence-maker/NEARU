@@ -281,9 +281,11 @@ export default function Chat() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <h2 className="font-bold text-zinc-900 leading-tight truncate">{headerTitle}</h2>
-                {!isRally && Boolean((otherUser as any)?.isVerified || otherUser?.isNINVerified) && (
+                {!isRally && (otherUser as any)?.isBlueVerified ? (
+                  <VerificationBadge isBlueCheck={true} size="sm" />
+                ) : !isRally && Boolean((otherUser as any)?.isVerified || otherUser?.isNINVerified) ? (
                   <VerificationBadge type={(otherUser as any)?.verificationType} isVerified={true} size="sm" />
-                )}
+                ) : null}
                 {!isRally && otherUser?.badges?.map((badge: string) => (
                   <div title={badge} key={badge} className="flex items-center justify-center w-4 h-4 bg-amber-100 rounded-full text-amber-600 shrink-0">
                     <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />

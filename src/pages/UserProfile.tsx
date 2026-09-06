@@ -414,13 +414,15 @@ export default function UserProfile() {
             <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
               {profile?.name || target?.name || 'Loading…'}
             </h1>
-            {Boolean(profile?.isVerified || profile?.badge?.isVerified || profile?.badge?.isNINVerified || target?.isVerified || target?.isNINVerified) && (
+            {Boolean(profile?.isBlueVerified || (target as any)?.isBlueVerified) ? (
+              <VerificationBadge isBlueCheck={true} size="lg" />
+            ) : Boolean(profile?.isVerified || profile?.badge?.isVerified || profile?.badge?.isNINVerified || target?.isVerified || target?.isNINVerified) ? (
               <VerificationBadge
                 type={profile?.verificationType || profile?.badge?.verificationType || (target as any)?.verificationType}
                 isVerified={true}
                 size="lg"
               />
-            )}
+            ) : null}
             {(isOrgBiz) && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
                 {profile?.accountType === 'business' || target?.accountType === 'business' ? 'Business' : 'Organization'}

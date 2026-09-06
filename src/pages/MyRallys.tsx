@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Rally } from '../types';
 
 export default function MyRallys() {
-  const { convexUserId } = useAuth();
+  const { user, convexUserId } = useAuth();
   const [activeTab, setActiveTab] = useState('Created');
   // Optimistic local delete — remove card immediately without waiting for re-query
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -46,6 +46,7 @@ export default function MyRallys() {
             username: r.creator.username,
             avatar: r.creator.avatar,
             isNINVerified: r.creator.isNINVerified,
+            isBlueVerified: r.creator.isBlueVerified,
             isPhoneVerified: false,
             badges: r.creator.badges,
             accountType: r.creator.accountType || 'personal',
@@ -58,6 +59,7 @@ export default function MyRallys() {
             username: '',
             avatar: '',
             isNINVerified: false,
+            isBlueVerified: user.isBlueVerified,
             isPhoneVerified: false,
           },
       status: r.status,

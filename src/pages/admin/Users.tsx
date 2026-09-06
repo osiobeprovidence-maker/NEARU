@@ -193,9 +193,11 @@ export default function AdminUsers() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-zinc-900 truncate">{u.name}</span>
-              {Boolean((u as any).isVerified || u.isNINVerified) && (
+              {(u as any).isBlueVerified ? (
+                <VerificationBadge isBlueCheck={true} size="md" />
+              ) : Boolean((u as any).isVerified || u.isNINVerified) ? (
                 <VerificationBadge type={(u as any).verificationType} isVerified={true} size="md" />
-              )}
+              ) : null}
             </div>
             <span className="text-[11px] text-zinc-400 font-medium block truncate">{u.username}</span>
           </div>

@@ -103,9 +103,11 @@ export default function ChatRequest() {
                 <h3 className="text-xl font-black text-zinc-900 tracking-tight">
                   {sender?.name || 'Someone'}
                 </h3>
-                {Boolean((sender as any)?.isVerified || sender?.isNINVerified) && (
+                {(sender as any)?.isBlueVerified ? (
+                  <VerificationBadge isBlueCheck={true} size="lg" />
+                ) : Boolean((sender as any)?.isVerified || sender?.isNINVerified) ? (
                   <VerificationBadge type={(sender as any)?.verificationType} isVerified={true} size="lg" />
-                )}
+                ) : null}
                 {sender?.badges?.map((b: string) => (
                   <div title={b} key={b} className="flex items-center justify-center w-5 h-5 bg-amber-100 rounded-full text-amber-600 shrink-0">
                     <Star className="w-3 h-3 fill-amber-500 text-amber-500" />

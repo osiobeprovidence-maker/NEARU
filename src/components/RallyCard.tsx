@@ -25,6 +25,7 @@ import { Rally } from '../types';
 import { rallyAccess } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
 import Avatar from './Avatar';
+import VerificationBadge from './VerificationBadge';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -337,9 +338,11 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             <span className="font-bold text-sm text-zinc-900 truncate">
               {rally.creator.organizationName || rally.creator.name}
             </span>
-            {rally.creator.isNINVerified && (
+            {rally.creator.isBlueVerified ? (
+              <VerificationBadge isBlueCheck={true} size="sm" />
+            ) : rally.creator.isNINVerified ? (
               <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            )}
+            ) : null}
             {(rally.creator.accountType === 'organization' || rally.creator.accountType === 'business') && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 shrink-0">
                 {rally.creator.accountType === 'business' ? 'Biz' : 'Org'}

@@ -64,6 +64,9 @@ export default function InterestPage() {
       username: r.creator.username,
       avatar: r.creator.avatar,
       isNINVerified: r.creator.isNINVerified,
+      isBlueVerified: r.creator.isBlueVerified,
+      isVerified: r.creator.isVerified,
+      verificationType: r.creator.verificationType,
       isPhoneVerified: false,
       badges: r.creator.badges,
     } : { id: '', name: 'User', username: '', avatar: '', isNINVerified: false, isPhoneVerified: false },
@@ -122,9 +125,11 @@ export default function InterestPage() {
                 <Link to={`/user/${p._id}`} className="flex-1 min-w-0 block">
                   <div className="flex items-center gap-1">
                     <span className="font-bold text-sm text-zinc-900 truncate">{p.name}</span>
-                    {Boolean((p as any).isVerified || p.isNINVerified) && (
+                    {(p as any).isBlueVerified ? (
+                      <VerificationBadge isBlueCheck={true} size="sm" />
+                    ) : Boolean((p as any).isVerified || p.isNINVerified) ? (
                       <VerificationBadge type={(p as any).verificationType} isVerified={true} size="sm" />
-                    )}
+                    ) : null}
                   </div>
                   <p className="text-xs text-zinc-500 font-medium truncate">@{p.username ? p.username.replace(/^@+/, '') : ''} · {p.followersCount} followers</p>
                 </Link>
