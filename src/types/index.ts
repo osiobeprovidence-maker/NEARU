@@ -1,4 +1,4 @@
-export type ActivityType = 'ASK' | 'HELP' | 'JOIN' | 'EVENT' | 'POST';
+export type ActivityType = 'ASK' | 'HELP' | 'JOIN' | 'OFFER' | 'COMMUNITY' | 'EVENT' | 'POST';
 
 export type RallyCategory = 'sports' | 'music' | 'gaming' | 'social' | 'work' | 'education' | 'creative' | 'fitness' | 'travel' | 'food' | 'general';
 
@@ -143,12 +143,16 @@ export interface Rally {
   price?: number;
   /** Access model: 'free' = FREE, 'paid' = charged admission, 'none' = no admission fee. */
   pricing?: 'free' | 'paid' | 'none';
+  /** Structured reward / compensation for community rallies */
+  rewardAmount?: number;
+  rewardCurrency?: string;
+  rewardType?: string;
   creator: User;
   authorType?: 'user' | 'page';
   pageId?: string;
   created_by_user_id?: string;
   pageAuthor?: Page;
-  status: 'ACTIVE' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
+  status: 'ACTIVE' | 'FULL' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
   city?: string;
   locationLabel?: string;

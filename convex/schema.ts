@@ -192,7 +192,15 @@ export default defineSchema({
     .index("by_firebase_uid", ["firebaseUid"]),
 
   rallies: defineTable({
-    type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN"), v.literal("EVENT"), v.literal("POST")),
+    type: v.union(
+      v.literal("ASK"),
+      v.literal("HELP"),
+      v.literal("JOIN"),
+      v.literal("OFFER"),
+      v.literal("COMMUNITY"),
+      v.literal("EVENT"),
+      v.literal("POST")
+    ),
     title: v.string(),
     description: v.string(),
     distance: v.number(),
@@ -201,6 +209,10 @@ export default defineSchema({
     peopleInterested: v.number(),
     isPaid: v.boolean(),
     price: v.optional(v.number()),
+    // Structured reward / compensation for community rallies
+    rewardAmount: v.optional(v.number()),
+    rewardCurrency: v.optional(v.string()),
+    rewardType: v.optional(v.string()),
     // Access model: 'free' = FREE, 'paid' = charged admission, 'none' = no
     // admission fee applied. Kept alongside legacy isPaid/price for backwards
     // compatibility with existing data and the rest of the product.
@@ -210,6 +222,7 @@ export default defineSchema({
     creatorId: v.id("users"),
     status: v.union(
       v.literal("ACTIVE"),
+      v.literal("FULL"),
       v.literal("LIVE"),
       v.literal("COMPLETED"),
       v.literal("CANCELLED")

@@ -58,6 +58,8 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
 
   const toggleLikeMut   = useMutation(api.rallies.toggleLike);
   const toggleRsvpMut   = useMutation(api.rallies.toggleRsvp);
+  const joinRallyMut    = useMutation(api.rallies.joinRally);
+  const leaveRallyMut   = useMutation(api.rallies.leaveRally);
   const addCommentMut   = useMutation(api.rallies.addComment);
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
   const deleteRallyMut  = useMutation(api.rallies.deleteRally);
@@ -75,7 +77,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   const isHelp = rally.type === 'HELP';
   const isJoin = rally.type === 'JOIN';
 
-  const typeConfig = {
+  const typeConfig: Record<string, { icon: any; color: string; bg: string; badge: string }> = {
     ASK: {
       icon: HandMetal,
       color: 'text-rose-600',
@@ -108,11 +110,15 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
     },
   };
 
-  const config = typeConfig[rally.type];
+  const config = typeConfig[rally.type] || typeConfig.ASK;
   const Icon = config.icon;
   // Access badge — POST content never shows a price/admission badge.
   const access = rallyAccess(rally);
   const isPostType = rally.type === 'POST';
+
+  const effectiveReward =
+    (rally as any).rewardAmount ||
+    ((rally as any).pricing === 'paid' && rally.price ? rally.price : undefined);
 
   // Action button labels
   const defaultActionText = isAsk
@@ -120,26 +126,22 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
     : isHelp
     ? "I'M INTERESTED"
     : isEvent
-    ? "I'm Coming"
-    : isJoin
-    ? 'JOIN'
-    : null; // POST type has no action CTA
+    ? "I'M COMING"
+    : 'JOIN RALLY';
 
   const takenActionText = isAsk
-    ? 'OFFER SENT'
+    ? 'HELPING ✓'
     : isHelp
-    ? 'INTEREST SENT'
+    ? 'INTERESTED ✓'
     : isEvent
-    ? "✓ You're coming"
-    : 'JOINED';
+    ? "COMING ✓"
+    : 'JOINED ✓';
 
-  // Is the event at capacity?
+  // Is the Rally or event at capacity?
   const isFull =
-    isEvent &&
-    rally.capacity &&
-    rally.capacity > 0 &&
-    localRsvpCount >= rally.capacity &&
-    !localRsvpd;
+    rally.status === 'FULL' ||
+    (rally.peopleNeeded && rally.peopleNeeded > 0 && localRsvpCount >= rally.peopleNeeded && !localRsvpd) ||
+    (rally.capacity && rally.capacity > 0 && localRsvpCount >= rally.capacity && !localRsvpd);
 
   // -------------------------------------------------------------------------
   // Handlers
@@ -172,8 +174,11 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       showToast('Not logged in', 'Please log in to respond.');
       return;
     }
-    if (isFull) {
-      showToast('Event Full', 'This event has reached its capacity.');
+    if (isOwner) {
+      return;
+    }
+    if (!localRsvpd && isFull) {
+      showToast('Rally Full', 'This Rally has reached capacity.');
       return;
     }
 
@@ -183,14 +188,17 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
     setLocalRsvpCount((c) => (wasRsvpd ? Math.max(0, c - 1) : c + 1));
 
     try {
-      await toggleRsvpMut({
-        rallyId: rally.id as any,
-        userId: convexUserId as any,
-      });
-      showToast(
-        !wasRsvpd ? takenActionText : 'Cancelled',
-        !wasRsvpd ? 'The creator will be notified.' : ''
-      );
+      if (wasRsvpd) {
+        await leaveRallyMut({
+          rallyId: rally.id as any,
+        });
+        showToast('Cancelled', 'You left this Rally.');
+      } else {
+        await joinRallyMut({
+          rallyId: rally.id as any,
+        });
+        showToast('Joined Rally', 'Private conversation with creator opened.');
+      }
     } catch (err) {
       // Revert
       setLocalRsvpd(wasRsvpd);
@@ -367,7 +375,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
           </div>
         </Link>
 
-        {/* Type + price badges */}
+        {/* Type + reward/price badges */}
         <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0 max-w-[55%]">
           <div
             className={cn(
@@ -377,7 +385,11 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
           >
             {rally.type}
           </div>
-          {!isPostType && (
+          {effectiveReward ? (
+            <div className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-300">
+              💰 ₦{Number(effectiveReward).toLocaleString()}
+            </div>
+          ) : !isPostType && access.label ? (
             <div
               className={cn(
                 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ring-1 ring-inset',
@@ -388,7 +400,7 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             >
               {access.label}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Three-dot menu — only for the owner */}
@@ -584,14 +596,25 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
           <Share2 className="w-5 h-5" />
         </button>
 
-        {/* Spacer + action CTA */}
-        {defaultActionText && (
+        {/* Action CTA for RALLY:
+            - If isOwner: Show "Your Rally" badge (NEVER "I CAN HELP")
+            - If NOT owner: Show "I CAN HELP" or "JOIN RALLY" (or "Helping ✓" if joined, "FULL" if full)
+        */}
+        {isOwner ? (
+          <Link
+            to={`/rally/${rally.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="ml-auto px-3.5 py-1.5 rounded-full text-xs font-bold text-zinc-600 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 transition-colors shrink-0"
+          >
+            Your Rally
+          </Link>
+        ) : defaultActionText ? (
           <button
             onClick={handleActionClick}
-            disabled={!!isFull}
+            disabled={!localRsvpd && !!isFull}
             className={cn(
               'ml-auto px-4 py-2 rounded-full text-xs font-bold transition-all duration-200 active:scale-95 shrink-0',
-              isFull
+              !localRsvpd && isFull
                 ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
                 : localRsvpd
                 ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
@@ -599,9 +622,9 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             )}
           >
             {localRsvpd && <CheckCircle2 className="w-3.5 h-3.5 inline mr-1 text-emerald-500" />}
-            {isFull ? 'FULL' : localRsvpd ? takenActionText : defaultActionText}
+            {localRsvpd ? takenActionText : isFull ? 'FULL' : defaultActionText}
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* Comments panel */}

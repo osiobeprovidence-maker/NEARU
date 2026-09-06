@@ -91,7 +91,9 @@ export default function CreateRallyModal({
 }: CreateRallyModalProps) {
   const [step, setStep] = useState(1);
   const [type, setType] = useState<ActivityType | null>(null);
+  const [topic, setTopic] = useState('');
   const [description, setDescription] = useState('');
+  const [rewardAmount, setRewardAmount] = useState('');
   const [pricing, setPricing] = useState<RallyPricing | null>(null);
   const [price, setPrice] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -211,7 +213,9 @@ export default function CreateRallyModal({
     setActivePreviewIndex(0);
     setStep(1);
     setType(null);
+    setTopic('');
     setDescription('');
+    setRewardAmount('');
     setPricing(null);
     setPrice('');
     setEventDate('');
@@ -472,8 +476,8 @@ export default function CreateRallyModal({
 
   const handlePost = async () => {
     if (!type || !description.trim()) return;
-    // For non-POST types, the admission model must be chosen
-    if (!POST_ONLY_TYPES.includes(type) && pricing === null) return;
+    // Only EVENT requires an admission model choice
+    if (type === 'EVENT' && pricing === null) return;
 
     // Guard: if media was chosen, ensure it has successfully uploaded before posting
     if (mediaType === 'image' && selectedImages.length > 0) {
@@ -525,12 +529,18 @@ export default function CreateRallyModal({
     setIsPosting(true);
     try {
       const userId = await ensureConvexUser();
-      const title = description.split('\n')[0].slice(0, 80) || `${type} RALLY`;
-      // POST never carries an admission model; RALLY types publish the explicit
-      // three-way pricing choice (free / paid / no admission fee).
-      const effectivePricing: RallyPricing = POST_ONLY_TYPES.includes(type)
-        ? 'none'
-        : (pricing ?? 'none');
+      const effectiveTitle = (type !== 'POST' && topic.trim())
+        ? topic.trim()
+        : (description.split('\n')[0].slice(0, 80) || `${type} RALLY`);
+
+      const parsedReward = rewardAmount ? parseFloat(rewardAmount.replace(/[^0-9.]/g, '')) : undefined;
+      const validReward = parsedReward && parsedReward > 0 ? parsedReward : undefined;
+
+      const effectivePricing: RallyPricing = type === 'EVENT'
+        ? (pricing ?? 'none')
+        : validReward
+        ? 'paid'
+        : 'none';
       const effectiveIsPaid = effectivePricing === 'paid';
 
       const rawImageStorageIds =
@@ -540,11 +550,14 @@ export default function CreateRallyModal({
 
       const rallyId = await createRally({
         type,
-        title,
+        title: effectiveTitle,
         description,
+        rewardAmount: validReward,
+        rewardCurrency: validReward ? '₦' : undefined,
+        rewardType: validReward ? 'reward' : undefined,
         distance: 0,
         time: eventTime || 'Soon',
-        peopleNeeded,
+        peopleNeeded: Math.max(1, peopleNeeded),
         capacity:
           type === 'EVENT' && peopleNeeded > 0 ? peopleNeeded : undefined,
         isPaid: effectiveIsPaid,
@@ -643,7 +656,8 @@ export default function CreateRallyModal({
   // Validation
   // -------------------------------------------------------------------------
   const isPost = type && POST_ONLY_TYPES.includes(type);
-  const needsPricingChoice = type && !isPost;
+  const isEvent = type === 'EVENT';
+  const needsPricingChoice = isEvent;
 
   const isAnyImageUploading = selectedImages.some(
     (it) => it.status === 'pending' || it.status === 'uploading'
@@ -658,11 +672,12 @@ export default function CreateRallyModal({
 
   const canReview =
     !!description.trim() &&
+    (isPost || !!topic.trim()) &&
     !isMediaUploading &&
     !hasImageErrors &&
     allImagesUploaded &&
     (!localPreview || !!mediaStorageId) &&
-    (isPost || (pricing !== null && (pricing !== 'paid' || !!price)));
+    (!isEvent || (pricing !== null && (pricing !== 'paid' || !!price)));
 
   // -------------------------------------------------------------------------
   // Visual config
@@ -705,6 +720,20 @@ export default function CreateRallyModal({
       bg: 'bg-indigo-100',
       label: 'Join',
       subtitle: 'I want people to join me.',
+    },
+    OFFER: {
+      icon: HandHeart,
+      color: 'text-teal-600',
+      bg: 'bg-teal-100',
+      label: 'Offer',
+      subtitle: 'Offer a service, item, or assistance.',
+    },
+    COMMUNITY: {
+      icon: Users,
+      color: 'text-blue-600',
+      bg: 'bg-blue-100',
+      label: 'Community',
+      subtitle: 'Community project or initiative.',
     },
   };
 
@@ -934,24 +963,49 @@ export default function CreateRallyModal({
                     </div>
                   </div>
 
-                  {/* Description */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold text-zinc-900">
-                      What's happening?
-                    </h3>
+                  {/* Topic / Headline (For RALLY types) */}
+                  {type !== 'POST' && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-bold text-zinc-900 flex items-center justify-between">
+                        <span>Topic / Headline</span>
+                        <span className="text-xs font-semibold text-indigo-600">Headline</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        placeholder={
+                          type === 'ASK'
+                            ? 'e.g. Looking for 2 people for weed removal'
+                            : type === 'HELP'
+                            ? 'e.g. Offering web development assistance'
+                            : type === 'JOIN'
+                            ? 'e.g. Need 3 people for community cleanup'
+                            : 'e.g. Looking for volunteers'
+                        }
+                        maxLength={100}
+                        className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm font-semibold text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                  )}
+
+                  {/* Description / Request Details */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-zinc-900 flex items-center justify-between">
+                      <span>{type === 'POST' ? "What's happening?" : 'Request Details'}</span>
+                      {type !== 'POST' && (
+                        <span className="text-xs font-normal text-zinc-400">Detailed description</span>
+                      )}
+                    </label>
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder={
-                        type === 'ASK'
-                          ? 'Tell people what you need...'
-                          : type === 'HELP'
-                          ? 'Tell people how you can help...'
-                          : type === 'EVENT'
-                          ? 'Describe your event...'
-                          : 'What do you want to share?'
+                        type === 'POST'
+                          ? "What's on your mind?"
+                          : 'e.g. I need two people for weed removal and deep cleaning around Uruwhoru High School.'
                       }
-                      className="w-full h-32 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-zinc-900 placeholder:text-zinc-400"
+                      className="w-full h-32 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm text-zinc-900 placeholder:text-zinc-400"
                     />
                   </div>
 
@@ -1296,55 +1350,7 @@ export default function CreateRallyModal({
                     </div>
                   )}
 
-                  {/* Event Hub: interests for RALLY types */}
-                  {!isPost && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
-                          <Tag className="w-4 h-4 text-violet-500" /> Event interests (optional)
-                        </h3>
-                        {selectedInterests.length > 0 && (
-                          <button
-                            onClick={() => setSelectedInterests([])}
-                            className="text-[11px] font-bold text-zinc-400 hover:text-zinc-600"
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {INTEREST_OPTIONS.map((opt) => {
-                          const selected = selectedInterests.includes(opt);
-                          return (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() =>
-                                setSelectedInterests((prev) =>
-                                  selected
-                                    ? prev.filter((i) => i !== opt)
-                                    : [...prev, opt]
-                                )
-                              }
-                              className={cn(
-                                'px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95',
-                                selected
-                                  ? 'bg-violet-600 text-white shadow-sm'
-                                  : 'bg-zinc-50 border border-zinc-200 text-zinc-600 hover:border-violet-200 hover:text-violet-600'
-                              )}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p className="text-[11px] text-zinc-400">
-                        Tag your RALLY with interests so the right people discover it.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Event Hub: attach a POST to a RALLY */}
+                  {/* Attach a POST to a RALLY */}
                   {isPost && (
                     <div className="space-y-3">
                       <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
@@ -1499,69 +1505,97 @@ export default function CreateRallyModal({
                         </div>
                       </div>
 
-                      {/* Admission model: Free / Paid / No admission fee */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-zinc-900">
-                          Admission
-                        </h3>
-                        <div className="grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() => setPricing('free')}
-                            className={cn(
-                              'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm transition-all border-2',
-                              pricing === 'free'
-                                ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                                : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
-                            )}
-                          >
-                            FREE
-                          </button>
-                          <button
-                            onClick={() => setPricing('paid')}
-                            className={cn(
-                              'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm transition-all border-2',
-                              pricing === 'paid'
-                                ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-xs'
-                                : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
-                            )}
-                          >
-                            PAID
-                          </button>
-                          <button
-                            onClick={() => setPricing('none')}
-                            className={cn(
-                              'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm leading-tight transition-all border-2',
-                              pricing === 'none'
-                                ? 'border-indigo-500 bg-indigo-50 text-indigo-800 shadow-xs'
-                                : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
-                            )}
-                          >
-                            No admission fee
-                          </button>
-                        </div>
-                        {pricing === 'paid' && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="pt-2"
-                          >
-                            <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <span className="text-zinc-500 font-semibold">
-                                  ₦
-                                </span>
-                              </div>
-                              <input
-                                type="number"
-                                value={price}
-                                onChange={(e) => setPrice(e.target.value)}
-                                placeholder="Amount"
-                                className="w-full pl-8 p-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
-                              />
+                      {/* Reward / Payment for Community RALLY requests */}
+                      {type !== 'EVENT' ? (
+                        <div className="space-y-2 p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                              <span>💰 Reward / Payment</span>
+                              <span className="text-xs font-normal text-zinc-500">(Optional)</span>
+                            </label>
+                          </div>
+                          <p className="text-xs text-zinc-600">
+                            Offering money, a reward, or compensation? Enter the amount to display on your Rally post.
+                          </p>
+                          <div className="relative mt-2">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                              <span className="text-emerald-700 font-bold text-sm">₦</span>
                             </div>
-                          </motion.div>
-                        )}
-                      </div>
+                            <input
+                              type="number"
+                              min="0"
+                              value={rewardAmount}
+                              onChange={(e) => setRewardAmount(e.target.value)}
+                              placeholder="e.g. 14,000"
+                              className="w-full pl-8 pr-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-sm font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-zinc-400"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        /* Admission model for EVENT type only */
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-bold text-zinc-900">
+                            Admission
+                          </h3>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              onClick={() => setPricing('free')}
+                              className={cn(
+                                'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm transition-all border-2',
+                                pricing === 'free'
+                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                                  : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
+                              )}
+                            >
+                              FREE
+                            </button>
+                            <button
+                              onClick={() => setPricing('paid')}
+                              className={cn(
+                                'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm transition-all border-2',
+                                pricing === 'paid'
+                                  ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-xs'
+                                  : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
+                              )}
+                            >
+                              PAID
+                            </button>
+                            <button
+                              onClick={() => setPricing('none')}
+                              className={cn(
+                                'py-3 px-2 rounded-xl font-bold text-xs sm:text-sm leading-tight transition-all border-2',
+                                pricing === 'none'
+                                  ? 'border-indigo-500 bg-indigo-50 text-indigo-800 shadow-xs'
+                                  : 'border-zinc-200 text-zinc-600 hover:border-zinc-300'
+                              )}
+                            >
+                              No admission fee
+                            </button>
+                          </div>
+                          {pricing === 'paid' && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              className="pt-2"
+                            >
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                  <span className="text-zinc-500 font-semibold">
+                                    ₦
+                                  </span>
+                                </div>
+                                <input
+                                  type="number"
+                                  value={price}
+                                  onChange={(e) => setPrice(e.target.value)}
+                                  placeholder="Amount"
+                                  className="w-full pl-8 p-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+                                />
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -1653,28 +1687,39 @@ export default function CreateRallyModal({
                           </div>
                         )}
                       </div>
-                      {!isPost && pricing !== null && (
-                        <div
-                          className={cn(
-                            'ml-auto px-2.5 py-1 rounded-full text-xs font-bold',
-                            pricing === 'paid'
-                              ? 'bg-amber-100 text-amber-700'
-                              : pricing === 'none'
-                              ? 'bg-zinc-100 text-zinc-600'
-                              : 'bg-emerald-100 text-emerald-700'
-                          )}
-                        >
-                          {pricing === 'paid'
-                            ? `₦${price || '?'}`
-                            : pricing === 'free'
-                            ? 'FREE'
-                            : 'No admission fee'}
+                      {type !== 'POST' && rewardAmount && parseFloat(rewardAmount) > 0 ? (
+                        <div className="ml-auto px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300">
+                          💰 ₦{parseFloat(rewardAmount).toLocaleString()}
                         </div>
+                      ) : (
+                        type === 'EVENT' && pricing !== null && (
+                          <div
+                            className={cn(
+                              'ml-auto px-2.5 py-1 rounded-full text-xs font-bold',
+                              pricing === 'paid'
+                                ? 'bg-amber-100 text-amber-700'
+                                : pricing === 'none'
+                                ? 'bg-zinc-100 text-zinc-600'
+                                : 'bg-emerald-100 text-emerald-700'
+                            )}
+                          >
+                            {pricing === 'paid'
+                              ? `₦${price || '?'}`
+                              : pricing === 'free'
+                              ? 'FREE'
+                              : 'No admission fee'}
+                          </div>
+                        )
                       )}
                     </div>
 
-                    {/* Content */}
-                    <p className="text-sm text-zinc-700 leading-relaxed">
+                    {/* Topic / Headline & Content */}
+                    {type !== 'POST' && topic.trim() && (
+                      <h4 className="text-base font-bold text-zinc-900 leading-snug">
+                        {topic.trim()}
+                      </h4>
+                    )}
+                    <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
                       {description}
                     </p>
 

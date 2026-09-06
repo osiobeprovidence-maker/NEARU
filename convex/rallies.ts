@@ -268,39 +268,95 @@ export const listByInterest = query({
 });
 
 export const listByCreator = query({
-  args: { creatorId: v.id("users"), userId: v.optional(v.id("users")) },
+  args: {
+    creatorId: v.id("users"),
+    userId: v.optional(v.id("users")),
+    tab: v.optional(v.union(v.literal("Created"), v.literal("Interested"), v.literal("Completed"))),
+  },
   handler: async (ctx, args) => {
-    const rallies = await ctx.db.query("rallies").withIndex("by_creator", (q) => q.eq("creatorId", args.creatorId)).order("desc").collect();
-    // Strictly isolate personal posts: never return page posts in personal profile
-    const personalRallies = rallies.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
-
-    const creator = await ctx.db.get(args.creatorId);
+    const tab = args.tab || "Created";
     const mediaCache: Record<string, string | undefined> = {};
     const avatarCache: Record<string, string | undefined> = {};
-    let resolvedCreatorAvatar = creator?.avatar || "";
-    if (creator && isStorageId(resolvedCreatorAvatar)) resolvedCreatorAvatar = (await resolveStorageUrl(ctx, avatarCache, resolvedCreatorAvatar)) || "";
-    const resolvedCreator = creator ? {
-      _id: creator._id,
-      name: creator.name,
-      username: creator.username,
-      avatar: resolvedCreatorAvatar,
-      isNINVerified: creator.isNINVerified,
-      isBlueVerified: !!creator.isBlueVerified,
-      blueCheckStatus: creator.blueCheckStatus,
-      badges: creator.badges,
-      accountType: creator.accountType || "personal",
-      organizationName: creator.organizationName,
-      isPro: creator.isPro ?? false,
-    } : null;
-    return await Promise.all(personalRallies.map(async (rally) => {
-      const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
-      const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
-      const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
-      const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
-      const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
-      const viewerId = args.userId ?? args.creatorId;
-      return { ...rally, mediaUrl, mediaUrls, creator: resolvedCreator, likesCount: likes.length, commentsCount, rsvpsCount: rsvps.length, isLiked: likes.some((l) => l.userId === viewerId), isRsvpd: rsvps.some((r) => r.userId === viewerId) };
-    }));
+
+    let targetRallies: any[] = [];
+    if (tab === "Interested") {
+      // Find rallies the user joined/helped
+      const userRsvps = await ctx.db
+        .query("rsvps")
+        .withIndex("by_user_rally", (q) => q.eq("userId", args.creatorId))
+        .collect();
+      const rallyIds = userRsvps.map((r) => r.rallyId);
+      for (const rid of rallyIds) {
+        const r = await ctx.db.get(rid);
+        if (r && r.creatorId.toString() !== args.creatorId.toString()) {
+          targetRallies.push(r);
+        }
+      }
+    } else {
+      const rallies = await ctx.db
+        .query("rallies")
+        .withIndex("by_creator", (q) => q.eq("creatorId", args.creatorId))
+        .order("desc")
+        .collect();
+      const personalRallies = rallies.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
+      if (tab === "Completed") {
+        targetRallies = personalRallies.filter((r) => r.status === "COMPLETED");
+      } else {
+        targetRallies = personalRallies;
+      }
+    }
+
+    const creatorCache: Record<string, any> = {};
+
+    return await Promise.all(
+      targetRallies.map(async (rally) => {
+        const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
+        const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
+
+        let creatorInfo = creatorCache[rally.creatorId.toString()];
+        if (!creatorInfo) {
+          const creatorDoc: any = await ctx.db.get(rally.creatorId);
+          if (creatorDoc) {
+            let avatar = creatorDoc.avatar || "";
+            if (isStorageId(avatar)) {
+              avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+            }
+            creatorInfo = {
+              _id: creatorDoc._id,
+              name: creatorDoc.name,
+              username: creatorDoc.username,
+              avatar,
+              isNINVerified: creatorDoc.isNINVerified,
+              isBlueVerified: !!creatorDoc.isBlueVerified,
+              blueCheckStatus: creatorDoc.blueCheckStatus,
+              verificationStatus: creatorDoc.blueCheckStatus || (creatorDoc.isBlueVerified ? "verified" : "unverified"),
+              badges: creatorDoc.badges,
+              accountType: creatorDoc.accountType || "personal",
+              organizationName: creatorDoc.organizationName,
+              isPro: creatorDoc.isPro ?? false,
+            };
+            creatorCache[rally.creatorId.toString()] = creatorInfo;
+          }
+        }
+
+        const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+        const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
+        const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+        const viewerId = args.userId ?? args.creatorId;
+
+        return {
+          ...rally,
+          mediaUrl,
+          mediaUrls,
+          creator: creatorInfo || null,
+          likesCount: likes.length,
+          commentsCount,
+          rsvpsCount: rsvps.length,
+          isLiked: likes.some((l) => l.userId.toString() === viewerId.toString()),
+          isRsvpd: rsvps.some((r) => r.userId.toString() === viewerId.toString()),
+        };
+      })
+    );
   },
 });
 
@@ -409,14 +465,68 @@ export const listByCity = query({
 });
 
 export const get = query({
-  args: { rallyId: v.id("rallies") },
+  args: { rallyId: v.id("rallies"), viewerId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
     const rally = await ctx.db.get(args.rallyId);
     if (!rally) return null;
     const mediaCache: Record<string, string | undefined> = {};
+    const avatarCache: Record<string, string | undefined> = {};
     const mediaUrl = await resolveMediaUrl(ctx, mediaCache, rally);
     const mediaUrls = await resolveMediaUrls(ctx, mediaCache, rally);
-    return { ...rally, mediaUrl, mediaUrls };
+
+    const creator = await ctx.db.get(rally.creatorId);
+    let resolvedCreatorAvatar = creator?.avatar || "";
+    if (creator && isStorageId(resolvedCreatorAvatar)) {
+      resolvedCreatorAvatar = (await resolveStorageUrl(ctx, avatarCache, resolvedCreatorAvatar)) || "";
+    }
+    const resolvedCreator = creator
+      ? {
+          _id: creator._id,
+          name: creator.name,
+          username: creator.username,
+          avatar: resolvedCreatorAvatar,
+          bio: creator.bio,
+          location: creator.location,
+          isNINVerified: creator.isNINVerified,
+          isBlueVerified: !!creator.isBlueVerified,
+          blueCheckStatus: creator.blueCheckStatus,
+          verificationStatus: creator.blueCheckStatus || (creator.isBlueVerified ? "verified" : "unverified"),
+          badges: creator.badges,
+          accountType: creator.accountType || "personal",
+          organizationName: creator.organizationName,
+          isPro: creator.isPro ?? false,
+        }
+      : null;
+
+    const likes = await ctx.db.query("likes").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+    const commentsCount = (await ctx.db.query("comments").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect()).length;
+    const rsvps = await ctx.db.query("rsvps").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+    const participants = await ctx.db.query("rallyParticipants").withIndex("by_rally", (q) => q.eq("rallyId", rally._id)).collect();
+
+    const isParticipant = args.viewerId
+      ? participants.some((p) => p.userId.toString() === args.viewerId!.toString() && p.role === "participant")
+      : false;
+    const isLiked = args.viewerId
+      ? likes.some((l) => l.userId.toString() === args.viewerId!.toString())
+      : false;
+    const isRsvpd = args.viewerId
+      ? rsvps.some((r) => r.userId.toString() === args.viewerId!.toString())
+      : false;
+    const participantCount = participants.filter((p) => p.role === "participant").length;
+
+    return {
+      ...rally,
+      mediaUrl,
+      mediaUrls,
+      creator: resolvedCreator,
+      likesCount: likes.length,
+      commentsCount,
+      rsvpsCount: rsvps.length,
+      participantCount: Math.max(participantCount, rally.peopleInterested || 0),
+      isLiked,
+      isRsvpd,
+      isParticipant,
+    };
   },
 });
 
@@ -584,7 +694,15 @@ export const getComments = query({
  */
 export const create = mutation({
   args: {
-    type: v.union(v.literal("ASK"), v.literal("HELP"), v.literal("JOIN"), v.literal("EVENT"), v.literal("POST")),
+    type: v.union(
+      v.literal("ASK"),
+      v.literal("HELP"),
+      v.literal("JOIN"),
+      v.literal("OFFER"),
+      v.literal("COMMUNITY"),
+      v.literal("EVENT"),
+      v.literal("POST")
+    ),
     title: v.string(),
     description: v.string(),
     distance: v.number(),
@@ -593,6 +711,9 @@ export const create = mutation({
     isPaid: v.boolean(),
     price: v.optional(v.number()),
     pricing: v.optional(v.union(v.literal("free"), v.literal("paid"), v.literal("none"))),
+    rewardAmount: v.optional(v.number()),
+    rewardCurrency: v.optional(v.string()),
+    rewardType: v.optional(v.string()),
     creatorId: v.id("users"), // verified against auth
     eventTag: v.optional(v.string()),
     city: v.optional(v.string()),
@@ -695,6 +816,9 @@ export const create = mutation({
       pricing: effectivePricing,
       isPaid: effectiveIsPaid,
       price: effectivePrice,
+      rewardAmount: args.rewardAmount,
+      rewardCurrency: args.rewardAmount ? (args.rewardCurrency || "₦") : undefined,
+      rewardType: args.rewardAmount ? (args.rewardType || "reward") : undefined,
       interest: args.type === "POST" && args.interest ? args.interest.toLowerCase().trim() : undefined,
       eventTag: isRallyType && eventTag ? eventTag.toLowerCase() : undefined,
       rallyLinkId: args.type === "POST" ? args.rallyLinkId : undefined,
@@ -755,7 +879,12 @@ export const saveMuxResult = mutation({
 export const updateStatus = mutation({
   args: {
     rallyId: v.id("rallies"),
-    status: v.union(v.literal("ACTIVE"), v.literal("COMPLETED"), v.literal("CANCELLED")),
+    status: v.union(
+      v.literal("ACTIVE"),
+      v.literal("FULL"),
+      v.literal("COMPLETED"),
+      v.literal("CANCELLED")
+    ),
   },
   handler: async (ctx, args) => {
     const caller = await getAuthenticatedUser(ctx);
@@ -853,6 +982,230 @@ export const toggleRsvp = mutation({
       });
     } catch {}
     return { rsvpd: true };
+  },
+});
+
+/**
+ * Join a RALLY as a helper / participant.
+ * - Enforces that the creator cannot join their own Rally.
+ * - Enforces capacity limits: once needed people join, status flips to FULL.
+ * - Creates/finds a private 1:1 direct conversation between helper and creator.
+ * - Sends an introductory message in the private chat.
+ * - Dispatches a notification to the creator.
+ * - Returns { joined: true, alreadyJoined: boolean, conversationId }.
+ */
+export const joinRally = mutation({
+  args: { rallyId: v.id("rallies") },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const rally = await ctx.db.get(args.rallyId);
+    if (!rally) throw new Error("Rally not found");
+
+    if (caller._id.toString() === rally.creatorId.toString()) {
+      throw new Error("You cannot join a Rally you created.");
+    }
+
+    const needed = rally.peopleNeeded || 1;
+    const currentInterested = rally.peopleInterested || 0;
+
+    // Check if already joined
+    const existingParticipant = await ctx.db
+      .query("rallyParticipants")
+      .withIndex("by_rally_user", (q) =>
+        q.eq("rallyId", args.rallyId).eq("userId", caller._id)
+      )
+      .first();
+
+    const directKey = [caller._id.toString(), rally.creatorId.toString()].sort().join(":");
+    let conv = await ctx.db
+      .query("conversations")
+      .withIndex("by_direct_key", (q) => q.eq("directKey", directKey))
+      .unique();
+
+    let conversationId: any = conv?._id;
+
+    if (existingParticipant) {
+      if (!conversationId) {
+        conversationId = await ctx.db.insert("conversations", {
+          type: "direct",
+          directKey,
+          rallyId: args.rallyId,
+          rallyTitle: rally.title,
+          participantIds: [caller._id, rally.creatorId],
+          lastMessage: {
+            senderId: caller._id.toString(),
+            text: `Hi, I'm helping with your Rally: "${rally.title}"`,
+            timestamp: Date.now(),
+          },
+          unreadCount: 0,
+          unreadByUser: { [caller._id.toString()]: 0, [rally.creatorId.toString()]: 0 },
+          lastRead: {},
+        });
+      }
+      return { joined: true, alreadyJoined: true, conversationId };
+    }
+
+    // Check capacity
+    if (rally.status === "FULL" || (needed > 0 && currentInterested >= needed)) {
+      throw new Error("This Rally has reached capacity.");
+    }
+
+    // Insert helper participant
+    await ctx.db.insert("rallyParticipants", {
+      rallyId: args.rallyId,
+      userId: caller._id,
+      role: "participant",
+      joinedAt: Date.now(),
+    });
+
+    // Also insert into rsvps for backwards compatibility
+    const existingRsvp = await ctx.db
+      .query("rsvps")
+      .withIndex("by_user_rally", (q) =>
+        q.eq("userId", caller._id).eq("rallyId", args.rallyId)
+      )
+      .first();
+    if (!existingRsvp) {
+      await ctx.db.insert("rsvps", {
+        userId: caller._id,
+        rallyId: args.rallyId,
+        createdAt: Date.now(),
+      });
+    }
+
+    const newInterested = currentInterested + 1;
+    const newStatus = (needed > 0 && newInterested >= needed) ? "FULL" : rally.status;
+    await ctx.db.patch(args.rallyId, {
+      peopleInterested: newInterested,
+      status: newStatus,
+    });
+
+    // Open or create 1:1 direct conversation between helper and creator
+    const introText = `Hi! I joined your Rally: "${rally.title}". Let's coordinate!`;
+    if (conv) {
+      conversationId = conv._id;
+      await ctx.db.insert("messages", {
+        conversationId,
+        senderId: caller._id,
+        text: introText,
+        timestamp: Date.now(),
+      });
+      const currentUnread = (conv.unreadByUser && conv.unreadByUser[rally.creatorId.toString()]) || 0;
+      await ctx.db.patch(conversationId, {
+        rallyId: args.rallyId,
+        rallyTitle: rally.title,
+        lastMessage: {
+          senderId: caller._id.toString(),
+          text: introText,
+          timestamp: Date.now(),
+        },
+        unreadCount: (conv.unreadCount || 0) + 1,
+        unreadByUser: {
+          ...(conv.unreadByUser || {}),
+          [caller._id.toString()]: 0,
+          [rally.creatorId.toString()]: currentUnread + 1,
+        },
+      });
+    } else {
+      conversationId = await ctx.db.insert("conversations", {
+        type: "direct",
+        directKey,
+        rallyId: args.rallyId,
+        rallyTitle: rally.title,
+        participantIds: [caller._id, rally.creatorId],
+        lastMessage: {
+          senderId: caller._id.toString(),
+          text: introText,
+          timestamp: Date.now(),
+        },
+        unreadCount: 1,
+        unreadByUser: {
+          [caller._id.toString()]: 0,
+          [rally.creatorId.toString()]: 1,
+        },
+        lastRead: {},
+      });
+      await ctx.db.insert("messages", {
+        conversationId,
+        senderId: caller._id,
+        text: introText,
+        timestamp: Date.now(),
+      });
+    }
+
+    // Notify creator
+    try {
+      await ctx.runMutation(api.notifications.create, {
+        userId: rally.creatorId,
+        type: "rally_participant_joined",
+        title: "New Rally Helper",
+        body: `${caller.name || "Someone"} joined your Rally "${rally.title}". Tap to chat privately.`,
+        rallyId: args.rallyId,
+        senderId: caller._id,
+        conversationId,
+        url: `/messages`,
+      });
+    } catch {}
+
+    return { joined: true, alreadyJoined: false, conversationId };
+  },
+});
+
+/**
+ * Leave a RALLY. Caller must be an active helper.
+ */
+export const leaveRally = mutation({
+  args: { rallyId: v.id("rallies") },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    const rally = await ctx.db.get(args.rallyId);
+    if (!rally) throw new Error("Rally not found");
+
+    const participant = await ctx.db
+      .query("rallyParticipants")
+      .withIndex("by_rally_user", (q) =>
+        q.eq("rallyId", args.rallyId).eq("userId", caller._id)
+      )
+      .first();
+    if (participant) {
+      await ctx.db.delete(participant._id);
+    }
+
+    const rsvp = await ctx.db
+      .query("rsvps")
+      .withIndex("by_user_rally", (q) =>
+        q.eq("userId", caller._id).eq("rallyId", args.rallyId)
+      )
+      .first();
+    if (rsvp) {
+      await ctx.db.delete(rsvp._id);
+    }
+
+    const needed = rally.peopleNeeded || 1;
+    const currentInterested = rally.peopleInterested || 0;
+    const newInterested = Math.max(0, currentInterested - 1);
+    let newStatus = rally.status;
+    if (rally.status === "FULL" && newInterested < needed) {
+      newStatus = "ACTIVE";
+    }
+
+    await ctx.db.patch(args.rallyId, {
+      peopleInterested: newInterested,
+      status: newStatus,
+    });
+
+    try {
+      await ctx.runMutation(api.notifications.create, {
+        userId: rally.creatorId,
+        type: "rally_participant_left",
+        title: "Helper left Rally",
+        body: `${caller.name || "Someone"} left "${rally.title}".`,
+        rallyId: args.rallyId,
+        url: `/rally/${args.rallyId}`,
+      });
+    } catch {}
+
+    return { left: true };
   },
 });
 

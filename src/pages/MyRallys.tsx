@@ -18,7 +18,7 @@ export default function MyRallys() {
   const myRallies = useQuery(
     api.rallies.listByCreator,
     convexUserId
-      ? { creatorId: convexUserId as any, userId: convexUserId as any }
+      ? { creatorId: convexUserId as any, userId: convexUserId as any, tab: activeTab as any }
       : 'skip'
   );
 
@@ -27,7 +27,7 @@ export default function MyRallys() {
   // Map raw Convex result to the Rally shape that RallyCard expects
   const mappedRallies: Rally[] = React.useMemo(() => {
     if (!myRallies) return [];
-    return myRallies.map((r) => ({
+    return myRallies.map((r: any) => ({
       id: r._id,
       type: r.type,
       title: r.title,
@@ -39,6 +39,9 @@ export default function MyRallys() {
       isPaid: r.isPaid,
       price: r.price,
       pricing: r.pricing,
+      rewardAmount: r.rewardAmount,
+      rewardCurrency: r.rewardCurrency,
+      rewardType: r.rewardType,
       creator: r.creator
         ? {
             id: r.creator._id,
@@ -85,9 +88,9 @@ export default function MyRallys() {
       isLiked: r.isLiked,
       isRsvpd: r.isRsvpd,
     }));
-  }, [myRallies, convexUserId]);
+  }, [myRallies, convexUserId, user]);
 
-  const createdRallies = mappedRallies.filter((r) => !deletedIds.has(r.id));
+  const displayedRallies = mappedRallies.filter((r) => !deletedIds.has(r.id));
   const isLoading = myRallies === undefined;
 
   const handleDeleted = (id: string) => {
@@ -119,24 +122,24 @@ export default function MyRallys() {
       </div>
 
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-        {isLoading && activeTab === 'Created' ? (
+        {isLoading ? (
           <>
             <RallyCardSkeleton />
             <RallyCardSkeleton />
           </>
-        ) : activeTab === 'Created' ? (
-          createdRallies.length > 0 ? (
-            createdRallies.map((rally) => (
-              <RallyCard key={rally.id} rally={rally} onDeleted={handleDeleted} />
-            ))
-          ) : (
-            <EmptyState
-              message="You haven't created any RALLYS yet. Time to start an adventure!"
-            />
-          )
+        ) : displayedRallies.length > 0 ? (
+          displayedRallies.map((rally) => (
+            <RallyCard key={rally.id} rally={rally} onDeleted={handleDeleted} />
+          ))
         ) : (
           <EmptyState
-            message={`You don't have any ${activeTab.toLowerCase()} RALLYS yet.`}
+            message={
+              activeTab === 'Created'
+                ? "You haven't created any RALLYS yet. Time to start an adventure!"
+                : activeTab === 'Interested'
+                ? "You haven't joined or offered help on any RALLYS yet."
+                : "You don't have any completed RALLYS yet."
+            }
           />
         )}
       </div>
