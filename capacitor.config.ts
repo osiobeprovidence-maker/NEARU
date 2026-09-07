@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.nearu.app',
-  appName: 'NEARU',
+  appId: 'lalao.com',
+  appName: 'lalao',
   webDir: 'dist'
 };
 

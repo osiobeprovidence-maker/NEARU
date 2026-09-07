@@ -220,19 +220,13 @@ const client = new ConvexHttpClient(CONVEX_URL, { fetch: resilientFetch });
 
 async function releasePipeline() {
   try {
-    // A. Request signed upload URL
-    const uploadUrl = await retryWithBackoff(async () => {
-      return await client.mutation(api.releases.generateApkUploadUrl, {});
-    });
-
-    if (!uploadUrl) {
-      throw new Error('Failed to generate Convex upload URL');
-    }
-    console.log(`   Signed upload URL acquired from Convex.`);
-
-    // B. Stream file via HTTP POST with customFetch
+    // A & B: Request fresh signed upload URL and stream file via HTTP POST on each attempt
     console.log(`   Streaming ${sizeMb} to Convex CDN...`);
-    const uploadResponse = await retryWithBackoff(async () => {
+    const uploadResult = await retryWithBackoff(async () => {
+      const uploadUrl = await client.mutation(api.releases.generateApkUploadUrl, {});
+      if (!uploadUrl) {
+        throw new Error('Failed to generate Convex upload URL');
+      }
       const resp = await resilientFetch(uploadUrl, {
         method: 'POST',
         headers: {
@@ -244,10 +238,10 @@ async function releasePipeline() {
       if (!resp.ok) {
         throw new Error(`Upload failed with status ${resp.status} ${resp.statusText}`);
       }
-      return resp;
-    });
+      return await resp.json();
+    }, 4, 3000);
 
-    const { storageId } = await uploadResponse.json();
+    const storageId = uploadResult.storageId;
     console.log(`   Upload successful! Storage ID: ${storageId}`);
 
     // 8. Publish release metadata in Convex

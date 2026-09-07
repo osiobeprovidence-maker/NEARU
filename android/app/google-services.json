@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "415405275981",
+    "project_id": "usenearu",
+    "storage_bucket": "usenearu.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:415405275981:android:0751d5c69d7dcd5d029504",
+        "android_client_info": {
+          "package_name": "lalao.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "415405275981-rhupnm6pd387e7g3i5tcbdniq8uepfnf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB38vRdMRpu7rJNUdqM43LXGRR6Vl4ox8M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "415405275981-rhupnm6pd387e7g3i5tcbdniq8uepfnf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
