@@ -28,11 +28,11 @@ export const getLatestRelease = query({
   args: {},
   handler: async (ctx) => {
     // 1. First look for explicit isLatest published release
-    let release = await ctx.db
+    const latestCandidates = await ctx.db
       .query("appReleases")
       .withIndex("by_latest", (q) => q.eq("isLatest", true))
-      .filter((q) => q.eq(q.field("status"), "published"))
-      .first();
+      .collect();
+    let release = latestCandidates.find((r) => r.status === "published") || null;
 
     // 2. Fallback: If not marked isLatest, pick the newest published release by timestamp
     if (!release) {
