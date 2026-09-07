@@ -44,7 +44,7 @@ function OrDivider() {
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, loginWithGoogle, register, sendMagicLink, loginWithMagicLink, resetPassword } = useAuth();
+  const { isLoggedIn, login, loginWithGoogle, register, sendMagicLink, loginWithMagicLink, resetPassword } = useAuth();
 
   const params = new URLSearchParams(location.search);
   const nextPath = params.get('next') || '/';
@@ -58,6 +58,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+
+  // If user is already authenticated (or becomes authenticated via redirect/popup/session),
+  // route them forward immediately
+  useEffect(() => {
+    if (isLoggedIn) {
+      navigate(nextPath, { replace: true });
+    }
+  }, [isLoggedIn, navigate, nextPath]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Magic-link auto-complete

@@ -4,6 +4,8 @@ import {
   auth,
   googleProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
@@ -226,6 +228,34 @@ function convexUserToUser(cu: any, firebaseEmail: string): User {
 }
 
 /**
+ * Purge stale/orphaned OAuth state stored by Firebase in sessionStorage.
+ * This prevents the "missing initial state" redirect error loop when browser storage
+ * has been partitioned, interrupted, or out of sync.
+ */
+function clearStaleOAuthStorage() {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < window.sessionStorage.length; i++) {
+        const key = window.sessionStorage.key(i);
+        if (
+          key &&
+          (key.startsWith('firebase:authUser:') ||
+            key.startsWith('firebase:redirect') ||
+            key.includes('apiKey') ||
+            key.includes('oauth'))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => window.sessionStorage.removeItem(k));
+    }
+  } catch {
+    // Ignore storage access errors if partitioned or in strict privacy mode
+  }
+}
+
+/**
  * Translate raw Firebase auth error codes into friendly user-facing messages.
  * The technical code is preserved on err.code so dev logs still have it.
  */
@@ -242,6 +272,12 @@ function friendlyAuthError(err: any): string {
     return 'Google sign-in was cancelled.';
   }
   if (code === 'auth/popup-blocked') return 'Pop-up was blocked by your browser. Please allow pop-ups and try again.';
+  if (code === 'auth/missing-initial-state') {
+    return 'Sign-in session expired or was blocked by browser privacy settings. Please try again with pop-ups allowed.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain is not authorized for Google sign-in. Please add this domain to Authorized Domains in Firebase Console.';
+  }
   if (code === 'auth/network-request-failed') return 'Something went wrong. Please check your connection and try again.';
   if (code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
   if (code === 'auth/account-exists-with-different-credential') {
@@ -320,6 +356,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
     return unsubscribe;
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Safe redirect-result handler on mount
+  // Resolves credentials if user arrived from an OAuth redirect or standalone PWA
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    let isMounted = true;
+    getRedirectResult(auth)
+      .then((cred) => {
+        if (!isMounted) return;
+        if (cred?.user) {
+          setFirebaseUser(cred.user);
+        }
+      })
+      .catch((err) => {
+        if (err?.code === 'auth/missing-initial-state') {
+          console.warn('[AuthContext] Handled missing-initial-state redirect cleanly; purging stale OAuth keys.');
+          clearStaleOAuthStorage();
+        } else if (
+          err?.code !== 'auth/popup-closed-by-user' &&
+          err?.code !== 'auth/cancelled-popup-request'
+        ) {
+          console.warn('[AuthContext] getRedirectResult notice:', err?.code, err?.message);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -430,12 +495,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithGoogle = async () => {
+    // Clear any stale OAuth transaction artifacts before triggering sign-in
+    clearStaleOAuthStorage();
     try {
-      await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged fires → uidQueryResult re-evaluates →
-      // syncNewUser runs if no Convex record exists.
-      // The calling page should navigate to '/' after this resolves.
+      // Primary: Use popup flow for web/PWA.
+      // This uses direct window.postMessage communication, which completely avoids
+      // storage-partitioned sessionStorage "missing initial state" issues.
+      const cred = await signInWithPopup(auth, googleProvider);
+      if (cred?.user) {
+        setFirebaseUser(cred.user);
+      }
+      return;
     } catch (err: any) {
+      console.warn('[AuthContext] Google popup sign-in error:', err?.code, err?.message);
+
+      // If popup was blocked by the browser (e.g. mobile Safari / standalone PWA),
+      // provide seamless fallback to signInWithRedirect.
+      if (err?.code === 'auth/popup-blocked') {
+        console.info('[AuthContext] Pop-up blocked; falling back to signInWithRedirect...');
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (redirectErr: any) {
+          if (redirectErr?.code === 'auth/missing-initial-state') {
+            clearStaleOAuthStorage();
+          }
+          throw new Error(friendlyAuthError(redirectErr));
+        }
+      }
+
+      // If missing initial state error occurs, purge stale session keys immediately
+      if (err?.code === 'auth/missing-initial-state') {
+        clearStaleOAuthStorage();
+      }
+
       // Re-throw with a friendly message so the UI can display it.
       throw new Error(friendlyAuthError(err));
     }
@@ -518,6 +611,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn('[AuthContext] Failed to clear push subscriptions on logout:', e);
     }
+    clearStaleOAuthStorage();
     await signOut(auth);
   };
 

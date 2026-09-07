@@ -18,8 +18,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('convex.cloud') || event.request.url.includes('convex.site')) return;
+  if (
+    event.request.url.includes('convex.cloud') ||
+    event.request.url.includes('convex.site') ||
+    event.request.url.includes('firebaseapp.com') ||
+    event.request.url.includes('googleapis.com') ||
+    event.request.url.includes('google.com') ||
+    event.request.url.includes('/__/auth/')
+  ) return;
   event.respondWith(
     fetch(event.request).catch(async () => {
       const cached = await caches.match(event.request);

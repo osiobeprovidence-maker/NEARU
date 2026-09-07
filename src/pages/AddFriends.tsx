@@ -26,6 +26,12 @@ import {
 } from 'lucide-react';
 import { ProfileVerificationCheck } from '../components/VerificationBadge';
 
+interface ContactInput {
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
 interface MatchedContactsListProps {
   viewerId: string;
   deviceContacts: ContactInput[];

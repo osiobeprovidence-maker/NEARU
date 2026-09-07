@@ -1,8 +1,15 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import {
+  initializeAuth,
   getAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  browserPopupRedirectResolver,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
@@ -11,6 +18,7 @@ import {
   isSignInWithEmailLink,
   signInWithEmailLink,
   reload,
+  setPersistence,
 } from "firebase/auth";
 
 const firebaseConfig = {
@@ -23,8 +31,26 @@ const firebaseConfig = {
   measurementId: "G-NCZZ1WFE1Z",
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// Initialize Auth with multi-tier browser persistence (IndexedDB -> LocalStorage -> SessionStorage)
+// and browserPopupRedirectResolver for rock-solid OAuth popup/redirect handling.
+let authInstance;
+try {
+  authInstance = initializeAuth(app, {
+    persistence: [
+      indexedDBLocalPersistence,
+      browserLocalPersistence,
+      browserSessionPersistence,
+    ],
+    popupRedirectResolver: browserPopupRedirectResolver,
+  });
+} catch {
+  // If already initialized (e.g. Vite fast refresh), obtain the existing instance
+  authInstance = getAuth(app);
+}
+
+export const auth = authInstance;
 
 // Google provider — configured once here, imported wherever needed.
 export const googleProvider = new GoogleAuthProvider();
@@ -39,6 +65,8 @@ googleProvider.setCustomParameters({ prompt: "select_account" });
 export {
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
@@ -47,4 +75,7 @@ export {
   isSignInWithEmailLink,
   signInWithEmailLink,
   reload,
+  setPersistence,
+  browserLocalPersistence,
+  indexedDBLocalPersistence,
 };
