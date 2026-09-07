@@ -1,5 +1,8 @@
+import React from 'react';
 import { motion } from 'motion/react';
 import BrandLogo from '../components/BrandLogo';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { 
   AlertCircle, 
   Heart, 
@@ -11,7 +14,12 @@ import {
   ArrowRight,
   Star,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  Download,
+  Smartphone,
+  History,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
 
 const fadeUp = {
@@ -23,7 +31,278 @@ const stagger = {
   visible: { transition: { staggerChildren: 0.12 } },
 };
 
+const FALLBACK_RELEASE = {
+  version: '1.0.0',
+  buildNumber: 100,
+  releaseDate: 'September 7, 2026',
+  apkUrl: 'https://rare-rooster-878.eu-west-1.convex.cloud/api/storage/c76736af-bec9-40a2-af46-8b0de74184d7',
+  apkSize: '4.6 MB',
+  releaseNotes: [
+    'Full-featured mobile messaging with bottom chat composer',
+    'Brand-new unified Add Friends discovery hub',
+    'Identity-verified community Rallies (Ask, Help, Join)',
+    'Performance optimizations & background stability improvements',
+  ],
+  minAndroidVersion: 'Android 8.0+',
+  isLatest: true,
+};
+
+interface ReleaseData {
+  version: string;
+  buildNumber?: number;
+  releaseDate: string;
+  apkUrl: string;
+  apkSize?: string;
+  releaseNotes: string[];
+  minAndroidVersion?: string;
+  isLatest?: boolean;
+}
+
+function DownloadHubContent({ 
+  release, 
+  history 
+}: { 
+  release: ReleaseData; 
+  history: ReleaseData[] 
+}) {
+  return (
+    <section id="download" className="max-w-6xl mx-auto px-5 py-16 md:py-24">
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: '-80px' }}
+        variants={stagger}
+        className="text-center mb-12"
+      >
+        <motion.div variants={fadeUp} transition={{ duration: 0.5 }}>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-full mb-3">
+            <Smartphone className="w-3.5 h-3.5" />
+            Official Android Release
+          </span>
+        </motion.div>
+        <motion.h2
+          variants={fadeUp}
+          transition={{ duration: 0.5 }}
+          className="text-3xl sm:text-5xl font-black text-zinc-900 tracking-tight"
+        >
+          Get Lalao for Android
+        </motion.h2>
+        <motion.p
+          variants={fadeUp}
+          transition={{ duration: 0.5 }}
+          className="mt-3 text-sm sm:text-base text-zinc-500 max-w-lg mx-auto leading-relaxed"
+        >
+          Download the latest verified Android release directly to your device. Always fast, virus-free, and up to date.
+        </motion.p>
+      </motion.div>
+
+      {/* Latest Release Featured Card */}
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: '-60px' }}
+        variants={fadeUp}
+        transition={{ duration: 0.6 }}
+        className="max-w-3xl mx-auto bg-white border border-zinc-200 rounded-3xl p-6 sm:p-10 shadow-xl shadow-zinc-200/50 relative overflow-hidden"
+      >
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/70 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        
+        <div className="relative">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-zinc-100">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-black text-zinc-900 tracking-tight">
+                    Lalao for Android
+                  </h3>
+                  <span className="px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
+                    Latest
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-500 font-medium mt-0.5 flex items-center gap-2">
+                  <span className="font-bold text-zinc-800">v{release.version}</span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-zinc-400" />
+                    {release.releaseDate}
+                  </span>
+                  {release.apkSize && (
+                    <>
+                      <span>•</span>
+                      <span>{release.apkSize}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <span className="text-xs font-bold text-zinc-500 bg-zinc-100 px-3 py-1 rounded-full border border-zinc-200">
+                {release.minAndroidVersion || 'Android 8.0+'}
+              </span>
+            </div>
+          </div>
+
+          <div className="py-6">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3.5 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              What's new in this release
+            </h4>
+            <ul className="space-y-2.5">
+              {release.releaseNotes.map((note: string, idx: number) => (
+                <li key={idx} className="flex items-start gap-2.5 text-sm text-zinc-700">
+                  <div className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="leading-snug">{note}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <a
+              href={release.apkUrl}
+              download={`lalao-v${release.version}.apk`}
+              className="px-8 py-4 bg-zinc-900 text-white font-bold text-sm rounded-2xl hover:bg-zinc-800 active:scale-[0.98] transition-all shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2.5 group"
+            >
+              <Download className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+              <span>Download APK</span>
+              <span className="text-xs text-zinc-400 font-normal ml-1">
+                (v{release.version})
+              </span>
+            </a>
+
+            <div className="flex items-center justify-center sm:justify-end gap-3 text-xs text-zinc-400 font-medium">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                Verified Safe
+              </span>
+              <span>•</span>
+              <span>Direct Install</span>
+              <span>•</span>
+              <span>No Store Login</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Version History */}
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: '-60px' }}
+        variants={fadeUp}
+        transition={{ duration: 0.6, delay: 0.1 }}
+        className="max-w-3xl mx-auto mt-8"
+      >
+        <div className="bg-zinc-100/70 border border-zinc-200/80 rounded-3xl p-6 sm:p-8">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-zinc-500" />
+              <h4 className="text-sm font-black uppercase tracking-wider text-zinc-700">
+                Version History
+              </h4>
+            </div>
+            <span className="text-xs text-zinc-400 font-medium">
+              {history.length} {history.length === 1 ? 'release' : 'releases'} available
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {history.map((rel: any, idx: number) => (
+              <div
+                key={rel.version || idx}
+                className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-zinc-300 transition-colors"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-zinc-900">
+                      v{rel.version}
+                    </span>
+                    {rel.isLatest && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full">
+                        Latest
+                      </span>
+                    )}
+                    <span className="text-xs text-zinc-400">
+                      • {rel.releaseDate}
+                    </span>
+                    {rel.apkSize && (
+                      <span className="text-xs text-zinc-400">
+                        • {rel.apkSize}
+                      </span>
+                    )}
+                  </div>
+                  {rel.releaseNotes && rel.releaseNotes.length > 0 && (
+                    <p className="text-xs text-zinc-500 line-clamp-1">
+                      {rel.releaseNotes.join(' • ')}
+                    </p>
+                  )}
+                </div>
+
+                <a
+                  href={rel.apkUrl}
+                  download={`lalao-v${rel.version}.apk`}
+                  className="self-start sm:self-center px-4 py-2 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 text-xs font-bold rounded-xl border border-zinc-200 transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5 text-zinc-600" />
+                  Download
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+function DownloadHubQuery() {
+  const latestRelease = useQuery(api.releases.getLatestRelease);
+  const versionHistory = useQuery(api.releases.getVersionHistory);
+
+  const activeRelease = latestRelease || FALLBACK_RELEASE;
+  const historyList = (versionHistory && versionHistory.length > 0)
+    ? (versionHistory as ReleaseData[])
+    : [activeRelease];
+
+  return <DownloadHubContent release={activeRelease} history={historyList} />;
+}
+
+class DownloadErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(err: any) {
+    console.warn('DownloadHub fallback used:', err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <DownloadHubContent 
+          release={FALLBACK_RELEASE} 
+          history={[FALLBACK_RELEASE]} 
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function Landing() {
+
+
   const handleGetStarted = () => {
     window.location.href = '/onboarding';
   };
@@ -41,6 +320,13 @@ export default function Landing() {
             <BrandLogo boxClassName="w-8 h-8" rounded="rounded-lg" nameClassName="text-xl" fallbackLetter="l" />
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href="#download"
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full hover:bg-indigo-100 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download APK
+            </a>
             <button
               onClick={handleLogin}
               className="px-4 py-2 text-sm font-bold text-zinc-600 hover:text-zinc-900 transition-colors"
@@ -88,13 +374,13 @@ export default function Landing() {
                 Start Rallying
                 <ArrowRight className="w-4 h-4" />
               </button>
-              <button
-                onClick={handleGetStarted}
-                className="w-full sm:w-auto px-8 py-4 bg-white text-zinc-900 font-bold text-sm rounded-2xl border border-zinc-200 hover:bg-zinc-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              <a
+                href="#download"
+                className="w-full sm:w-auto px-8 py-4 bg-white text-zinc-900 font-bold text-sm rounded-2xl border border-zinc-200 hover:bg-zinc-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm"
               >
-                I have an account
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                <Download className="w-4 h-4 text-indigo-600" />
+                Download for Android
+              </a>
             </div>
 
             <div className="mt-8 flex items-center justify-center gap-6 text-xs text-zinc-400 font-medium">
@@ -114,6 +400,13 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ------------------------------------------------------------- */}
+      {/* OFFICIAL LALAO ANDROID DOWNLOAD HUB */}
+      {/* ------------------------------------------------------------- */}
+      <DownloadErrorBoundary>
+        <DownloadHubQuery />
+      </DownloadErrorBoundary>
 
       {/* Three Pillars: ASK / HELP / JOIN */}
       <section className="max-w-6xl mx-auto px-5 py-20 md:py-28">

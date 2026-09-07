@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -10,7 +10,9 @@
     "build:prod": "vite build --mode production && cap sync android",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "release:apk": "node scripts/release-apk.mjs",
+    "release:apk:dry": "node scripts/release-apk.mjs --dry-run"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

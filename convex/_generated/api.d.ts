@@ -25,6 +25,7 @@ import type * as notifications from "../notifications.js";
 import type * as pages from "../pages.js";
 import type * as push from "../push.js";
 import type * as rallies from "../rallies.js";
+import type * as releases from "../releases.js";
 import type * as users from "../users.js";
 import type * as verificationWorkflow from "../verificationWorkflow.js";
 import type * as verifications from "../verifications.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   pages: typeof pages;
   push: typeof push;
   rallies: typeof rallies;
+  releases: typeof releases;
   users: typeof users;
   verificationWorkflow: typeof verificationWorkflow;
   verifications: typeof verifications;

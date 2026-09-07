@@ -859,4 +859,28 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
     .index("by_created", ["createdAt"]),
+
+  // Android Application Releases & Version History
+  appReleases: defineTable({
+    version: v.string(), // Semantic version, e.g. "1.0.0"
+    buildNumber: v.number(), // Integer build number / versionCode, e.g. 100
+    releaseDate: v.string(), // Human readable date, e.g. "September 7, 2026"
+    timestamp: v.number(), // Epoch ms for chronological sorting
+    apkStorageId: v.optional(v.string()), // Convex storage ID if uploaded to Convex
+    apkUrl: v.string(), // Direct download URL (Convex CDN or external)
+    apkSize: v.optional(v.string()), // e.g. "4.8 MB"
+    releaseNotes: v.array(v.string()), // Highlights / changelog bullet points
+    isLatest: v.boolean(), // Quick indicator for the current public release
+    status: v.union(
+      v.literal("published"),
+      v.literal("draft"),
+      v.literal("archived")
+    ),
+    minAndroidVersion: v.optional(v.string()), // e.g. "Android 8.0+"
+    sha256: v.optional(v.string()), // Integrity checksum
+  })
+    .index("by_status", ["status"])
+    .index("by_latest", ["isLatest"])
+    .index("by_timestamp", ["timestamp"]),
 });
+
