@@ -91,6 +91,42 @@ export const getByUsername = query({
   },
 });
 
+export const checkUsernameAvailable = query({
+  args: {
+    username: v.string(),
+    currentUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const raw = (args.username || "").trim().toLowerCase().replace(/^@+/, "");
+    if (!raw) {
+      return { available: false, cleanUsername: "", reason: "Username cannot be empty" };
+    }
+    if (raw.length < 3) {
+      return { available: false, cleanUsername: raw, reason: "Must be at least 3 characters" };
+    }
+    if (raw.length > 30) {
+      return { available: false, cleanUsername: raw, reason: "Cannot exceed 30 characters" };
+    }
+    if (!/^[a-z0-9_.]+$/.test(raw)) {
+      return { available: false, cleanUsername: raw, reason: "Can only contain letters, numbers, underscores, and periods" };
+    }
+
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_username", (q) => q.eq("username", raw))
+      .first();
+
+    if (existing) {
+      if (args.currentUserId && existing._id === args.currentUserId) {
+        return { available: true, cleanUsername: raw };
+      }
+      return { available: false, cleanUsername: raw, reason: "Username is already taken" };
+    }
+
+    return { available: true, cleanUsername: raw };
+  },
+});
+
 export const getProfile = query({
   args: {
     userId: v.id("users"),
@@ -909,7 +945,22 @@ export const completeOnboarding = mutation({
     void _ignored;
     const patch: Record<string, unknown> = { onboardingCompleted: true };
     if (fields.name) patch.name = fields.name;
-    if (fields.username) patch.username = fields.username;
+    if (fields.username) {
+      const clean = fields.username.trim().toLowerCase().replace(/^@+/, "");
+      if (clean) {
+        if (!/^[a-z0-9_.]{3,30}$/.test(clean)) {
+          throw new Error("Username must be between 3 and 30 characters and contain only letters, numbers, underscores, and periods.");
+        }
+        const existing = await ctx.db
+          .query("users")
+          .withIndex("by_username", (q) => q.eq("username", clean))
+          .first();
+        if (existing && existing._id !== targetId) {
+          throw new Error("This username is already taken. Please choose another.");
+        }
+        patch.username = clean;
+      }
+    }
     if (fields.avatar) patch.avatar = fields.avatar;
     if (fields.interests && fields.interests.length > 0) {
       patch.interests = fields.interests;

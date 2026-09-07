@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import BrandLogo from '../components/BrandLogo';
 import { useQuery } from 'convex/react';
@@ -301,14 +302,14 @@ class DownloadErrorBoundary extends React.Component<
 }
 
 export default function Landing() {
-
+  const navigate = useNavigate();
 
   const handleGetStarted = () => {
-    window.location.href = '/onboarding';
+    navigate('/login?mode=signup');
   };
 
   const handleLogin = () => {
-    window.location.href = '/login';
+    navigate('/login?mode=signin');
   };
 
   return (
