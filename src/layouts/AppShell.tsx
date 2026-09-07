@@ -23,11 +23,13 @@ import {
   ArrowLeft,
   Building2,
   Store,
-  Menu
+  Menu,
+  UserPlus
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { App as CapApp } from '@capacitor/app';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation as useLocationContext } from '../contexts/LocationContext';
 import CreateRallyModal from '../components/CreateRallyModal';
@@ -66,7 +68,101 @@ export default function AppShell() {
   const [toastConfig, setToastConfig] = useState<{ title: string, subtitle: string } | null>(null);
   const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handleViewport = () => {
+      const diff = window.innerHeight - vv.height;
+      setIsKeyboardOpen(diff > 140);
+    };
+    vv.addEventListener('resize', handleViewport);
+    vv.addEventListener('scroll', handleViewport);
+    return () => {
+      vv.removeEventListener('resize', handleViewport);
+      vv.removeEventListener('scroll', handleViewport);
+    };
+  }, []);
+
+  const shellStateRef = useRef({
+    isCreateContentOpen,
+    isCreateModalOpen,
+    isNotifPanelOpen,
+    isProfileMenuOpen,
+    isLocationModalOpen,
+    closeLocationModal,
+  });
+
+  useEffect(() => {
+    shellStateRef.current = {
+      isCreateContentOpen,
+      isCreateModalOpen,
+      isNotifPanelOpen,
+      isProfileMenuOpen,
+      isLocationModalOpen,
+      closeLocationModal,
+    };
+  });
+
+  useEffect(() => {
+    let removeListener: (() => void) | null = null;
+    try {
+      CapApp.addListener('backButton', ({ canGoBack }) => {
+        // If on a chat conversation screen, Chat.tsx handles it
+        const currentPath = window.location.pathname;
+        if (
+          currentPath.startsWith('/messages/') && 
+          currentPath !== '/messages' && 
+          currentPath !== '/messages/add-friends' && 
+          !currentPath.startsWith('/messages/request/')
+        ) {
+          return;
+        }
+
+        const s = shellStateRef.current;
+        if (s.isCreateContentOpen) {
+          setIsCreateContentOpen(false);
+          return;
+        }
+        if (s.isCreateModalOpen) {
+          setIsCreateModalOpen(false);
+          return;
+        }
+        if (s.isNotifPanelOpen) {
+          setIsNotifPanelOpen(false);
+          return;
+        }
+        if (s.isProfileMenuOpen) {
+          setIsProfileMenuOpen(false);
+          return;
+        }
+        if (s.isLocationModalOpen) {
+          s.closeLocationModal();
+          return;
+        }
+
+        if (currentPath !== '/') {
+          if (canGoBack || window.history.length > 1) {
+            navigate(-1);
+          } else {
+            navigate('/');
+          }
+        } else {
+          CapApp.exitApp();
+        }
+      }).then((handle) => {
+        removeListener = () => handle.remove();
+      }).catch(() => {});
+    } catch (err) {
+      console.warn('AppShell backButton error:', err);
+    }
+
+    return () => {
+      removeListener?.();
+    };
+  }, [navigate]);
 
   const unreadCount = useQuery(
     api.notifications.unreadCount,
@@ -187,6 +283,7 @@ export default function AppShell() {
     const path = routeLocation.pathname;
     if (path === '/') return null;
     if (path === '/messages') return 'Messages';
+    if (path === '/messages/add-friends') return 'Add Friends';
     if (path.startsWith('/messages/')) return null;
     if (path === '/explore') return 'Explore';
     if (path === '/my-rallys') return 'My RALLYS';
@@ -209,10 +306,20 @@ export default function AppShell() {
   };
 
   const mobileTitle = getMobileHeaderTitle();
-  const isChatPage = routeLocation.pathname.startsWith('/messages/') && routeLocation.pathname !== '/messages';
+  const isChatPage = 
+    routeLocation.pathname.startsWith('/messages/') && 
+    routeLocation.pathname !== '/messages' &&
+    routeLocation.pathname !== '/messages/add-friends' &&
+    !routeLocation.pathname.startsWith('/messages/request/');
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row">
+    <div 
+      className={cn(
+        "bg-zinc-50 flex flex-col md:flex-row",
+        isChatPage ? "h-screen overflow-hidden" : "min-h-screen"
+      )}
+      style={isChatPage ? { height: '100dvh' } : undefined}
+    >
       <AnimatePresence>
         {toastConfig && (
           <motion.div
@@ -390,6 +497,7 @@ export default function AppShell() {
                 routeLocation.pathname === '/terms' || 
                 routeLocation.pathname === '/privacy' ||
                 routeLocation.pathname === '/help' ||
+                routeLocation.pathname === '/messages/add-friends' ||
                 routeLocation.pathname.startsWith('/review/') ||
                 routeLocation.pathname.startsWith('/report/')) && (
                 <button
@@ -461,6 +569,15 @@ export default function AppShell() {
                 </>
               )}
             </div>
+          ) : routeLocation.pathname === '/messages' ? (
+            <button
+              onClick={() => navigate('/messages/add-friends')}
+              className="p-2 rounded-full text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 active:scale-95 transition-all shrink-0 flex items-center justify-center cursor-pointer"
+              title="Add Friends"
+              aria-label="Add Friends"
+            >
+              <UserPlus className="w-5 h-5" />
+            </button>
           ) : (routeLocation.pathname === '/settings' ||
                routeLocation.pathname === '/settings/personal-info' || 
                routeLocation.pathname === '/profile/edit' || 
@@ -470,7 +587,8 @@ export default function AppShell() {
                routeLocation.pathname === '/safety' ||
                routeLocation.pathname === '/terms' ||
                routeLocation.pathname === '/privacy' ||
-               routeLocation.pathname === '/help') ? (
+               routeLocation.pathname === '/help' ||
+               routeLocation.pathname === '/messages/add-friends') ? (
             <div className="w-6 shrink-0" />
           ) : (
             <button
@@ -491,59 +609,76 @@ export default function AppShell() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 pt-[53px] md:pt-0 min-h-screen">
-        <div className={cn(
-          "mx-auto w-full",
-          routeLocation.pathname.startsWith('/explore') ? "max-w-6xl px-3 sm:px-6" : "max-w-3xl"
-        )}>
+      <main 
+        className={cn(
+          "flex-1 md:ml-64 flex flex-col transition-all duration-150 overflow-hidden",
+          isChatPage 
+            ? "pt-0 pb-0 h-full" 
+            : "pt-[53px] md:pt-0 min-h-screen pb-[65px] md:pb-0"
+        )}
+        style={isChatPage ? { height: '100%' } : undefined}
+      >
+        <div 
+          className={cn(
+            "mx-auto w-full",
+            isChatPage 
+              ? "h-full flex-1 flex flex-col max-w-3xl overflow-hidden" 
+              : routeLocation.pathname.startsWith('/explore') ? "max-w-6xl px-3 sm:px-6" : "max-w-3xl"
+          )}
+          style={isChatPage ? { height: '100%' } : undefined}
+        >
           <Outlet />
         </div>
       </main>
 
       {/* Desktop Floating Create Button */}
-      <button
-        onClick={() => setIsCreateContentOpen(true)}
-        className="hidden md:flex fixed bottom-6 right-6 items-center gap-2 px-5 py-3 rounded-full bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all z-40"
-        title="Create"
-      >
-        <Plus className="w-5 h-5" />
-        Create
-      </button>
+      {!isChatPage && (
+        <button
+          onClick={() => setIsCreateContentOpen(true)}
+          className="hidden md:flex fixed bottom-6 right-6 items-center gap-2 px-5 py-3 rounded-full bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all z-40"
+          title="Create"
+        >
+          <Plus className="w-5 h-5" />
+          Create
+        </button>
+      )}
 
-      {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 z-50 px-4 py-3 flex items-center justify-between safe-area-bottom">
-        <div className="flex-1 flex justify-around items-center">
-          <NavLink to="/" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
-            <Home className="w-6 h-6" />
-          </NavLink>
-          <NavLink to="/explore" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
-            <Compass className="w-6 h-6" />
-          </NavLink>
-        </div>
-        
-        <div className="relative -top-6 px-4">
-          <button 
-            className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all"
-            onClick={() => setIsCreateContentOpen(true)}
-          >
-            <Plus className="w-8 h-8" />
-          </button>
-        </div>
+      {/* Mobile Bottom Nav - Completely hidden inside conversations */}
+      {!isChatPage && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-zinc-100 z-50 px-4 py-3 flex items-center justify-between safe-area-bottom">
+          <div className="flex-1 flex justify-around items-center">
+            <NavLink to="/" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
+              <Home className="w-6 h-6" />
+            </NavLink>
+            <NavLink to="/explore" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
+              <Compass className="w-6 h-6" />
+            </NavLink>
+          </div>
+          
+          <div className="relative -top-6 px-4">
+            <button 
+              className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 active:scale-95 transition-all"
+              onClick={() => setIsCreateContentOpen(true)}
+            >
+              <Plus className="w-8 h-8" />
+            </button>
+          </div>
 
-        <div className="flex-1 flex justify-around items-center">
-          <NavLink to="/messages" className={({isActive}) => cn("relative flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
-            <MessageSquare className="w-6 h-6" />
-            {!!unreadMessages && (
-              <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
-                {unreadMessages > 99 ? '99+' : unreadMessages}
-              </span>
-            )}
-          </NavLink>
-          <NavLink to="/profile" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
-            <User className="w-6 h-6" />
-          </NavLink>
-        </div>
-      </nav>
+          <div className="flex-1 flex justify-around items-center">
+            <NavLink to="/messages" className={({isActive}) => cn("relative flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
+              <MessageSquare className="w-6 h-6" />
+              {!!unreadMessages && (
+                <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </span>
+              )}
+            </NavLink>
+            <NavLink to="/profile" className={({isActive}) => cn("flex flex-col items-center gap-1 w-12", isActive ? "text-indigo-600" : "text-zinc-500")}>
+              <User className="w-6 h-6" />
+            </NavLink>
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

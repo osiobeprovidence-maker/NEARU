@@ -7,10 +7,11 @@ interface PageShellProps {
   backTo?: string;
   children: React.ReactNode;
   headerAction?: React.ReactNode;
+  hideMobileHeaderAction?: boolean;
   className?: string;
 }
 
-export default function PageShell({ title, subtitle, backTo, children, headerAction, className }: PageShellProps) {
+export default function PageShell({ title, subtitle, backTo, children, headerAction, hideMobileHeaderAction, className }: PageShellProps) {
   return (
     <div className={cn("px-0 md:px-8 pt-0 md:pt-8 pb-24 md:pb-8", className)}>
       {/* Desktop Header */}
@@ -23,14 +24,14 @@ export default function PageShell({ title, subtitle, backTo, children, headerAct
       </div>
 
       {/* Mobile Subtitle and Header Action (if present) */}
-      {(subtitle || headerAction) && (
+      {(subtitle || (!hideMobileHeaderAction && headerAction)) && (
         <div className="md:hidden px-4 pt-3 mb-3 flex items-center justify-between gap-3">
           {subtitle ? (
             <p className="text-xs text-zinc-500 font-medium">{subtitle}</p>
           ) : (
             <div />
           )}
-          {headerAction && <div>{headerAction}</div>}
+          {!hideMobileHeaderAction && headerAction && <div>{headerAction}</div>}
         </div>
       )}
 

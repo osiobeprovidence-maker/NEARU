@@ -337,7 +337,10 @@ export const matchDeviceContacts = query({
     const emailToContact = new Map<string, string>();
     const phoneToContact = new Map<string, string>();
 
-    for (const c of args.contacts) {
+    // Limit to 1000 contacts for fast processing
+    const contactsSlice = args.contacts.slice(0, 1000);
+
+    for (const c of contactsSlice) {
       const contactLabel = c.name?.trim() || "";
       const email = normalizeEmail(c.email);
       if (email) {
@@ -349,59 +352,46 @@ export const matchDeviceContacts = query({
       }
     }
 
+    if (emailToContact.size === 0 && phoneToContact.size === 0) {
+      return [];
+    }
+
     const matchedUserMap = new Map<
       string,
       { user: any; contactName: string }
     >();
 
-    // 1. Search by email
-    for (const [em, contactLabel] of emailToContact.entries()) {
-      const user = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", em))
-        .first();
-      if (user && user._id.toString() !== args.viewerId.toString()) {
-        const uId = user._id.toString();
-        if (!blockedIds.has(uId) && !matchedUserMap.has(uId)) {
-          matchedUserMap.set(uId, { user, contactName: contactLabel });
+    // Fast in-memory matching: fetch registered users in one single query
+    const registeredUsers = await ctx.db.query("users").take(500);
+
+    for (const u of registeredUsers) {
+      const uId = u._id.toString();
+      if (uId === args.viewerId.toString() || blockedIds.has(uId)) continue;
+      if (u.moderationStatus === "BANNED") continue;
+
+      let matchedLabel: string | undefined;
+
+      // Check email match
+      if (u.email) {
+        const em = normalizeEmail(u.email);
+        if (em && emailToContact.has(em)) {
+          matchedLabel = emailToContact.get(em);
         }
       }
-    }
 
-    // 2. Search by phone
-    for (const [ph, contactLabel] of phoneToContact.entries()) {
-      const user = await ctx.db
-        .query("users")
-        .withIndex("by_phone", (q) => q.eq("phone", ph))
-        .first();
-      if (user && user._id.toString() !== args.viewerId.toString()) {
-        const uId = user._id.toString();
-        if (!blockedIds.has(uId) && !matchedUserMap.has(uId)) {
-          matchedUserMap.set(uId, { user, contactName: contactLabel });
-        }
-      }
-    }
-
-    // 3. Fallback scan if phone was stored in varied format in users
-    if (phoneToContact.size > 0 && matchedUserMap.size < 20) {
-      const allUsersWithPhone = await ctx.db.query("users").take(200);
-      for (const u of allUsersWithPhone) {
-        const uId = u._id.toString();
-        if (uId === args.viewerId.toString() || blockedIds.has(uId)) continue;
-        if (matchedUserMap.has(uId)) continue;
-
-        if (u.phone) {
-          const userPhoneVars = normalizePhoneVariations(u.phone);
-          for (const up of userPhoneVars) {
-            if (phoneToContact.has(up)) {
-              matchedUserMap.set(uId, {
-                user: u,
-                contactName: phoneToContact.get(up) || "",
-              });
-              break;
-            }
+      // Check phone match
+      if (!matchedLabel && u.phone) {
+        const uPhoneVars = normalizePhoneVariations(u.phone);
+        for (const upv of uPhoneVars) {
+          if (phoneToContact.has(upv)) {
+            matchedLabel = phoneToContact.get(upv);
+            break;
           }
         }
+      }
+
+      if (matchedLabel !== undefined) {
+        matchedUserMap.set(uId, { user: u, contactName: matchedLabel });
       }
     }
 

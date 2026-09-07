@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import PageShell from '../components/PageShell';
+import QueryErrorBoundary from '../components/QueryErrorBoundary';
 import Avatar from '../components/Avatar';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
+import { permissionManager } from '../services/permissionManager';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import {
@@ -23,15 +26,167 @@ import {
 } from 'lucide-react';
 import { ProfileVerificationCheck } from '../components/VerificationBadge';
 
-interface ContactInput {
-  name?: string;
-  phone?: string;
-  email?: string;
+interface MatchedContactsListProps {
+  viewerId: string;
+  deviceContacts: ContactInput[];
+  sentRequestIds: Set<string>;
+  processingId: string | null;
+  handleAccept: (requestId: string) => void;
+  handleSendFriendRequest: (userId: string) => void;
+  handleShareInvite: () => void;
+}
+
+function MatchedContactsList({
+  viewerId,
+  deviceContacts,
+  sentRequestIds,
+  processingId,
+  handleAccept,
+  handleSendFriendRequest,
+  handleShareInvite,
+}: MatchedContactsListProps) {
+  const matchedContacts = useQuery(
+    api.friends.matchDeviceContacts,
+    viewerId && deviceContacts.length > 0
+      ? {
+          viewerId: viewerId as any,
+          contacts: deviceContacts,
+        }
+      : 'skip'
+  );
+
+  if (matchedContacts === undefined) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="h-16 bg-zinc-100/70 rounded-2xl animate-pulse" />
+        <div className="h-16 bg-zinc-100/70 rounded-2xl animate-pulse" />
+      </div>
+    );
+  }
+
+  if (matchedContacts.length === 0) {
+    return (
+      <div className="p-8 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center mx-auto mb-3 text-zinc-400">
+          <Users className="w-6 h-6" />
+        </div>
+        <h3 className="text-sm font-bold text-zinc-800 mb-1">
+          No contacts on NEARU yet.
+        </h3>
+        <p className="text-xs text-zinc-500 max-w-sm mx-auto mb-4">
+          None of your imported contacts have joined NEARU yet. Invite them to join and connect!
+        </p>
+        <button
+          onClick={handleShareInvite}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 transition-all"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          Share Invite Link
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-zinc-100">
+      {matchedContacts.map((contact: any) => {
+        const isSent = sentRequestIds.has(contact._id) || contact.isPendingOutgoing;
+        const isAcceptable = contact.isPendingIncoming && !isSent && !contact.isFriend;
+        const isBusy = processingId === contact._id;
+
+        return (
+          <motion.div
+            key={contact._id}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 sm:p-5 flex items-center justify-between gap-3 sm:gap-4 hover:bg-zinc-50/50 transition-colors"
+          >
+            <Link
+              to={`/user/${contact._id}`}
+              className="flex items-center gap-3 sm:gap-3.5 group min-w-0"
+            >
+              <Avatar
+                src={contact.avatar}
+                name={contact.name}
+                size="md"
+                className="border border-zinc-200 shadow-2xs group-hover:scale-105 transition-transform"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">
+                    {contact.name || 'User'}
+                  </span>
+                  <ProfileVerificationCheck user={contact} size="sm" />
+                  {contact.badges?.map((b: string) => (
+                    <div
+                      key={b}
+                      title={b}
+                      className="w-3.5 h-3.5 bg-amber-100 rounded-full text-amber-600 flex items-center justify-center shrink-0"
+                    >
+                      <Star className="w-2 h-2 fill-amber-500 text-amber-500" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-zinc-500 font-medium truncate">
+                    @{contact.username ? contact.username.replace(/^@+/, '') : 'user'}
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
+                    From your contacts
+                  </span>
+                </div>
+              </div>
+            </Link>
+
+            {/* Action Button */}
+            <div className="shrink-0">
+              {contact.isFriend ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Check className="w-3.5 h-3.5" /> Friends
+                </span>
+              ) : isAcceptable ? (
+                <button
+                  onClick={() => handleAccept(contact.incomingRequestId)}
+                  disabled={isBusy}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-xs transition-all flex items-center gap-1.5"
+                >
+                  {isBusy ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  Accept
+                </button>
+              ) : isSent ? (
+                <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-100 text-zinc-500 border border-zinc-200">
+                  <Clock className="w-3.5 h-3.5" /> Request Sent
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleSendFriendRequest(contact._id)}
+                  disabled={isBusy}
+                  className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isBusy ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <UserPlus className="w-3.5 h-3.5" />
+                  )}
+                  Add Friend
+                </button>
+              )}
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function AddFriends() {
   const navigate = useNavigate();
   const { convexUserId } = useAuth();
+  const { requestWithRationale, isNative, openSettings } = usePermissions();
 
   // Mutations
   const acceptRequest = useMutation(api.chatRequests.accept);
@@ -56,22 +211,12 @@ export default function AddFriends() {
     convexUserId ? { userId: convexUserId as any, limit: 20 } : 'skip'
   );
 
-  // 3. All Contacts State & Query
+  // 3. All Contacts State
   const [deviceContacts, setDeviceContacts] = useState<ContactInput[]>([]);
   const [contactsSynced, setContactsSynced] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
   const [manualQuery, setManualQuery] = useState('');
-
-  const matchedContacts = useQuery(
-    api.friends.matchDeviceContacts,
-    convexUserId && contactsSynced
-      ? {
-          viewerId: convexUserId as any,
-          contacts: deviceContacts,
-        }
-      : 'skip'
-  );
 
   // Filter pending incoming requests
   const pendingRequests = (incomingRequests ?? []).filter(
@@ -147,58 +292,75 @@ export default function AddFriends() {
     }
   };
 
-  // Handle Contact Picker API
+  // Handle Contact Picker API & Native Android Contacts Sync
   const handleImportContacts = async () => {
     setContactError(null);
     setSyncLoading(true);
 
-    // Check if W3C Contact Picker API is available
-    if ('contacts' in navigator && 'ContactsManager' in window) {
-      try {
-        const props = ['name', 'tel', 'email'];
-        const selected = await (navigator as any).contacts.select(props, {
-          multiple: true,
-        });
-
-        if (selected && selected.length > 0) {
-          const parsed: ContactInput[] = [];
-          for (const item of selected) {
-            const name = Array.isArray(item.name) ? item.name[0] : item.name;
-            const phones: string[] = Array.isArray(item.tel) ? item.tel : item.tel ? [item.tel] : [];
-            const emails: string[] = Array.isArray(item.email) ? item.email : item.email ? [item.email] : [];
-
-            if (phones.length > 0) {
-              for (const phone of phones) {
-                parsed.push({ name, phone, email: emails[0] });
-              }
-            } else if (emails.length > 0) {
-              for (const email of emails) {
-                parsed.push({ name, email });
-              }
-            } else if (name) {
-              parsed.push({ name });
-            }
+    try {
+      if (isNative) {
+        // 1. Request Contacts Permission with Rationale Modal + Native Dialog
+        const permResult = await requestWithRationale('contacts');
+        if (!permResult.granted) {
+          if (permResult.permanentlyDenied) {
+            setContactError(
+              'Contact access is disabled. Please enable it in Settings so NEARU can find your friends from your contacts.'
+            );
+          } else {
+            setContactError(
+              'Contact access was not granted. You can search directly below or enable contacts in Settings.'
+            );
           }
+          return;
+        }
 
-          setDeviceContacts(parsed);
+        // 2. Fetch contacts from native Android ContactsContract
+        const rawContacts = await permissionManager.getDeviceContacts();
+        const validContacts = (rawContacts || [])
+          .filter((c) => Boolean((c.phone && c.phone.trim()) || (c.email && c.email.trim())))
+          .map((c) => ({
+            name: c.name?.trim() || undefined,
+            phone: c.phone?.trim() || undefined,
+            email: c.email?.trim() || undefined,
+          }))
+          .slice(0, 500);
+
+        if (validContacts.length > 0) {
+          setDeviceContacts(validContacts);
           setContactsSynced(true);
         } else {
-          setSyncLoading(false);
+          setContactError('No contacts with phone numbers or emails were found on this device.');
         }
-      } catch (err: any) {
-        console.warn('Contact picker error:', err);
-        setContactError(
-          'Contact access was cancelled or not granted. You can search directly below.'
-        );
-      } finally {
-        setSyncLoading(false);
+      } else {
+        // Web fallback (Contact Picker API if supported)
+        const rawContacts = await permissionManager.getDeviceContacts();
+        const validContacts = (rawContacts || [])
+          .filter((c) => Boolean((c.phone && c.phone.trim()) || (c.email && c.email.trim())))
+          .map((c) => ({
+            name: c.name?.trim() || undefined,
+            phone: c.phone?.trim() || undefined,
+            email: c.email?.trim() || undefined,
+          }))
+          .slice(0, 500);
+
+        if (validContacts.length > 0) {
+          setDeviceContacts(validContacts);
+          setContactsSynced(true);
+        }
       }
-    } else {
-      // Fallback for desktop browsers / unsupported environments
+    } catch (err: any) {
+      console.warn('Contact import error:', err);
+      if (!isNative) {
+        setContactError(
+          'Direct address book sync is supported on mobile devices. Use the quick lookup below to check a phone number or email.'
+        );
+      } else {
+        setContactError(
+          err?.message || 'Could not access contacts. Please check device permissions.'
+        );
+      }
+    } finally {
       setSyncLoading(false);
-      setContactError(
-        'Direct address book sync is supported on mobile devices. Use the quick lookup below to check a phone number or email.'
-      );
     }
   };
 
@@ -600,134 +762,38 @@ export default function AddFriends() {
           )}
 
           {contactError && (
-            <div className="mx-5 my-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <div className="flex-1 leading-relaxed">
-                <span>{contactError}</span>
+            <div className="mx-5 my-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                <div className="flex-1 leading-relaxed">
+                  <span>{contactError}</span>
+                </div>
               </div>
+              {isNative && (
+                <button
+                  type="button"
+                  onClick={() => openSettings()}
+                  className="px-3 py-1.5 bg-amber-200/80 hover:bg-amber-200 text-amber-900 rounded-xl font-bold text-xs shrink-0 transition-colors active:scale-95"
+                >
+                  Settings
+                </button>
+              )}
             </div>
           )}
 
           {/* Matched Contacts List */}
-          {contactsSynced && (
-            <div className="divide-y divide-zinc-100">
-              {matchedContacts === undefined ? (
-                <div className="p-6 space-y-4">
-                  <div className="h-16 bg-zinc-100/70 rounded-2xl animate-pulse" />
-                  <div className="h-16 bg-zinc-100/70 rounded-2xl animate-pulse" />
-                </div>
-              ) : matchedContacts.length === 0 ? (
-                <div className="p-8 text-center">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center mx-auto mb-3 text-zinc-400">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-sm font-bold text-zinc-800 mb-1">
-                    No contacts on Laulau yet.
-                  </h3>
-                  <p className="text-xs text-zinc-500 max-w-sm mx-auto mb-4">
-                    None of your imported contacts have joined Laulau yet. Invite them to join and connect!
-                  </p>
-                  <button
-                    onClick={handleShareInvite}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-800 transition-all"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    Share Invite Link
-                  </button>
-                </div>
-              ) : (
-                matchedContacts.map((contact: any) => {
-                  const isSent = sentRequestIds.has(contact._id) || contact.isPendingOutgoing;
-                  const isAcceptable = contact.isPendingIncoming && !isSent && !contact.isFriend;
-                  const isBusy = processingId === contact._id;
-
-                  return (
-                    <motion.div
-                      key={contact._id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 sm:p-5 flex items-center justify-between gap-3 sm:gap-4 hover:bg-zinc-50/50 transition-colors"
-                    >
-                      <Link
-                        to={`/user/${contact._id}`}
-                        className="flex items-center gap-3 sm:gap-3.5 group min-w-0"
-                      >
-                        <Avatar
-                          src={contact.avatar}
-                          name={contact.name}
-                          size="md"
-                          className="border border-zinc-200 shadow-2xs group-hover:scale-105 transition-transform"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm sm:text-base font-bold text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">
-                              {contact.name || 'User'}
-                            </span>
-                            <ProfileVerificationCheck user={contact} size="sm" />
-                            {contact.badges?.map((b: string) => (
-                              <div
-                                key={b}
-                                title={b}
-                                className="w-3.5 h-3.5 bg-amber-100 rounded-full text-amber-600 flex items-center justify-center shrink-0"
-                              >
-                                <Star className="w-2 h-2 fill-amber-500 text-amber-500" />
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-zinc-500 font-medium truncate">
-                              @{contact.username ? contact.username.replace(/^@+/, '') : 'user'}
-                            </span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
-                              From your contacts
-                            </span>
-                          </div>
-                        </div>
-                      </Link>
-
-                      {/* Action Button */}
-                      <div className="shrink-0">
-                        {contact.isFriend ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <Check className="w-3.5 h-3.5" /> Friends
-                          </span>
-                        ) : isAcceptable ? (
-                          <button
-                            onClick={() => handleAccept(contact.incomingRequestId)}
-                            disabled={isBusy}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-xs transition-all flex items-center gap-1.5"
-                          >
-                            {isBusy ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5" />
-                            )}
-                            Accept
-                          </button>
-                        ) : isSent ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-100 text-zinc-500 border border-zinc-200">
-                            <Clock className="w-3.5 h-3.5" /> Request Sent
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleSendFriendRequest(contact._id)}
-                            disabled={isBusy}
-                            className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            {isBusy ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <UserPlus className="w-3.5 h-3.5" />
-                            )}
-                            Add Friend
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
+          {contactsSynced && convexUserId && (
+            <QueryErrorBoundary message="Could not match contacts right now. Please try again.">
+              <MatchedContactsList
+                viewerId={convexUserId}
+                deviceContacts={deviceContacts}
+                sentRequestIds={sentRequestIds}
+                processingId={processingId}
+                handleAccept={handleAccept}
+                handleSendFriendRequest={handleSendFriendRequest}
+                handleShareInvite={handleShareInvite}
+              />
+            </QueryErrorBoundary>
           )}
         </div>
       </div>

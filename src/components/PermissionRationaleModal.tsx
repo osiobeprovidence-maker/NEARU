@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Camera, Mic, Bell, AlertCircle, Settings, X } from 'lucide-react';
+import { MapPin, Camera, Mic, Bell, BookUser, AlertCircle, Settings, X } from 'lucide-react';
 import { AppPermissionType, PermissionDialogConfig } from '../services/permissionManager';
 
 interface PermissionRationaleModalProps {
@@ -50,6 +50,12 @@ export default function PermissionRationaleModal({
         return (
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200/70 flex items-center justify-center shadow-xs">
             <Bell className="w-7 h-7" />
+          </div>
+        );
+      case 'contacts':
+        return (
+          <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-600 border border-teal-200/70 flex items-center justify-center shadow-xs">
+            <BookUser className="w-7 h-7" />
           </div>
         );
       default:

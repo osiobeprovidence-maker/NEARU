@@ -36,6 +36,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     camera: defaultStatus('camera'),
     microphone: defaultStatus('microphone'),
     notifications: defaultStatus('notifications'),
+    contacts: defaultStatus('contacts'),
   });
   const [apiLevel, setApiLevel] = useState<number>(0);
   const isNative = permissionManager.isNative();

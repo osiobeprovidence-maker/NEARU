@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-export type AppPermissionType = 'location' | 'camera' | 'microphone' | 'notifications';
+export type AppPermissionType = 'location' | 'camera' | 'microphone' | 'notifications' | 'contacts';
 export type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'permanently_denied';
 
 export interface PermissionCheckResult {
@@ -87,6 +87,20 @@ export const PERMISSION_CONFIGS: Record<AppPermissionType, {
       cancelLabel: 'Cancel',
     },
   },
+  contacts: {
+    rationale: {
+      title: 'Find friends from contacts',
+      description: 'NEARU matches your device address book to find friends already on the app. Your contacts are matched privately and never stored.',
+      confirmLabel: 'Allow Contacts',
+      cancelLabel: 'Not Now',
+    },
+    settings: {
+      title: 'Contact access required',
+      description: 'NEARU needs contact access to sync and match friends from your address book. You can enable it from Android Settings.',
+      confirmLabel: 'Open Settings',
+      cancelLabel: 'Cancel',
+    },
+  },
 };
 
 interface LaloaPermissionsPluginNative {
@@ -98,9 +112,11 @@ interface LaloaPermissionsPluginNative {
     camera: PermissionCheckResult;
     microphone: PermissionCheckResult;
     notifications: PermissionCheckResult;
+    contacts: PermissionCheckResult;
   }>;
   requestAppPermission(options: { name: string }): Promise<PermissionCheckResult>;
   openAppSettings(): Promise<{ success: boolean }>;
+  getDeviceContacts(): Promise<{ contacts: Array<{ name?: string; phone?: string; email?: string }> }>;
 }
 
 const NativePermissions = registerPlugin<LaloaPermissionsPluginNative>('LaloaPermissions');
@@ -159,20 +175,22 @@ class PermissionManager {
           camera: res.camera,
           microphone: res.microphone,
           notifications: res.notifications,
+          contacts: res.contacts,
         };
       } catch (err) {
         console.warn('[PermissionManager] checkAllPermissions failed:', err);
       }
     }
 
-    const [location, camera, microphone, notifications] = await Promise.all([
+    const [location, camera, microphone, notifications, contacts] = await Promise.all([
       this.checkWebPermission('location'),
       this.checkWebPermission('camera'),
       this.checkWebPermission('microphone'),
       this.checkWebPermission('notifications'),
+      this.checkWebPermission('contacts'),
     ]);
 
-    return { location, camera, microphone, notifications };
+    return { location, camera, microphone, notifications, contacts };
   }
 
   public async requestDirect(type: AppPermissionType): Promise<PermissionRequestResult> {
@@ -231,6 +249,56 @@ class PermissionManager {
     );
   }
 
+  public async getDeviceContacts(): Promise<Array<{ name?: string; phone?: string; email?: string }>> {
+    if (this.isNative()) {
+      try {
+        const res = await NativePermissions.getDeviceContacts();
+        return res?.contacts || [];
+      } catch (err) {
+        console.warn('[PermissionManager] Native getDeviceContacts error:', err);
+        throw err;
+      }
+    }
+
+    // Web Fallback: W3C Contact Picker API if available
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        const props = ['name', 'tel', 'email'];
+        const selected = await (navigator as any).contacts.select(props, {
+          multiple: true,
+        });
+
+        if (selected && selected.length > 0) {
+          const parsed: Array<{ name?: string; phone?: string; email?: string }> = [];
+          for (const item of selected) {
+            const name = Array.isArray(item.name) ? item.name[0] : item.name;
+            const phones: string[] = Array.isArray(item.tel) ? item.tel : item.tel ? [item.tel] : [];
+            const emails: string[] = Array.isArray(item.email) ? item.email : item.email ? [item.email] : [];
+
+            if (phones.length > 0) {
+              for (const phone of phones) {
+                parsed.push({ name, phone, email: emails[0] });
+              }
+            } else if (emails.length > 0) {
+              for (const email of emails) {
+                parsed.push({ name, email });
+              }
+            } else if (name) {
+              parsed.push({ name });
+            }
+          }
+          return parsed;
+        }
+        return [];
+      } catch (err) {
+        console.warn('[PermissionManager] Web contacts.select error:', err);
+        throw err;
+      }
+    }
+
+    throw new Error('Contact access is supported on mobile devices.');
+  }
+
   public hasDismissedRecently(type: AppPermissionType, cooldownMs = 24 * 60 * 60 * 1000): boolean {
     const raw = localStorage.getItem(`lalao_perm_dismissed_${type}`);
     if (!raw) return false;
@@ -250,6 +318,13 @@ class PermissionManager {
   // --- Web fallbacks ---
   private async checkWebPermission(type: AppPermissionType): Promise<PermissionCheckResult> {
     try {
+      if (type === 'contacts') {
+        if ('contacts' in navigator && 'ContactsManager' in window) {
+          return { name: type, status: 'prompt' };
+        }
+        return { name: type, status: 'denied' };
+      }
+
       if (type === 'notifications') {
         if (!('Notification' in window)) {
           return { name: type, status: 'denied' };
@@ -290,6 +365,13 @@ class PermissionManager {
   }
 
   private async requestWebPermission(type: AppPermissionType): Promise<PermissionRequestResult> {
+    if (type === 'contacts') {
+      if ('contacts' in navigator && 'ContactsManager' in window) {
+        return { name: type, status: 'granted', granted: true, permanentlyDenied: false };
+      }
+      return { name: type, status: 'denied', granted: false, permanentlyDenied: true };
+    }
+
     if (type === 'notifications') {
       if (!('Notification' in window)) {
         return { name: type, status: 'denied', granted: false, permanentlyDenied: true };

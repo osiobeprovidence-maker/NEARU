@@ -149,16 +149,14 @@ export default function Messages() {
           <Inbox className="w-3.5 h-3.5" /> Message requests
         </div>
       ) : null}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
         onClick={item.navigateTo}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') item.navigateTo();
         }}
-        className={`w-full flex items-center gap-3.5 sm:gap-4 p-4 sm:p-5 text-left transition-colors cursor-pointer border-b border-zinc-100 last:border-b-0 group ${
+        className={`w-full flex items-center gap-3.5 sm:gap-4 p-4 sm:p-5 text-left transition-colors cursor-pointer border-b border-zinc-100 last:border-b-0 group active:bg-zinc-100 ${
           item.unread > 0
             ? 'bg-indigo-50/40 hover:bg-indigo-50/60'
             : 'bg-white hover:bg-zinc-50/75'
@@ -238,13 +236,14 @@ export default function Messages() {
             </div>
           ) : null}
         </div>
-      </motion.div>
+      </div>
     </React.Fragment>
   );
 
   return (
     <PageShell
       title="Messages"
+      hideMobileHeaderAction
       headerAction={
         <button
           onClick={() => navigate('/messages/add-friends')}

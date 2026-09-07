@@ -18,6 +18,7 @@ import {
   Camera,
   Mic,
   Bell,
+  BookUser,
   ExternalLink
 } from 'lucide-react';
 
@@ -64,6 +65,13 @@ const PERMISSION_ITEMS: {
     description: 'RALLY alerts, messages and activity updates',
     icon: Bell,
     color: 'bg-blue-50 text-blue-600',
+  },
+  {
+    key: 'contacts',
+    title: 'Contacts',
+    description: 'Finding friends from your device address book',
+    icon: BookUser,
+    color: 'bg-teal-50 text-teal-600',
   },
 ];
 

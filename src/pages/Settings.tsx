@@ -45,6 +45,18 @@ export default function Settings() {
   const [pendingType, setPendingType] = useState<'organization' | 'business' | null>(null);
   const [orgModalOpen, setOrgModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notifStatus, setNotifStatus] = useState<string | null>(null);
+
+  const handleEnableNotifications = async () => {
+    try {
+      if ('Notification' in window) {
+        const res = await Notification.requestPermission();
+        setNotifStatus(res === 'granted' ? 'Notifications enabled' : 'Notifications blocked');
+      }
+    } catch {
+      setNotifStatus('Could not enable notifications');
+    }
+  };
 
   const showToast = (title: string, subtitle: string) =>
     window.dispatchEvent(new CustomEvent('show-toast', { detail: { title, subtitle } }));
