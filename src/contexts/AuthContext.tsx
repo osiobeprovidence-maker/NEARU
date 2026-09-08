@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, PrivacySettings, NotificationSettings, AppSettings, TrustedContact, BlockedUser } from '../types';
+import { Capacitor } from '@capacitor/core';
 import {
   auth,
   googleProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
@@ -15,7 +14,7 @@ import {
   signInWithEmailLink,
   reload,
 } from '../lib/firebase';
-import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { unsubscribeUserFromPush, syncPushSubscriptionSilently } from '../utils/pushManager';
@@ -497,39 +496,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async () => {
     // Clear any stale OAuth transaction artifacts before triggering sign-in
     clearStaleOAuthStorage();
-    try {
-      // Primary: Use popup flow for web/PWA.
-      // This uses direct window.postMessage communication, which completely avoids
-      // storage-partitioned sessionStorage "missing initial state" issues.
-      const cred = await signInWithPopup(auth, googleProvider);
-      if (cred?.user) {
-        setFirebaseUser(cred.user);
+
+    // On Android/iOS use the native Google Sign-In SDK via @capacitor-firebase/authentication.
+    // The web OAuth popup/redirect both fail in a Capacitor WebView because sessionStorage
+    // is NOT shared between WebView windows — causing "auth/missing-initial-state" errors.
+    // The native plugin bypasses the WebView entirely and talks directly to the OS.
+    if (Capacitor.isNativePlatform()) {
+      try {
+        // Lazy-import so web bundle doesn't load native code in the browser
+        const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const idToken = result.credential?.idToken;
+        if (!idToken) throw new Error('Google Sign-In failed: no ID token returned.');
+        // Exchange the native ID token for a Firebase web credential
+        const credential = GoogleAuthProvider.credential(idToken);
+        const cred = await signInWithCredential(auth, credential);
+        if (cred?.user) setFirebaseUser(cred.user);
+        return;
+      } catch (err: any) {
+        console.warn('[AuthContext] Native Google sign-in error:', err?.code, err?.message);
+        throw new Error(friendlyAuthError(err));
       }
+    }
+
+    // Web / PWA: use popup flow (works in regular browsers)
+    try {
+      const cred = await signInWithPopup(auth, googleProvider);
+      if (cred?.user) setFirebaseUser(cred.user);
       return;
     } catch (err: any) {
       console.warn('[AuthContext] Google popup sign-in error:', err?.code, err?.message);
-
-      // If popup was blocked by the browser (e.g. mobile Safari / standalone PWA),
-      // provide seamless fallback to signInWithRedirect.
-      if (err?.code === 'auth/popup-blocked') {
-        console.info('[AuthContext] Pop-up blocked; falling back to signInWithRedirect...');
-        try {
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        } catch (redirectErr: any) {
-          if (redirectErr?.code === 'auth/missing-initial-state') {
-            clearStaleOAuthStorage();
-          }
-          throw new Error(friendlyAuthError(redirectErr));
-        }
-      }
-
-      // If missing initial state error occurs, purge stale session keys immediately
-      if (err?.code === 'auth/missing-initial-state') {
-        clearStaleOAuthStorage();
-      }
-
-      // Re-throw with a friendly message so the UI can display it.
+      if (err?.code === 'auth/missing-initial-state') clearStaleOAuthStorage();
       throw new Error(friendlyAuthError(err));
     }
   };

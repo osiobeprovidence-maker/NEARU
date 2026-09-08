@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "415405275981-fg1645ickhnresi78hhffdmvt1tms2u8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "lalao.com",
+            "certificate_hash": "034abd9208bb35b00b868eccf56d8e4e18f50d7a"
+          }
+        },
+        {
           "client_id": "415405275981-rhupnm6pd387e7g3i5tcbdniq8uepfnf.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -161,7 +161,8 @@ const AppRoutes = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signin" element={<LoginPage />} />
         <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="*" element={<Landing />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
