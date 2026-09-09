@@ -187,7 +187,6 @@ export default function AddFriends() {
             onClick={handleShareInvite}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-semibold text-sm transition-colors"
           >
-            <Share2 className="w-5 h-5" />
             Invite your friends!
           </motion.button>
         </div>
