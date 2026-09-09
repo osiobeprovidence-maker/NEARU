@@ -902,5 +902,12 @@ export default defineSchema({
     .index("by_page", ["pageId"])
     .index("by_expiresAt", ["expiresAt"])
     .index("by_createdAt", ["createdAt"]),
-});
 
+  cycleLikes: defineTable({
+    cycleId: v.id("cycles"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_cycle", ["cycleId"])
+    .index("by_user_cycle", ["userId", "cycleId"]),
+});

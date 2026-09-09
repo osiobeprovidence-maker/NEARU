@@ -267,22 +267,7 @@ export const markCycleViewed = mutation({
   },
 });
 
-export const deleteCycle = mutation({
-  args: { cycleId: v.id("cycles") },
-  handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
-    if (!user) throw new Error("Unauthorized");
 
-    const cycle = await ctx.db.get(args.cycleId);
-    if (!cycle) throw new Error("Not found");
-
-    if (cycle.authorId !== user._id) {
-      throw new Error("Unauthorized");
-    }
-
-    await ctx.db.delete(args.cycleId);
-  },
-});
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -292,3 +277,133 @@ export const generateUploadUrl = mutation({
     return await ctx.storage.generateUploadUrl();
   },
 });
+
+export const likeCycle = mutation({
+  args: { cycleId: v.id("cycles") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthenticated");
+
+    const existingLike = await ctx.db
+      .query("cycleLikes")
+      .withIndex("by_user_cycle", (q) => q.eq("userId", user._id).eq("cycleId", args.cycleId))
+      .first();
+
+    if (!existingLike) {
+      await ctx.db.insert("cycleLikes", {
+        cycleId: args.cycleId,
+        userId: user._id,
+        createdAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const unlikeCycle = mutation({
+  args: { cycleId: v.id("cycles") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthenticated");
+
+    const existingLike = await ctx.db
+      .query("cycleLikes")
+      .withIndex("by_user_cycle", (q) => q.eq("userId", user._id).eq("cycleId", args.cycleId))
+      .first();
+
+    if (existingLike) {
+      await ctx.db.delete(existingLike._id);
+    }
+  },
+});
+
+export const deleteCycle = mutation({
+  args: { cycleId: v.id("cycles") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthenticated");
+
+    const cycle = await ctx.db.get(args.cycleId);
+    if (!cycle) throw new Error("Cycle not found");
+    if (cycle.authorId !== user._id) throw new Error("Unauthorized");
+
+    // Optional: delete associated likes to save space, but they will eventually be pruned anyway
+    const likes = await ctx.db
+      .query("cycleLikes")
+      .withIndex("by_cycle", (q) => q.eq("cycleId", args.cycleId))
+      .collect();
+    for (const like of likes) {
+      await ctx.db.delete(like._id);
+    }
+
+    await ctx.db.delete(args.cycleId);
+  },
+});
+
+export const getCycleEngagement = query({
+  args: { cycleId: v.id("cycles") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) return null;
+
+    const cycle = await ctx.db.get(args.cycleId);
+    if (!cycle) return null;
+
+    const isOwner = cycle.authorId === user._id;
+
+    const likes = await ctx.db
+      .query("cycleLikes")
+      .withIndex("by_cycle", (q) => q.eq("cycleId", args.cycleId))
+      .collect();
+    
+    const likedByMe = likes.some(l => l.userId === user._id);
+    
+    // For non-owners, only return public counts and personal like state
+    if (!isOwner) {
+      return {
+        likeCount: likes.length,
+        likedByMe,
+        viewCount: cycle.viewedBy?.length || 0,
+        likers: [],
+        viewers: [],
+      };
+    }
+
+    // For owners, return detailed viewer/liker profiles
+    const likers = await Promise.all(
+      likes.map(async (l) => {
+        const u = await ctx.db.get(l.userId);
+        if (!u) return null;
+        let avatarUrl = u.avatar;
+        // Optionally resolve storage URL if using internal storage
+        return {
+          _id: u._id,
+          name: u.name,
+          username: u.username,
+          avatar: avatarUrl,
+        };
+      })
+    );
+
+    const viewers = await Promise.all(
+      (cycle.viewedBy || []).map(async (viewerId) => {
+        const u = await ctx.db.get(viewerId);
+        if (!u) return null;
+        return {
+          _id: u._id,
+          name: u.name,
+          username: u.username,
+          avatar: u.avatar,
+        };
+      })
+    );
+
+    return {
+      likeCount: likes.length,
+      likedByMe,
+      viewCount: cycle.viewedBy?.length || 0,
+      likers: likers.filter(Boolean),
+      viewers: viewers.filter(Boolean),
+    };
+  },
+});
+
