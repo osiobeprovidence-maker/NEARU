@@ -16,19 +16,24 @@ export const getActiveFriendCycles = query({
       .withIndex("by_follower", (q) => q.eq("followerId", user._id))
       .collect();
 
-    const followingIds = new Set(following.map((f) => f.followingId.toString()));
+    const followingIds = new Set(
+      following
+        .map((f) => f.followingId)
+        .filter((id) => id != null)
+        .map((id) => id.toString())
+    );
 
     // Get all active user cycles that are not expired
     const activeCycles = await ctx.db
       .query("cycles")
-      .withIndex("by_expiresAt")
-      .filter((q) => q.gt(q.field("expiresAt"), now))
+      .withIndex("by_expiresAt", (q) => q.gt("expiresAt", now))
       .collect();
 
     // Filter to friends' cycles
     const friendCycles = activeCycles.filter(
       (cycle) =>
         cycle.authorType === "user" &&
+        cycle.authorId &&
         followingIds.has(cycle.authorId.toString())
     );
 
@@ -38,7 +43,12 @@ export const getActiveFriendCycles = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const followedPageIds = new Set(pageFollows.map((f) => f.pageId.toString()));
+    const followedPageIds = new Set(
+      pageFollows
+        .map((f) => f.pageId)
+        .filter((id) => id != null)
+        .map((id) => id.toString())
+    );
 
     // Filter to followed pages' cycles
     const pageCycles = activeCycles.filter(
@@ -50,10 +60,17 @@ export const getActiveFriendCycles = query({
 
     const validCycles = [...friendCycles, ...pageCycles];
 
+    if (validCycles.length === 0) {
+      return [];
+    }
+
     // Group cycles by author (or page)
     const grouped = new Map<string, typeof validCycles>();
 
     for (const cycle of validCycles) {
+      if (cycle.authorType === "page" && !cycle.pageId) continue;
+      if (cycle.authorType === "user" && !cycle.authorId) continue;
+
       const key = cycle.authorType === "page" ? `page:${cycle.pageId}` : `user:${cycle.authorId}`;
       if (!grouped.has(key)) {
         grouped.set(key, []);
@@ -64,11 +81,33 @@ export const getActiveFriendCycles = query({
     // Resolve details for each group
     const results = [];
     for (const [key, cycles] of grouped.entries()) {
-      cycles.sort((a, b) => a.createdAt - b.createdAt); // oldest to newest viewing order
+      cycles.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // oldest to newest viewing order
 
       let name = "";
       let avatarUrl = undefined;
       let hasUnseen = false;
+      let resolvedAuthor = false;
+
+      if (cycles[0].authorType === "page" && cycles[0].pageId) {
+        const page = await ctx.db.get(cycles[0].pageId);
+        if (page) {
+          name = page.name || "Unknown Page";
+          avatarUrl = page.avatar;
+          resolvedAuthor = true;
+        }
+      } else if (cycles[0].authorType === "user" && cycles[0].authorId) {
+        const author = await ctx.db.get(cycles[0].authorId);
+        if (author) {
+          name = author.name || "Unknown User";
+          avatarUrl = author.avatar;
+          resolvedAuthor = true;
+        }
+      }
+
+      if (!resolvedAuthor) {
+        // Author or page is deleted, skip this group
+        continue;
+      }
 
       // Resolve author/page info and media URLs
       const enrichedCycles = [];
@@ -79,27 +118,18 @@ export const getActiveFriendCycles = query({
 
         let mediaUrl = undefined;
         if (cycle.mediaStorageId) {
-          mediaUrl = await ctx.storage.getUrl(cycle.mediaStorageId) ?? undefined;
+          try {
+             mediaUrl = (await ctx.storage.getUrl(cycle.mediaStorageId)) ?? undefined;
+          } catch (e) {
+             // Invalid storage ID, ignore
+             console.warn(`Invalid storage id ${cycle.mediaStorageId} for cycle ${cycle._id}`);
+          }
         }
 
         enrichedCycles.push({
           ...cycle,
           mediaUrl,
         });
-      }
-
-      if (cycles[0].authorType === "page") {
-        const page = await ctx.db.get(cycles[0].pageId!);
-        if (page) {
-          name = page.name;
-          avatarUrl = page.avatar;
-        }
-      } else {
-        const author = await ctx.db.get(cycles[0].authorId);
-        if (author) {
-          name = author.name;
-          avatarUrl = author.avatar;
-        }
       }
 
       results.push({
@@ -111,7 +141,7 @@ export const getActiveFriendCycles = query({
         avatarUrl,
         hasUnseen,
         cycles: enrichedCycles,
-        latestUpdate: cycles[cycles.length - 1].createdAt,
+        latestUpdate: cycles[cycles.length - 1].createdAt || 0,
       });
     }
 
@@ -132,9 +162,9 @@ export const getMyActiveCycles = query({
       .filter((q) => q.gt(q.field("expiresAt"), now))
       .collect();
 
-    if (myCycles.length === 0) return null;
+    if (!myCycles || myCycles.length === 0) return null;
 
-    myCycles.sort((a, b) => a.createdAt - b.createdAt);
+    myCycles.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     
     let hasUnseen = false;
 
@@ -145,7 +175,11 @@ export const getMyActiveCycles = query({
       }
       let mediaUrl = undefined;
       if (cycle.mediaStorageId) {
-        mediaUrl = await ctx.storage.getUrl(cycle.mediaStorageId) ?? undefined;
+        try {
+           mediaUrl = (await ctx.storage.getUrl(cycle.mediaStorageId)) ?? undefined;
+        } catch (e) {
+           console.warn(`Invalid storage id ${cycle.mediaStorageId} for cycle ${cycle._id}`);
+        }
       }
       enrichedCycles.push({
         ...cycle,
@@ -157,11 +191,11 @@ export const getMyActiveCycles = query({
       key: `user:${user._id}`,
       authorType: "user",
       authorId: user._id,
-      name: user.name,
+      name: user.name || "You",
       avatarUrl: user.avatar,
       hasUnseen, // For self, usually everything is seen if they just posted it, but we track it anyway
       cycles: enrichedCycles,
-      latestUpdate: myCycles[myCycles.length - 1].createdAt,
+      latestUpdate: myCycles[myCycles.length - 1].createdAt || 0,
     };
   },
 });
