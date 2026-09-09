@@ -181,18 +181,16 @@ export default function AddFriends() {
         </div>
 
         {/* Invite Your Friends */}
-        {!q && (
-          <div className="px-4 mb-4">
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={handleShareInvite}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-sm transition-colors"
-            >
-              <Share2 className="w-4 h-4" />
-              Invite your friends!
-            </motion.button>
-          </div>
-        )}
+        <div className="px-4 mb-4">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={handleShareInvite}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-semibold text-sm transition-colors"
+          >
+            <Share2 className="w-5 h-5" />
+            Invite your friends!
+          </motion.button>
+        </div>
 
         {/* Added Me */}
         {!q && (
