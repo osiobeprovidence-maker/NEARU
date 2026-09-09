@@ -467,13 +467,13 @@ function UserProfileContent() {
         : 'Message';
 
   // ---------------------------------------------------------------------------
-  // Tab navigation config
+  // Tab navigation config — conditional on account type
   // ---------------------------------------------------------------------------
   const profileTabs: { key: PublicTab; label: string; icon: React.ReactNode }[] = [
     { key: 'posts', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
     { key: 'media', label: 'Media', icon: <Image className="w-3.5 h-3.5" /> },
     { key: 'likes', label: 'Likes', icon: <Heart className="w-3.5 h-3.5" /> },
-    { key: 'about', label: 'About', icon: <Info className="w-3.5 h-3.5" /> },
+    ...(isOrgBiz ? [{ key: 'about' as PublicTab, label: 'About', icon: <Info className="w-3.5 h-3.5" /> }] : []),
   ];
 
   // ---------------------------------------------------------------------------
@@ -612,6 +612,26 @@ function UserProfileContent() {
                         ))}
                       </div>
                     )}
+
+                    {/* ── Social Stats Row (Following | Followers | Likes) ── */}
+                    <div className="flex items-center gap-5 pt-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-zinc-900">
+                          {formatCount(profile ? profile.followingCount : (followingCount ?? null))}
+                        </span>
+                        <span className="text-sm text-zinc-500 font-medium">Following</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-zinc-900">
+                          {formatCount(profile ? profile.followersCount : (followerCount ?? null))}
+                        </span>
+                        <span className="text-sm text-zinc-500 font-medium">Followers</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-zinc-900">—</span>
+                        <span className="text-sm text-zinc-500 font-medium">Likes</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -651,12 +671,14 @@ function UserProfileContent() {
                             >
                               <BarChart2 className="w-4 h-4 text-indigo-500" /> Profile Stats
                             </button>
-                            <button
-                              onClick={() => { setMoreOpen(false); setActiveTab('about'); }}
-                              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                            >
-                              <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
-                            </button>
+                            {isOrgBiz && (
+                              <button
+                                onClick={() => { setMoreOpen(false); setActiveTab('about'); }}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                              >
+                                <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
+                              </button>
+                            )}
                             <button
                               onClick={() => { setMoreOpen(false); shareProfile(); }}
                               className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
@@ -713,7 +735,7 @@ function UserProfileContent() {
                         </button>
                       )}
 
-                      {/* More menu */}
+                      {/* More menu — public view */}
                       <div className="relative ml-auto">
                         <button
                           onClick={() => setMoreOpen((o) => !o)}
@@ -732,12 +754,14 @@ function UserProfileContent() {
                               >
                                 <BarChart2 className="w-4 h-4 text-indigo-500" /> Profile Stats
                               </button>
-                              <button
-                                onClick={() => { setMoreOpen(false); setActiveTab('about'); }}
-                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                              >
-                                <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
-                              </button>
+                              {isOrgBiz && (
+                                <button
+                                  onClick={() => { setMoreOpen(false); setActiveTab('about'); }}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                                >
+                                  <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
+                                </button>
+                              )}
                               <button
                                 onClick={() => { setMoreOpen(false); shareProfile(); }}
                                 className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
@@ -878,8 +902,8 @@ function UserProfileContent() {
                     </div>
                   )}
 
-                  {/* ABOUT */}
-                  {activeTab === 'about' && (() => {
+                  {/* ABOUT — Only for Business/Organization */}
+                  {activeTab === 'about' && isOrgBiz && (() => {
                     const targetData = target || profile;
                     const joined = joinedDate(targetData?._creationTime);
                     const isVerified = targetData?.isBlueVerified || targetData?.isVerified || targetData?.verificationStatus === 'verified';
@@ -888,9 +912,30 @@ function UserProfileContent() {
                       : targetData?.website ? `https://${targetData.website}` : null;
                     return (
                       <div className="p-4 sm:p-6 space-y-6">
+                        {/* Business/Org identity info */}
                         <div className="space-y-3">
+                          {(targetData?.accountType === 'business' || targetData?.accountType === 'organization') && (
+                            <div className="flex items-center gap-2">
+                              <span className={cn(
+                                'px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ring-1 ring-inset',
+                                targetData.accountType === 'business'
+                                  ? 'bg-violet-50 text-violet-700 ring-violet-200'
+                                  : 'bg-indigo-50 text-indigo-700 ring-indigo-200'
+                              )}>
+                                {targetData.accountType === 'business' ? 'Business' : 'Organization'}
+                              </span>
+                              {targetData?.category && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200">
+                                  {targetData.category}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {targetData?.bio && (
                             <p className="text-sm text-zinc-700 font-medium leading-relaxed">{targetData.bio}</p>
+                          )}
+                          {(targetData?.description && targetData.description !== targetData?.bio) && (
+                            <p className="text-sm text-zinc-600 font-medium leading-relaxed">{targetData.description}</p>
                           )}
                           {targetData?.location && (
                             <div className="flex items-center gap-2 text-sm text-zinc-600 font-medium">
@@ -905,7 +950,8 @@ function UserProfileContent() {
                             </div>
                           )}
                           {websiteUrl && (
-                            <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-indigo-600 font-semibold hover:underline">
+                            <a href={websiteUrl} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm text-indigo-600 font-semibold hover:underline">
                               <Globe className="w-4 h-4 shrink-0" />
                               <span className="break-all">{targetData?.website}</span>
                             </a>
@@ -916,9 +962,14 @@ function UserProfileContent() {
                               <span>Verified Account</span>
                             </div>
                           )}
-                          {isOrgBiz && <OrgSocialLinks links={targetData?.socialLinks || []} />}
+                          {(targetData?.socialLinks && targetData.socialLinks.length > 0) && (
+                            <OrgSocialLinks links={targetData.socialLinks} />
+                          )}
                         </div>
+
                         <div className="border-t border-zinc-100" />
+
+                        {/* Reviews section */}
                         <div>
                           <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-4">Reviews</h3>
                           {ratingsData === undefined ? (

@@ -469,6 +469,7 @@ function ProfileContent() {
       : null;
 
   const publicInterests = user.showInterests !== false ? getPublicInterests(user) : [];
+  const isOrgBiz = user.accountType === 'organization' || user.accountType === 'business';
   const rating = ratingsData?.averageScore ?? null;
   const reviewsCountVal = ratingsData?.totalCount ?? (stats?.rated ?? null);
 
@@ -477,23 +478,23 @@ function ProfileContent() {
 
   // Stats modal handlers
   const handleFollowersClick = () => {
-    showToast('Followers', 'See your followers. Visit any follower\'s profile to interact.');
+    showToast('Followers', 'See your followers in Profile Stats.');
   };
   const handleFollowingClick = () => {
-    showToast('Following', 'See the accounts you follow.');
+    showToast('Following', 'See the accounts you follow in Profile Stats.');
   };
   const handleRatingClick = () => {
-    setTab('about');
+    if (isOrgBiz) setTab('about');
   };
 
   // ---------------------------------------------------------------------------
-  // Tab definitions — Posts | Media | Likes | About
+  // Tab definitions — conditional on account type
   // ---------------------------------------------------------------------------
   const profileTabs: { key: ProfileTab; label: string; icon: React.ReactNode }[] = [
     { key: 'posts', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
     { key: 'media', label: 'Media', icon: <Image className="w-3.5 h-3.5" /> },
     { key: 'likes', label: 'Likes', icon: <Heart className="w-3.5 h-3.5" /> },
-    { key: 'about', label: 'About', icon: <Info className="w-3.5 h-3.5" /> },
+    ...(isOrgBiz ? [{ key: 'about' as ProfileTab, label: 'About', icon: <Info className="w-3.5 h-3.5" /> }] : []),
   ];
 
   return (
@@ -596,6 +597,30 @@ function ProfileContent() {
                 ))}
               </div>
             )}
+
+            {/* ── Social Stats Row (Following | Followers | Likes) ── */}
+            <div className="flex items-center gap-5 mt-3.5">
+              <button
+                type="button"
+                onClick={handleFollowingClick}
+                className="flex items-center gap-1.5 hover:opacity-75 active:scale-95 transition-all"
+              >
+                <span className="text-sm font-black text-zinc-900">{formatCount(followingTotal)}</span>
+                <span className="text-sm text-zinc-500 font-medium">Following</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleFollowersClick}
+                className="flex items-center gap-1.5 hover:opacity-75 active:scale-95 transition-all"
+              >
+                <span className="text-sm font-black text-zinc-900">{formatCount(followersTotal)}</span>
+                <span className="text-sm text-zinc-500 font-medium">Followers</span>
+              </button>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-black text-zinc-900">—</span>
+                <span className="text-sm text-zinc-500 font-medium">Likes</span>
+              </div>
+            </div>
           </div>
 
           {/* ---- Action Buttons ---- */}
@@ -645,13 +670,15 @@ function ProfileContent() {
                       >
                         <BarChart2 className="w-4 h-4 text-indigo-500" /> Profile Stats
                       </button>
-                      {/* About & Reviews */}
-                      <button
-                        onClick={() => { setMoreOpen(false); setTab('about'); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                      >
-                        <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
-                      </button>
+                      {/* About & Reviews — only for business/organization */}
+                      {isOrgBiz && (
+                        <button
+                          onClick={() => { setMoreOpen(false); setTab('about'); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                        >
+                          <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
+                        </button>
+                      )}
                       {/* Share Profile */}
                       <button
                         onClick={() => { setMoreOpen(false); shareProfile(); }}
