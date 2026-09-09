@@ -366,3 +366,15 @@ export const send = mutation({
     return { type: "request", requestId };
   },
 });
+
+export const getPendingIncomingCount = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("chatRequests")
+      .withIndex("by_toUser", (q) => q.eq("toUserId", args.userId).eq("status", "PENDING"))
+      .collect();
+    return rows.length;
+  },
+});
+

@@ -241,6 +241,11 @@ export default function Messages() {
     convexUserId ? {} : 'skip'
   );
 
+  const pendingIncomingCount = useQuery(
+    api.chatRequests.getPendingIncomingCount,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  ) ?? 0;
+
   const [isCycleCreatorOpen, setIsCycleCreatorOpen] = useState(false);
   const [selectedCycleGroup, setSelectedCycleGroup] = useState<any>(null);
 
@@ -343,8 +348,13 @@ export default function Messages() {
           </h1>
           <div className="flex items-center gap-0.5 shrink-0">
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/add-friends')}
-              className="p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="Add Friends">
+              className="relative p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="Add Friends">
               <UserPlus className="w-[22px] h-[22px]" />
+              {pendingIncomingCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white">
+                  {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
+                </span>
+              )}
             </motion.button>
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/new')}
               className="p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="New Chat">
@@ -362,8 +372,13 @@ export default function Messages() {
         </h1>
         <div className="flex items-center gap-2">
           <motion.button whileTap={{ scale: 0.94 }} onClick={() => navigate('/messages/add-friends')}
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm transition-all" aria-label="Add Friends">
+            className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm transition-all" aria-label="Add Friends">
             <UserPlus className="w-5 h-5" />
+            {pendingIncomingCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-white">
+                {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
+              </span>
+            )}
           </motion.button>
           <motion.button whileTap={{ scale: 0.94 }} onClick={() => navigate('/messages/new')}
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm transition-all" aria-label="New Chat">
