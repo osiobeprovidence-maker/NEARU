@@ -461,3 +461,49 @@ export const sendFriendRequest = mutation({
     });
   },
 });
+
+export const listMyFriends = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const followingDocs = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .collect();
+    const followingIds = new Set(followingDocs.map((f) => f.followingId.toString()));
+
+    const followerDocs = await ctx.db
+      .query("follows")
+      .withIndex("by_following", (q) => q.eq("followingId", args.userId))
+      .collect();
+    
+    const mutualIds = followerDocs
+      .filter((f) => followingIds.has(f.followerId.toString()))
+      .map((f) => f.followerId);
+
+    const avatarCache: Record<string, string | undefined> = {};
+    const results = [];
+    
+    for (const id of mutualIds) {
+      const user = await ctx.db.get(id);
+      if (!user || user.moderationStatus === "BANNED") continue;
+
+      let avatar = user.avatar || "";
+      if (avatar && isStorageId(avatar)) {
+        avatar = (await resolveStorageUrl(ctx, avatarCache, avatar)) || "";
+      }
+
+      results.push({
+        _id: user._id,
+        name: user.name,
+        username: user.username,
+        avatar,
+        bio: user.bio,
+        isNINVerified: user.isNINVerified,
+        badges: user.badges,
+      });
+    }
+
+    return results;
+  },
+});
+

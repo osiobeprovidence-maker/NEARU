@@ -23,6 +23,7 @@ const Home = React.lazy(() => import('./pages/Home'));
 const Explore = React.lazy(() => import('./pages/Explore'));
 const MyRallys = React.lazy(() => import('./pages/MyRallys'));
 const Messages = React.lazy(() => import('./pages/Messages'));
+const NewChat = React.lazy(() => import('./pages/NewChat'));
 const Chat = React.lazy(() => import('./pages/Chat'));
 const ChatRequest = React.lazy(() => import('./pages/ChatRequest'));
 const AddFriends = React.lazy(() => import('./pages/AddFriends'));
@@ -216,6 +217,7 @@ const AppRoutes = () => {
           <Route path="explore" element={<Explore />} />
           <Route path="my-rallys" element={<MyRallys />} />
           <Route path="messages" element={<Messages />} />
+          <Route path="messages/new" element={<NewChat />} />
           <Route path="messages/add-friends" element={<AddFriends />} />
           <Route path="messages/request/:id" element={<ChatRequest />} />
           <Route path="messages/:id" element={<Chat />} />

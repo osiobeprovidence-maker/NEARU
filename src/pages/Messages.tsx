@@ -283,6 +283,13 @@ export default function Messages() {
 
   const cycleParticipants: any[] = [];
   
+  // Always add Create Cycle first
+  cycleParticipants.push({
+    key: 'create-cycle',
+    name: 'Create Cycle',
+    isCreateAction: true,
+  });
+
   if (myActiveCycles) {
     let previewAvatar = myActiveCycles.avatarUrl;
     const latestCycle = myActiveCycles.cycles[myActiveCycles.cycles.length - 1];
@@ -310,13 +317,6 @@ export default function Messages() {
     });
   }
 
-  // Always add Create Cycle next
-  cycleParticipants.push({
-    key: 'create-cycle',
-    name: 'Create Cycle',
-    isCreateAction: true,
-  });
-
   if (activeFriendCycles) {
     activeFriendCycles.forEach(group => {
       cycleParticipants.push({
@@ -338,15 +338,15 @@ export default function Messages() {
       {/* Mobile Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-100 safe-area-top md:hidden">
         <div className="flex items-center justify-between px-4 py-3 min-h-[56px]">
-          <motion.button whileTap={{ scale: 0.92 }} onClick={() => navigate('/profile')} aria-label="Profile" className="shrink-0">
-            <Avatar src={user.avatar} name={user.name} size="sm" className="border-2 border-indigo-100 shadow-sm" />
-          </motion.button>
+          <h1 className="text-2xl font-black tracking-tight text-zinc-900">
+            Messages
+          </h1>
           <div className="flex items-center gap-0.5 shrink-0">
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/add-friends')}
               className="p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="Add Friends">
               <UserPlus className="w-[22px] h-[22px]" />
             </motion.button>
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/add-friends')}
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/new')}
               className="p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="New Chat">
               <SquarePen className="w-[22px] h-[22px]" />
             </motion.button>
@@ -365,7 +365,7 @@ export default function Messages() {
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm transition-all" aria-label="Add Friends">
             <UserPlus className="w-5 h-5" />
           </motion.button>
-          <motion.button whileTap={{ scale: 0.94 }} onClick={() => navigate('/messages/add-friends')}
+          <motion.button whileTap={{ scale: 0.94 }} onClick={() => navigate('/messages/new')}
             className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm transition-all" aria-label="New Chat">
             <SquarePen className="w-5 h-5" />
           </motion.button>
@@ -460,9 +460,9 @@ export default function Messages() {
             {q ? 'Try a different name.' : 'Start a new conversation with a friend.'}
           </p>
           {!q && (
-            <motion.button whileTap={{ scale: 0.95 }} onClick={() => navigate('/messages/add-friends')}
+            <motion.button whileTap={{ scale: 0.95 }} onClick={() => navigate('/messages/new')}
               className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-sm transition-all">
-              <Send className="w-4 h-4" />
+              <SquarePen className="w-4 h-4" />
               New Chat
             </motion.button>
           )}
