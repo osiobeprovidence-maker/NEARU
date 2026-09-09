@@ -27,6 +27,7 @@ const NewChat = React.lazy(() => import('./pages/NewChat'));
 const Chat = React.lazy(() => import('./pages/Chat'));
 const ChatRequest = React.lazy(() => import('./pages/ChatRequest'));
 const AddFriends = React.lazy(() => import('./pages/AddFriends'));
+const InviteFriends = React.lazy(() => import('./pages/InviteFriends'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const ManagePage = React.lazy(() => import('./pages/ManagePage'));
@@ -219,6 +220,7 @@ const AppRoutes = () => {
           <Route path="messages" element={<Messages />} />
           <Route path="messages/new" element={<NewChat />} />
           <Route path="messages/add-friends" element={<AddFriends />} />
+          <Route path="messages/invite" element={<InviteFriends />} />
           <Route path="messages/request/:id" element={<ChatRequest />} />
           <Route path="messages/:id" element={<Chat />} />
           <Route path="notifications" element={<Notifications />} />

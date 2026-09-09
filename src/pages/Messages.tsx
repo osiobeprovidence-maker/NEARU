@@ -125,11 +125,6 @@ function CycleAvatar({
       )}>
         <div className="w-full h-full rounded-full overflow-hidden bg-white p-[2px] relative">
           <Avatar src={avatar} name={name} className="w-full h-full" />
-          {isMe && !hasNew && (
-            <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-primary border-2 border-white flex items-center justify-center">
-              <Plus className="w-3 h-3 text-white" />
-            </div>
-          )}
         </div>
       </div>
       <span className="text-[11px] font-semibold text-zinc-700 truncate w-full text-center leading-tight">
@@ -301,7 +296,11 @@ export default function Messages() {
 
   const allConversations = loading ? [] : buildItems();
   const q = search.trim().toLowerCase();
-  const filteredConversations = q ? allConversations.filter((i) => i.title.toLowerCase().includes(q)) : allConversations;
+  
+  // Filter out the 'feeling like' / 'RALLY chat started' item
+  let validConversations = allConversations.filter(c => !(c.title === 'feeling like' || c.subtitle === 'RALLY chat started'));
+    
+  const filteredConversations = q ? validConversations.filter((i) => i.title.toLowerCase().includes(q)) : validConversations;
 
   const cycleParticipants: any[] = [];
   
@@ -312,7 +311,7 @@ export default function Messages() {
     isCreateAction: true,
   });
 
-  if (myActiveCycles) {
+  if (myActiveCycles && myActiveCycles.cycles && myActiveCycles.cycles.length > 0) {
     let previewAvatar = myActiveCycles.avatarUrl;
     const latestCycle = myActiveCycles.cycles[myActiveCycles.cycles.length - 1];
     if (latestCycle?.mediaUrl) {
@@ -326,16 +325,6 @@ export default function Messages() {
       hasNew: myActiveCycles.hasUnseen,
       isMe: true,
       cyclesGroup: myActiveCycles,
-    });
-  } else {
-    // Show empty self Add Cycle
-    cycleParticipants.push({
-      key: 'me-empty',
-      name: 'Your Cycle',
-      avatar: user?.avatar,
-      hasNew: false,
-      isMe: true,
-      cyclesGroup: null,
     });
   }
 
@@ -415,7 +404,7 @@ export default function Messages() {
             id="messages-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search messagesâ€¦"
+            placeholder="Search messages…"
             className="flex-1 bg-transparent text-sm text-zinc-800 placeholder-zinc-400 outline-none font-medium"
           />
           <AnimatePresence>
@@ -460,22 +449,6 @@ export default function Messages() {
             </div>
           </div>
           <div className="h-px bg-zinc-100" />
-        </div>
-      )}
-
-      {/* Loading skeleton */}
-      {loading && (
-        <div className="px-4 space-y-1 mt-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-center gap-3 py-3.5 animate-pulse">
-              <div className="w-[54px] h-[54px] rounded-full bg-zinc-100 shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3.5 w-32 bg-zinc-100 rounded-full" />
-                <div className="h-3 w-48 bg-zinc-100 rounded-full" />
-              </div>
-              <div className="h-3 w-10 bg-zinc-100 rounded-full shrink-0" />
-            </div>
-          ))}
         </div>
       )}
 

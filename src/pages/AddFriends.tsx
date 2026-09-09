@@ -119,17 +119,7 @@ export default function AddFriends() {
   };
 
   const handleShareInvite = () => {
-    const inviteUrl = window.location.origin;
-    if (navigator.share) {
-      navigator.share({
-        title: 'Join me on Laulau',
-        text: 'Join me on Laulau to connect and chat!',
-        url: inviteUrl,
-      }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(inviteUrl);
-      alert('Invite link copied to clipboard!');
-    }
+    navigate('/messages/invite');
   };
 
   // Safe recommendations (filter out searched/friends/sent)

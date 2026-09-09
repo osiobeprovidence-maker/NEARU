@@ -315,6 +315,7 @@ export default function AppShell() {
   const isCustomHeaderPage = 
     routeLocation.pathname === '/messages' || 
     routeLocation.pathname === '/messages/add-friends' ||
+    routeLocation.pathname === '/messages/invite' ||
     routeLocation.pathname === '/messages/new';
 
   return (
