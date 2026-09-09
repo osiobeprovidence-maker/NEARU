@@ -14,7 +14,7 @@ import {
   signInWithEmailLink,
   reload,
 } from '../lib/firebase';
-import { GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged, User as FirebaseUser, getRedirectResult } from 'firebase/auth';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { unsubscribeUserFromPush, syncPushSubscriptionSilently } from '../utils/pushManager';
