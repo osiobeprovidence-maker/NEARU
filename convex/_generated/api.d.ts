@@ -13,6 +13,7 @@ import type * as adminHelpers from "../adminHelpers.js";
 import type * as ads from "../ads.js";
 import type * as blueCheck from "../blueCheck.js";
 import type * as chatRequests from "../chatRequests.js";
+import type * as cycles from "../cycles.js";
 import type * as eventHub from "../eventHub.js";
 import type * as follows from "../follows.js";
 import type * as friends from "../friends.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   ads: typeof ads;
   blueCheck: typeof blueCheck;
   chatRequests: typeof chatRequests;
+  cycles: typeof cycles;
   eventHub: typeof eventHub;
   follows: typeof follows;
   friends: typeof friends;
