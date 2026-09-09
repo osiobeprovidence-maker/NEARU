@@ -11,8 +11,6 @@ import {
   Star,
   Users,
   UserCheck,
-  UserPlus,
-  CheckCircle2,
   FileText,
   Loader2,
   Calendar,
@@ -22,6 +20,9 @@ import {
   Zap,
   ShieldCheck,
   ChevronRight,
+  X,
+  BarChart2,
+  Info,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar';
@@ -39,8 +40,8 @@ import { Rally } from '../types';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-type ProfileTab = 'posts' | 'reviews' | 'rallys' | 'media' | 'likes';
-const VALID_TABS: ProfileTab[] = ['posts', 'reviews', 'rallys', 'media', 'likes'];
+type ProfileTab = 'posts' | 'media' | 'likes' | 'about';
+const VALID_TABS: ProfileTab[] = ['posts', 'media', 'likes', 'about'];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,140 +59,124 @@ function joinedDate(ts?: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar: Profile Stats
+// Profile Stats Modal
 // ---------------------------------------------------------------------------
-interface ProfileStatsSidebarProps {
+interface ProfileStatsModalProps {
   rating: number | null;
   reviewsCount: number | null;
   postsCount: number | null;
   followersCount: number | null;
   followingCount: number | null;
+  onClose: () => void;
   onFollowersClick: () => void;
   onFollowingClick: () => void;
   onRatingClick: () => void;
 }
 
-function ProfileStatsSidebar({
+function ProfileStatsModal({
   rating,
   reviewsCount,
   postsCount,
   followersCount,
   followingCount,
+  onClose,
   onFollowersClick,
   onFollowingClick,
   onRatingClick,
-}: ProfileStatsSidebarProps) {
+}: ProfileStatsModalProps) {
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-100">
-        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Profile Stats</h3>
-      </div>
-      <div className="p-4 space-y-3">
-        {/* Rating */}
-        <button
-          type="button"
-          onClick={onRatingClick}
-          className="w-full flex items-center justify-between group hover:bg-zinc-50 -mx-2 px-2 py-1.5 rounded-xl transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Star className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
-            <div className="text-left">
-              <div className="text-lg font-black text-zinc-900 leading-tight">
-                {rating !== null ? rating?.toFixed(1) : '—'}
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
+
+      {/* Modal panel — centered on desktop, bottom sheet on mobile */}
+      <div className="fixed inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center z-50 p-0 sm:p-4">
+        <div className="w-full sm:w-[360px] bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+            <h3 className="text-sm font-black uppercase tracking-wider text-zinc-400">Profile Stats</h3>
+            <button
+              onClick={onClose}
+              className="w-7 h-7 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4 text-zinc-500" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-2">
+            {/* Rating */}
+            <button
+              type="button"
+              onClick={() => { onClose(); onRatingClick(); }}
+              className="w-full flex items-center justify-between group hover:bg-zinc-50 px-3 py-3 rounded-xl transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <Star className="w-4.5 h-4.5 text-amber-400 fill-amber-400" />
+                </div>
+                <div className="text-left">
+                  <div className="text-base font-black text-zinc-900 leading-tight">
+                    {rating !== null ? rating?.toFixed(1) : '—'}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 font-medium">
+                    {reviewsCount === null ? '…' : `${reviewsCount} Review${reviewsCount === 1 ? '' : 's'}`}
+                  </div>
+                </div>
               </div>
-              <div className="text-[11px] text-zinc-400 font-medium">
-                {reviewsCount === null ? '…' : `${reviewsCount} Review${reviewsCount === 1 ? '' : 's'}`}
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+            </button>
+
+            {/* Posts */}
+            <div className="flex items-center gap-3 px-3 py-3 rounded-xl">
+              <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center">
+                <FileText className="w-4.5 h-4.5 text-zinc-500" />
+              </div>
+              <div>
+                <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(postsCount)}</div>
+                <div className="text-[11px] text-zinc-400 font-medium">Posts</div>
               </div>
             </div>
-          </div>
-          <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
-        </button>
 
-        <div className="border-t border-zinc-100" />
+            {/* Followers */}
+            <button
+              type="button"
+              onClick={() => { onClose(); onFollowersClick(); }}
+              className="w-full flex items-center justify-between group hover:bg-zinc-50 px-3 py-3 rounded-xl transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                  <Users className="w-4.5 h-4.5 text-indigo-500" />
+                </div>
+                <div className="text-left">
+                  <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followersCount)}</div>
+                  <div className="text-[11px] text-zinc-400 font-medium">Followers</div>
+                </div>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+            </button>
 
-        {/* Posts */}
-        <div className="flex items-center gap-2 px-0 py-0.5">
-          <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
-          <div>
-            <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(postsCount)}</div>
-            <div className="text-[11px] text-zinc-400 font-medium">Posts</div>
+            {/* Following */}
+            <button
+              type="button"
+              onClick={() => { onClose(); onFollowingClick(); }}
+              className="w-full flex items-center justify-between group hover:bg-zinc-50 px-3 py-3 rounded-xl transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <UserCheck className="w-4.5 h-4.5 text-emerald-500" />
+                </div>
+                <div className="text-left">
+                  <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followingCount)}</div>
+                  <div className="text-[11px] text-zinc-400 font-medium">Following</div>
+                </div>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+            </button>
           </div>
         </div>
-
-        <div className="border-t border-zinc-100" />
-
-        {/* Followers */}
-        <button
-          type="button"
-          onClick={onFollowersClick}
-          className="w-full flex items-center justify-between group hover:bg-zinc-50 -mx-2 px-2 py-1.5 rounded-xl transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-indigo-500 shrink-0" />
-            <div className="text-left">
-              <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followersCount)}</div>
-              <div className="text-[11px] text-zinc-400 font-medium">Followers</div>
-            </div>
-          </div>
-          <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
-        </button>
-
-        {/* Following */}
-        <button
-          type="button"
-          onClick={onFollowingClick}
-          className="w-full flex items-center justify-between group hover:bg-zinc-50 -mx-2 px-2 py-1.5 rounded-xl transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-            <div className="text-left">
-              <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followingCount)}</div>
-              <div className="text-[11px] text-zinc-400 font-medium">Following</div>
-            </div>
-          </div>
-          <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
-        </button>
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sidebar: About
-// ---------------------------------------------------------------------------
-function ProfileAboutSidebar({ user }: { user: any }) {
-  const isVerified = user?.isBlueVerified || user?.isVerified || user?.verificationStatus === 'verified';
-  const joined = joinedDate(user?._creationTime);
-
-  return (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-100">
-        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">About</h3>
-      </div>
-      <div className="p-4 space-y-2.5">
-        {user?.bio && (
-          <p className="text-xs text-zinc-600 font-medium leading-relaxed line-clamp-3">{user.bio}</p>
-        )}
-        {user?.location && (
-          <div className="flex items-center gap-2 text-xs text-zinc-600 font-medium">
-            <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-            <span>{user.location}</span>
-          </div>
-        )}
-        {joined && (
-          <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
-            <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-            <span>Joined {joined}</span>
-          </div>
-        )}
-        {isVerified && (
-          <div className="flex items-center gap-2 text-xs text-emerald-700 font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>Verified Account</span>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -291,7 +276,6 @@ function UserRow({
             </>
           ) : (
             <>
-              <UserPlus className="w-3.5 h-3.5" />
               <span>Follow</span>
             </>
           )}
@@ -309,6 +293,7 @@ function ProfileContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const coverRef = useRef<CoverBannerHandle>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   const updateUserMutation = useMutation(api.users.update);
@@ -359,45 +344,22 @@ function ProfileContent() {
   const postedCount = stats?.posted ?? (stats === undefined ? null : 0);
   const followersTotal = followerCount ?? (followerCount === undefined ? null : 0);
   const followingTotal = followingCount ?? (followingCount === undefined ? null : 0);
-  const ratedCount = stats?.rated ?? (stats === undefined ? null : 0);
 
   // ---------------------------------------------------------------------------
   // Tab Content Queries
   // ---------------------------------------------------------------------------
   const rawPosts = useQuery(
     api.rallies.listByCreator,
-    convexUserId && (activeTab === 'posts' || activeTab === 'rallys' || activeTab === 'media')
+    convexUserId && (activeTab === 'posts' || activeTab === 'media')
       ? { creatorId: convexUserId as any, userId: convexUserId as any }
       : 'skip'
   );
 
-  const followersList = useQuery(
-    api.follows.listFollowersWithProfiles,
-    convexUserId && activeTab === 'posts' // never used as a tab now, only for sidebar/modal
-      ? 'skip'
-      : 'skip'
-  );
-
-  const followingList = useQuery(
-    api.follows.listFollowingWithProfiles,
-    convexUserId && activeTab === 'posts'
-      ? 'skip'
-      : 'skip'
-  );
-
-  // Reviews (formerly "rated")
+  // Reviews — loaded for About tab
   const ratingsData = useQuery(
     api.rallies.listRatingsForUser,
-    convexUserId && activeTab === 'reviews'
+    convexUserId && activeTab === 'about'
       ? { userId: convexUserId as any }
-      : 'skip'
-  );
-
-  // Followers list for modal (always available in sidebar)
-  const followersListSidebar = useQuery(
-    api.follows.listFollowersWithProfiles,
-    convexUserId && activeTab === 'followers' as any
-      ? { userId: convexUserId as any, viewerId: convexUserId as any }
       : 'skip'
   );
 
@@ -471,9 +433,7 @@ function ProfileContent() {
     return rawPosts.map(mapRally).filter((p) => !deletedIds.has(p.id));
   }, [rawPosts, deletedIds]);
 
-  // Tab-filtered lists
   const postsList = useMemo(() => allContent.filter((p) => p.type === 'POST'), [allContent]);
-  const rallysList = useMemo(() => allContent.filter((p) => p.type !== 'POST'), [allContent]);
   const mediaList = useMemo(
     () => allContent.filter((p) => p.mediaUrls && p.mediaUrls.length > 0),
     [allContent]
@@ -512,529 +472,512 @@ function ProfileContent() {
   const rating = ratingsData?.averageScore ?? null;
   const reviewsCountVal = ratingsData?.totalCount ?? (stats?.rated ?? null);
 
-  // Sidebar stat click handlers — navigate to the correct tab
+  const isVerified = user?.isBlueVerified || user?.isVerified || user?.verificationStatus === 'verified';
+  const joined = joinedDate((user as any)?._creationTime as number | undefined);
+
+  // Stats modal handlers
   const handleFollowersClick = () => {
-    // Open followers list in a dedicated view (navigate to /profile with internal modal or use followers data)
-    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: 'Followers', subtitle: 'See your followers below. Visit the profile of any follower to interact.' } }));
+    showToast('Followers', 'See your followers. Visit any follower\'s profile to interact.');
   };
   const handleFollowingClick = () => {
-    window.dispatchEvent(new CustomEvent('show-toast', { detail: { title: 'Following', subtitle: 'See accounts you follow below.' } }));
+    showToast('Following', 'See the accounts you follow.');
   };
   const handleRatingClick = () => {
-    setTab('reviews');
+    setTab('about');
   };
 
   // ---------------------------------------------------------------------------
-  // Tab definitions
+  // Tab definitions — Posts | Media | Likes | About
   // ---------------------------------------------------------------------------
   const profileTabs: { key: ProfileTab; label: string; icon: React.ReactNode }[] = [
     { key: 'posts', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
-    { key: 'reviews', label: 'Reviews', icon: <Star className="w-3.5 h-3.5" /> },
-    { key: 'rallys', label: 'RALLYS', icon: <Zap className="w-3.5 h-3.5" /> },
     { key: 'media', label: 'Media', icon: <Image className="w-3.5 h-3.5" /> },
     { key: 'likes', label: 'Likes', icon: <Heart className="w-3.5 h-3.5" /> },
+    { key: 'about', label: 'About', icon: <Info className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <PageShell title="Profile">
-      <div className="w-full">
+      <div className="w-full max-w-2xl mx-auto">
+
         {/* ================================================================ */}
-        {/* RESPONSIVE GRID: main (left) + sidebar (right, desktop only)     */}
+        {/* Profile Card + Feed — single column, full-width                  */}
         {/* ================================================================ */}
-        <div className="flex flex-col lg:flex-row lg:items-start gap-5">
+        <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
 
-          {/* ============================================================== */}
-          {/* LEFT: Profile Card + Feed                                       */}
-          {/* ============================================================== */}
-          <div className="flex-1 min-w-0">
-            <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
+          {/* ---- Cover Banner ---- */}
+          <CoverBanner
+            ref={coverRef}
+            coverImage={coverUrl}
+            canEdit
+            onCoverUploaded={handleCoverUploaded}
+            onError={(msg) => showToast('Error', msg)}
+          />
 
-              {/* ---- Cover Banner ---- */}
-              <CoverBanner
-                ref={coverRef}
-                coverImage={coverUrl}
-                canEdit
-                onCoverUploaded={handleCoverUploaded}
-                onError={(msg) => showToast('Error', msg)}
-              />
-
-              {/* ---- Profile Identity ---- */}
-              <div className="px-4 sm:px-6 pb-2">
-                {/* Avatar overlapping cover */}
-                <div className="relative -mt-10 sm:-mt-14 z-10 w-fit">
-                  <div className="relative">
-                    <Avatar
-                      src={user.avatar}
-                      name={user.name}
-                      size="xl"
-                      className="border-4 border-white shadow-lg"
-                    />
-                    {avatarUploading && (
-                      <div className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
-                        <Loader2 className="w-7 h-7 text-white animate-spin" />
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setCropFile(null); setIsCropModalOpen(true); }}
-                    className="absolute bottom-0 right-0 p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-all shadow-md active:scale-95 cursor-pointer z-20"
-                    title="Edit Profile Photo"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                  </button>
-                  <input
-                    id="profile-avatar-input"
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    tabIndex={-1}
-                    disabled={avatarUploading}
-                    onChange={handleAvatarChange}
-                  />
-                </div>
-
-                {/* Name & Verification Badge */}
-                <div className="flex items-center gap-1.5 mt-3 mb-0.5 flex-wrap">
-                  <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
-                    {user.name}
-                  </h2>
-                  <ProfileVerificationCheck user={user} size="lg" />
-                </div>
-
-                {/* Username */}
-                <p className="text-sm font-semibold text-zinc-400 mb-1.5">
-                  {user.username ? `@${user.username.replace(/^@+/, '')}` : ''}
-                </p>
-
-                {/* Bio */}
-                <p className="text-sm text-zinc-700 font-medium leading-relaxed mb-2 max-w-xl">
-                  {user.bio || 'Always looking for something fun to do.'}
-                </p>
-
-                {/* Location + Gender */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-zinc-600 font-medium">
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-zinc-400" />
-                    {user.location || 'Location not set'}
-                  </span>
-                  {user.gender && user.gender !== 'Prefer not to say' && (
-                    <>
-                      <span className="text-zinc-300">•</span>
-                      <span>{user.gender}</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Public Interests Tags */}
-                {publicInterests.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {publicInterests.map((interest) => (
-                      <span
-                        key={interest}
-                        className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold ring-1 ring-inset ring-indigo-100"
-                      >
-                        {interest}
-                      </span>
-                    ))}
+          {/* ---- Profile Identity ---- */}
+          <div className="px-4 sm:px-6 pb-2">
+            {/* Avatar overlapping cover */}
+            <div className="relative -mt-10 sm:-mt-14 z-10 w-fit">
+              <div className="relative">
+                <Avatar
+                  src={user.avatar}
+                  name={user.name}
+                  size="xl"
+                  className="border-4 border-white shadow-lg"
+                />
+                {avatarUploading && (
+                  <div className="absolute inset-0 rounded-full bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-20">
+                    <Loader2 className="w-7 h-7 text-white animate-spin" />
                   </div>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => { setCropFile(null); setIsCropModalOpen(true); }}
+                className="absolute bottom-0 right-0 p-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-full transition-all shadow-md active:scale-95 cursor-pointer z-20"
+                title="Edit Profile Photo"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+              <input
+                id="profile-avatar-input"
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                tabIndex={-1}
+                disabled={avatarUploading}
+                onChange={handleAvatarChange}
+              />
+            </div>
 
-              {/* ---- Action Buttons ---- */}
-              <div className="px-4 sm:px-6 mt-3 mb-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    to="/settings/personal-info"
-                    className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+            {/* Name & Verification Badge */}
+            <div className="flex items-center gap-1.5 mt-3 mb-0.5 flex-wrap">
+              <h2 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+                {user.name}
+              </h2>
+              <ProfileVerificationCheck user={user} size="lg" />
+            </div>
+
+            {/* Username */}
+            <p className="text-sm font-semibold text-zinc-400 mb-1.5">
+              {user.username ? `@${user.username.replace(/^@+/, '')}` : ''}
+            </p>
+
+            {/* Bio */}
+            <p className="text-sm text-zinc-700 font-medium leading-relaxed mb-2 max-w-xl">
+              {user.bio || 'Always looking for something fun to do.'}
+            </p>
+
+            {/* Location + Gender */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-zinc-600 font-medium">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-zinc-400" />
+                {user.location || 'Location not set'}
+              </span>
+              {user.gender && user.gender !== 'Prefer not to say' && (
+                <>
+                  <span className="text-zinc-300">•</span>
+                  <span>{user.gender}</span>
+                </>
+              )}
+            </div>
+
+            {/* Public Interests Tags */}
+            {publicInterests.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {publicInterests.map((interest) => (
+                  <span
+                    key={interest}
+                    className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold ring-1 ring-inset ring-indigo-100"
                   >
-                    <Edit3 className="w-4 h-4" /> Edit Profile
-                  </Link>
-                  <button
-                    onClick={() => coverRef.current?.openPicker()}
-                    className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-sm font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
-                  >
-                    <Camera className="w-4 h-4" /> Edit Cover
-                  </button>
-
-                  {/* Get Verified button — only if not yet verified */}
-                  {!user.isBlueVerified && !user.isVerified && user.blueCheckStatus !== 'pending' && (
-                    <button
-                      type="button"
-                      onClick={() => setIsGetVerifiedOpen(true)}
-                      className="px-4 py-2.5 rounded-xl bg-[#1D9BF0] hover:bg-blue-600 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
-                    >
-                      <ShieldCheck className="w-4 h-4" /> Get Verified
-                    </button>
-                  )}
-
-                  <div className="relative ml-auto">
-                    <button
-                      onClick={() => setMoreOpen((o) => !o)}
-                      className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
-                      aria-label="More actions"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                    {moreOpen && (
-                      <>
-                        <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
-                        <div className="absolute right-0 top-full mt-1.5 z-40 w-48 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
-                          <button
-                            onClick={() => { setMoreOpen(false); shareProfile(); }}
-                            className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                          >
-                            <Share2 className="w-4 h-4 text-indigo-500" /> Share Profile
-                          </button>
-                          {(user.isBlueVerified || user.isVerified) && (
-                            <button
-                              onClick={() => { setMoreOpen(false); setIsGetVerifiedOpen(true); }}
-                              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
-                            >
-                              <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verification Status
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+                    {interest}
+                  </span>
+                ))}
               </div>
+            )}
+          </div>
 
-              {/* ---- Pending verification banner ---- */}
-              {user.blueCheckStatus === 'pending' && (
-                <div className="mx-4 sm:mx-6 mb-4 p-4 rounded-2xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                  <div className="flex items-start sm:items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
-                      <Clock className="w-5 h-5 animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-amber-950">Verification Under Review</h3>
-                      <p className="text-xs text-amber-800 mt-0.5">
-                        Your RALLY profile verification request is being reviewed by our team.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsGetVerifiedOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-amber-900/10 hover:bg-amber-900/20 text-amber-900 text-xs font-bold transition-colors shrink-0 text-center cursor-pointer"
-                  >
-                    View Status →
-                  </button>
-                </div>
+          {/* ---- Action Buttons ---- */}
+          <div className="px-4 sm:px-6 mt-3 mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/settings/personal-info"
+                className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+              >
+                <Edit3 className="w-4 h-4" /> Edit Profile
+              </Link>
+              <button
+                onClick={() => coverRef.current?.openPicker()}
+                className="px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-sm font-bold inline-flex items-center gap-1.5 transition-colors active:scale-95"
+              >
+                <Camera className="w-4 h-4" /> Edit Cover
+              </button>
+
+              {/* Get Verified button — only if not yet verified */}
+              {!user.isBlueVerified && !user.isVerified && user.blueCheckStatus !== 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => setIsGetVerifiedOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-[#1D9BF0] hover:bg-blue-600 text-white text-sm font-bold inline-flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+                >
+                  <ShieldCheck className="w-4 h-4" /> Get Verified
+                </button>
               )}
 
-              {/* ================================================================ */}
-              {/* TAB NAVIGATION: Posts | Reviews | RALLYS | Media | Likes         */}
-              {/* ================================================================ */}
-              <div className="border-t border-zinc-200/80 overflow-x-auto no-scrollbar">
-                <div className="flex items-stretch min-w-full sm:min-w-0">
-                  {profileTabs.map((tab) => {
-                    const isSelected = activeTab === tab.key;
-                    return (
+              {/* Three-dot menu */}
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setMoreOpen((o) => !o)}
+                  className="px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 inline-flex items-center transition-colors active:scale-95"
+                  aria-label="More actions"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+                {moreOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
+                      {/* Profile Stats */}
                       <button
-                        key={tab.key}
-                        type="button"
-                        onClick={() => setTab(tab.key)}
-                        className={cn(
-                          'flex-1 min-w-[72px] py-3 px-2 flex flex-col items-center justify-center gap-1 transition-all relative select-none group',
-                          isSelected
-                            ? 'text-zinc-900'
-                            : 'text-zinc-400 hover:text-zinc-700'
-                        )}
+                        onClick={() => { setMoreOpen(false); setStatsModalOpen(true); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
                       >
-                        <span className={cn('transition-transform group-hover:scale-110', isSelected ? 'text-zinc-900' : 'text-zinc-400')}>
-                          {tab.icon}
-                        </span>
-                        <span className={cn(
-                          'text-[10px] sm:text-[11px] font-black uppercase tracking-wider whitespace-nowrap',
-                          isSelected ? 'text-zinc-900' : 'text-zinc-400'
-                        )}>
-                          {tab.label}
-                        </span>
-                        {isSelected && (
-                          <div className="absolute bottom-0 left-3 right-3 h-0.5 bg-zinc-900 rounded-full" />
-                        )}
+                        <BarChart2 className="w-4 h-4 text-indigo-500" /> Profile Stats
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ================================================================ */}
-              {/* TAB CONTENT                                                      */}
-              {/* ================================================================ */}
-              <div className="min-h-[260px]">
-
-                {/* POSTS */}
-                {activeTab === 'posts' && (
-                  <div className="divide-y divide-zinc-100">
-                    {rawPosts === undefined ? null : postsList.length > 0 ? (
-                      postsList.map((post) => (
-                        <PostCard key={post.id} post={post} onDeleted={handleDeleted} />
-                      ))
-                    ) : (
-                      <div className="text-center py-16 px-4">
-                        <div className="w-14 h-14 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto mb-3">
-                          <FileText className="w-7 h-7" />
-                        </div>
-                        <h3 className="text-lg font-black text-zinc-900 tracking-tight">No posts yet</h3>
-                        <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
-                          Posts you create will appear here.
-                        </p>
+                      {/* About & Reviews */}
+                      <button
+                        onClick={() => { setMoreOpen(false); setTab('about'); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                      >
+                        <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
+                      </button>
+                      {/* Share Profile */}
+                      <button
+                        onClick={() => { setMoreOpen(false); shareProfile(); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                      >
+                        <Share2 className="w-4 h-4 text-zinc-500" /> Share Profile
+                      </button>
+                      {/* Verification Status (if already verified) */}
+                      {(user.isBlueVerified || user.isVerified) && (
                         <button
-                          onClick={() => window.dispatchEvent(new CustomEvent('open-create-rally'))}
-                          className="mt-4 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-all active:scale-95 shadow-xs"
+                          onClick={() => { setMoreOpen(false); setIsGetVerifiedOpen(true); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
                         >
-                          Create a Post
+                          <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verification Status
                         </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* REVIEWS */}
-                {activeTab === 'reviews' && (
-                  <div>
-                    {ratingsData === undefined ? null : ratingsData.ratings.length > 0 ? (
-                      <div>
-                        {/* Rating Banner */}
-                        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50/70 to-orange-50/50 border-b border-amber-100 flex items-center justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-2xl sm:text-3xl font-black text-zinc-900">
-                                {ratingsData.averageScore}
-                              </span>
-                              <div className="flex items-center text-amber-400">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <Star
-                                    key={star}
-                                    className={cn(
-                                      'w-4 h-4 sm:w-5 sm:h-5',
-                                      Math.round(ratingsData.averageScore) >= star
-                                        ? 'fill-amber-400 text-amber-400'
-                                        : 'text-zinc-300'
-                                    )}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-xs text-zinc-600 font-medium mt-0.5">
-                              Based on {ratingsData.totalCount} review{ratingsData.totalCount === 1 ? '' : 's'}
-                            </p>
-                          </div>
-                        </div>
-                        {/* Reviews List */}
-                        <div className="divide-y divide-zinc-100">
-                          {ratingsData.ratings.map((r: any) => (
-                            <div key={r._id} className="p-4 sm:p-5 hover:bg-zinc-50/50 transition-colors">
-                              <div className="flex items-start justify-between gap-3 mb-2">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <Avatar src={r.rater?.avatar} name={r.rater?.name} size="md" className="ring-1 ring-zinc-200" />
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1">
-                                      <span className="font-bold text-zinc-900 text-sm truncate">
-                                        {r.rater?.name || 'Anonymous Neighbor'}
-                                      </span>
-                                      <ProfileVerificationCheck user={r.rater} size="sm" />
-                                    </div>
-                                    <p className="text-xs text-zinc-400 font-medium truncate">
-                                      {r.rater?.username ? `@${r.rater.username.replace(/^@+/, '')}` : ''}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <div className="flex items-center gap-0.5 text-amber-400">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                      <Star
-                                        key={star}
-                                        className={cn(
-                                          'w-3.5 h-3.5',
-                                          r.score >= star ? 'fill-amber-400 text-amber-400' : 'text-zinc-200'
-                                        )}
-                                      />
-                                    ))}
-                                  </div>
-                                  <span className="text-[11px] text-zinc-400 font-medium mt-0.5 block">
-                                    {new Date(r.createdAt).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              </div>
-                              {r.review && (
-                                <p className="text-xs sm:text-sm text-zinc-700 font-medium leading-relaxed mt-2 pl-11">
-                                  "{r.review}"
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-16 px-4">
-                        <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3">
-                          <Star className="w-7 h-7" />
-                        </div>
-                        <h3 className="text-lg font-black text-zinc-900 tracking-tight">No reviews yet</h3>
-                        <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
-                          When neighbors rate and review their experiences with you, they will appear here.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* RALLYS */}
-                {activeTab === 'rallys' && (
-                  <div className="divide-y divide-zinc-100">
-                    {rawPosts === undefined ? null : rallysList.length > 0 ? (
-                      rallysList.map((rally) => (
-                        <RallyCard key={rally.id} rally={rally} onDeleted={handleDeleted} />
-                      ))
-                    ) : (
-                      <div className="text-center py-16 px-4">
-                        <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
-                          <Zap className="w-7 h-7" />
-                        </div>
-                        <h3 className="text-lg font-black text-zinc-900 tracking-tight">No RALLYS yet</h3>
-                        <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
-                          RALLYS you create will appear here.
-                        </p>
-                        <button
-                          onClick={() => window.dispatchEvent(new CustomEvent('open-create-rally'))}
-                          className="mt-4 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-all active:scale-95 shadow-xs"
-                        >
-                          Create a RALLY
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* MEDIA */}
-                {activeTab === 'media' && (
-                  <div>
-                    {rawPosts === undefined ? null : mediaList.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-0.5 p-0.5">
-                        {mediaList.map((item) => {
-                          const thumb = item.mediaUrls?.[0] || item.mediaUrl;
-                          return (
-                            <Link
-                              key={item.id}
-                              to={`/rally/${item.id}`}
-                              className="relative aspect-square bg-zinc-100 overflow-hidden group"
-                            >
-                              {item.mediaType === 'video' ? (
-                                <video
-                                  src={thumb}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  muted
-                                  playsInline
-                                />
-                              ) : (
-                                <img
-                                  src={thumb}
-                                  alt=""
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                              )}
-                              {item.mediaUrls && item.mediaUrls.length > 1 && (
-                                <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-md bg-black/60 flex items-center justify-center">
-                                  <Image className="w-3 h-3 text-white" />
-                                </div>
-                              )}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-center py-16 px-4">
-                        <div className="w-14 h-14 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto mb-3">
-                          <Image className="w-7 h-7" />
-                        </div>
-                        <h3 className="text-lg font-black text-zinc-900 tracking-tight">No media yet</h3>
-                        <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
-                          Posts and RALLYS with photos or videos will appear here.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* LIKES */}
-                {activeTab === 'likes' && (
-                  <div className="text-center py-16 px-4">
-                    <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
-                      <Heart className="w-7 h-7" />
+                      )}
                     </div>
-                    <h3 className="text-lg font-black text-zinc-900 tracking-tight">Liked posts</h3>
-                    <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
-                      Posts you like will appear here soon.
-                    </p>
-                  </div>
+                  </>
                 )}
-
               </div>
             </div>
           </div>
 
-          {/* ============================================================== */}
-          {/* RIGHT SIDEBAR (desktop: sticky, mobile: shown below)           */}
-          {/* ============================================================== */}
-          <aside className="w-full lg:w-[280px] xl:w-[300px] shrink-0 space-y-4 lg:sticky lg:top-4 order-first lg:order-none">
-
-            {/* Mobile: compact stat pills row */}
-            <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
-              <button
-                type="button"
-                onClick={handleRatingClick}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800"
-              >
-                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                {rating !== null ? rating.toFixed(1) : '—'}
-                <span className="text-zinc-400 font-medium">· {reviewsCountVal ?? 0} Reviews</span>
-              </button>
-              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800">
-                <FileText className="w-3.5 h-3.5 text-zinc-400" />
-                {formatCount(postedCount)} Posts
+          {/* ---- Pending verification banner ---- */}
+          {user.blueCheckStatus === 'pending' && (
+            <div className="mx-4 sm:mx-6 mb-4 p-4 rounded-2xl bg-amber-50/90 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                  <Clock className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-950">Verification Under Review</h3>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    Your RALLY profile verification request is being reviewed by our team.
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={handleFollowersClick}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800"
+                onClick={() => setIsGetVerifiedOpen(true)}
+                className="px-4 py-2 rounded-xl bg-amber-900/10 hover:bg-amber-900/20 text-amber-900 text-xs font-bold transition-colors shrink-0 text-center cursor-pointer"
               >
-                <Users className="w-3.5 h-3.5 text-indigo-500" />
-                {formatCount(followersTotal)} Followers
-              </button>
-              <button
-                type="button"
-                onClick={handleFollowingClick}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
-                {formatCount(followingTotal)} Following
+                View Status →
               </button>
             </div>
+          )}
 
-            {/* Desktop sidebar panels */}
-            <div className="hidden lg:block space-y-4">
-              <ProfileStatsSidebar
-                rating={rating}
-                reviewsCount={reviewsCountVal}
-                postsCount={postedCount}
-                followersCount={followersTotal}
-                followingCount={followingTotal}
-                onFollowersClick={handleFollowersClick}
-                onFollowingClick={handleFollowingClick}
-                onRatingClick={handleRatingClick}
-              />
-              <ProfileAboutSidebar user={user} />
+          {/* ================================================================ */}
+          {/* TAB NAVIGATION: Posts | Media | Likes | About                   */}
+          {/* ================================================================ */}
+          <div className="border-t border-zinc-200/80 overflow-x-auto no-scrollbar">
+            <div className="flex items-stretch min-w-full sm:min-w-0">
+              {profileTabs.map((tab) => {
+                const isSelected = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setTab(tab.key)}
+                    className={cn(
+                      'flex-1 min-w-[72px] py-3 px-2 flex flex-col items-center justify-center gap-1 transition-all relative select-none group',
+                      isSelected
+                        ? 'text-zinc-900'
+                        : 'text-zinc-400 hover:text-zinc-700'
+                    )}
+                  >
+                    <span className={cn('transition-transform group-hover:scale-110', isSelected ? 'text-zinc-900' : 'text-zinc-400')}>
+                      {tab.icon}
+                    </span>
+                    <span className={cn(
+                      'text-[10px] sm:text-[11px] font-black uppercase tracking-wider whitespace-nowrap',
+                      isSelected ? 'text-zinc-900' : 'text-zinc-400'
+                    )}>
+                      {tab.label}
+                    </span>
+                    {isSelected && (
+                      <div className="absolute bottom-0 left-3 right-3 h-0.5 bg-zinc-900 rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          </aside>
+          </div>
 
+          {/* ================================================================ */}
+          {/* TAB CONTENT                                                      */}
+          {/* ================================================================ */}
+          <div className="min-h-[260px]">
+
+            {/* POSTS */}
+            {activeTab === 'posts' && (
+              <div className="divide-y divide-zinc-100">
+                {rawPosts === undefined ? null : postsList.length > 0 ? (
+                  postsList.map((post) => (
+                    <PostCard key={post.id} post={post} onDeleted={handleDeleted} />
+                  ))
+                ) : (
+                  <div className="text-center py-16 px-4">
+                    <div className="w-14 h-14 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto mb-3">
+                      <FileText className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-black text-zinc-900 tracking-tight">No posts yet</h3>
+                    <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
+                      Posts you create will appear here.
+                    </p>
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent('open-create-rally'))}
+                      className="mt-4 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-all active:scale-95 shadow-xs"
+                    >
+                      Create a Post
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MEDIA */}
+            {activeTab === 'media' && (
+              <div>
+                {rawPosts === undefined ? null : mediaList.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                    {mediaList.map((item) => {
+                      const thumb = item.mediaUrls?.[0] || item.mediaUrl;
+                      return (
+                        <Link
+                          key={item.id}
+                          to={`/rally/${item.id}`}
+                          className="relative aspect-square bg-zinc-100 overflow-hidden group"
+                        >
+                          {item.mediaType === 'video' ? (
+                            <video
+                              src={thumb}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )}
+                          {item.mediaUrls && item.mediaUrls.length > 1 && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-md bg-black/60 flex items-center justify-center">
+                              <Image className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-16 px-4">
+                    <div className="w-14 h-14 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto mb-3">
+                      <Image className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-black text-zinc-900 tracking-tight">No media yet</h3>
+                    <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
+                      Posts and RALLYS with photos or videos will appear here.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* LIKES */}
+            {activeTab === 'likes' && (
+              <div className="text-center py-16 px-4">
+                <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                  <Heart className="w-7 h-7" />
+                </div>
+                <h3 className="text-lg font-black text-zinc-900 tracking-tight">Liked posts</h3>
+                <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
+                  Posts you like will appear here soon.
+                </p>
+              </div>
+            )}
+
+            {/* ABOUT */}
+            {activeTab === 'about' && (
+              <div className="p-4 sm:p-6 space-y-6">
+
+                {/* Info section */}
+                <div className="space-y-3">
+                  {user?.bio && (
+                    <p className="text-sm text-zinc-700 font-medium leading-relaxed">{user.bio}</p>
+                  )}
+                  {user?.location && (
+                    <div className="flex items-center gap-2 text-sm text-zinc-600 font-medium">
+                      <MapPin className="w-4 h-4 text-zinc-400 shrink-0" />
+                      <span>{user.location}</span>
+                    </div>
+                  )}
+                  {joined && (
+                    <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium">
+                      <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
+                      <span>Joined {joined}</span>
+                    </div>
+                  )}
+                  {isVerified && (
+                    <div className="flex items-center gap-2 text-sm text-emerald-700 font-bold">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>Verified Account</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-zinc-100" />
+
+                {/* Reviews section */}
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-4">Reviews</h3>
+
+                  {ratingsData === undefined ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="w-5 h-5 animate-spin text-zinc-300" />
+                    </div>
+                  ) : ratingsData.ratings.length > 0 ? (
+                    <div>
+                      {/* Rating Banner */}
+                      <div className="mb-4 p-4 bg-gradient-to-r from-amber-50/70 to-orange-50/50 rounded-2xl border border-amber-100 flex items-center gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl sm:text-3xl font-black text-zinc-900">
+                              {ratingsData.averageScore}
+                            </span>
+                            <div className="flex items-center text-amber-400">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={cn(
+                                    'w-4 h-4 sm:w-5 sm:h-5',
+                                    Math.round(ratingsData.averageScore) >= star
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'text-zinc-300'
+                                  )}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-xs text-zinc-600 font-medium mt-0.5">
+                            Based on {ratingsData.totalCount} review{ratingsData.totalCount === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Reviews List */}
+                      <div className="space-y-1 divide-y divide-zinc-100">
+                        {ratingsData.ratings.map((r: any) => (
+                          <div key={r._id} className="py-4 hover:bg-zinc-50/50 transition-colors rounded-xl px-1">
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Avatar src={r.rater?.avatar} name={r.rater?.name} size="md" className="ring-1 ring-zinc-200" />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-zinc-900 text-sm truncate">
+                                      {r.rater?.name || 'Anonymous Neighbor'}
+                                    </span>
+                                    <ProfileVerificationCheck user={r.rater} size="sm" />
+                                  </div>
+                                  <p className="text-xs text-zinc-400 font-medium truncate">
+                                    {r.rater?.username ? `@${r.rater.username.replace(/^@+/, '')}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="flex items-center gap-0.5 text-amber-400">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <Star
+                                      key={star}
+                                      className={cn(
+                                        'w-3.5 h-3.5',
+                                        r.score >= star ? 'fill-amber-400 text-amber-400' : 'text-zinc-200'
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-[11px] text-zinc-400 font-medium mt-0.5 block">
+                                  {new Date(r.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            {r.review && (
+                              <p className="text-xs sm:text-sm text-zinc-700 font-medium leading-relaxed mt-2 pl-11">
+                                "{r.review}"
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 px-4">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3">
+                        <Star className="w-7 h-7" />
+                      </div>
+                      <h3 className="text-lg font-black text-zinc-900 tracking-tight">No reviews yet</h3>
+                      <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
+                        When neighbors rate and review their experiences with you, they will appear here.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
+
+      {/* Profile Stats Modal */}
+      {statsModalOpen && (
+        <ProfileStatsModal
+          rating={rating}
+          reviewsCount={reviewsCountVal}
+          postsCount={postedCount}
+          followersCount={followersTotal}
+          followingCount={followingTotal}
+          onClose={() => setStatsModalOpen(false)}
+          onFollowersClick={handleFollowersClick}
+          onFollowingClick={handleFollowingClick}
+          onRatingClick={handleRatingClick}
+        />
+      )}
 
       {/* Modals */}
       <UserAvatarCropModal

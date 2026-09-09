@@ -29,12 +29,13 @@ import {
   User as UserIcon,
   Star,
   FileText,
-  Zap,
   Image,
   Users,
   ChevronRight,
   Calendar,
   Heart,
+  BarChart2,
+  Info,
 } from 'lucide-react';
 import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
@@ -50,8 +51,8 @@ import {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-type PublicTab = 'posts' | 'reviews' | 'rallys' | 'media';
-const PUBLIC_TABS: PublicTab[] = ['posts', 'reviews', 'rallys', 'media'];
+type PublicTab = 'posts' | 'media' | 'likes' | 'about';
+const PUBLIC_TABS: PublicTab[] = ['posts', 'media', 'likes', 'about'];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,139 +70,82 @@ function joinedDate(ts?: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar: Profile Stats (read-only, public view)
+// Profile Stats Modal (public view)
 // ---------------------------------------------------------------------------
-interface PublicStatsSidebarProps {
+interface PublicStatsModalProps {
   rating: number | null;
   reviewsCount: number | null;
   postsCount: number | null;
   followersCount: number | null;
   followingCount: number | null;
+  onClose: () => void;
   onRatingClick: () => void;
 }
 
-function PublicStatsSidebar({
+function PublicStatsModal({
   rating,
   reviewsCount,
   postsCount,
   followersCount,
   followingCount,
+  onClose,
   onRatingClick,
-}: PublicStatsSidebarProps) {
+}: PublicStatsModalProps) {
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-100">
-        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Profile Stats</h3>
-      </div>
-      <div className="p-4 space-y-3">
-        {/* Rating */}
-        <button
-          type="button"
-          onClick={onRatingClick}
-          className="w-full flex items-center justify-between group hover:bg-zinc-50 -mx-2 px-2 py-1.5 rounded-xl transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Star className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
-            <div className="text-left">
-              <div className="text-lg font-black text-zinc-900 leading-tight">
-                {rating !== null ? rating.toFixed(1) : '—'}
+    <>
+      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center z-50 p-0 sm:p-4">
+        <div className="w-full sm:w-[360px] bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+            <h3 className="text-sm font-black uppercase tracking-wider text-zinc-400">Profile Stats</h3>
+            <button onClick={onClose} className="w-7 h-7 rounded-full hover:bg-zinc-100 flex items-center justify-center transition-colors" aria-label="Close">
+              <X className="w-4 h-4 text-zinc-500" />
+            </button>
+          </div>
+          <div className="p-4 space-y-2">
+            <button type="button" onClick={() => { onClose(); onRatingClick(); }} className="w-full flex items-center justify-between group hover:bg-zinc-50 px-3 py-3 rounded-xl transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                </div>
+                <div className="text-left">
+                  <div className="text-base font-black text-zinc-900 leading-tight">{rating !== null ? rating.toFixed(1) : '—'}</div>
+                  <div className="text-[11px] text-zinc-400 font-medium">{reviewsCount === null ? '…' : `${reviewsCount} Review${reviewsCount === 1 ? '' : 's'}`}</div>
+                </div>
               </div>
-              <div className="text-[11px] text-zinc-400 font-medium">
-                {reviewsCount === null ? '…' : `${reviewsCount} Review${reviewsCount === 1 ? '' : 's'}`}
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+            </button>
+            <div className="flex items-center gap-3 px-3 py-3 rounded-xl">
+              <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-zinc-500" />
+              </div>
+              <div>
+                <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(postsCount)}</div>
+                <div className="text-[11px] text-zinc-400 font-medium">Posts</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-3 py-3 rounded-xl">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                <Users className="w-4 h-4 text-indigo-500" />
+              </div>
+              <div>
+                <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followersCount)}</div>
+                <div className="text-[11px] text-zinc-400 font-medium">Followers</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-3 py-3 rounded-xl">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                <UserCheck className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div>
+                <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followingCount)}</div>
+                <div className="text-[11px] text-zinc-400 font-medium">Following</div>
               </div>
             </div>
           </div>
-          <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
-        </button>
-
-        <div className="border-t border-zinc-100" />
-
-        {/* Posts */}
-        <div className="flex items-center gap-2 px-0 py-0.5">
-          <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
-          <div>
-            <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(postsCount)}</div>
-            <div className="text-[11px] text-zinc-400 font-medium">Posts</div>
-          </div>
-        </div>
-
-        <div className="border-t border-zinc-100" />
-
-        {/* Followers */}
-        <div className="flex items-center gap-2 px-0 py-0.5">
-          <Users className="w-4 h-4 text-indigo-500 shrink-0" />
-          <div>
-            <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followersCount)}</div>
-            <div className="text-[11px] text-zinc-400 font-medium">Followers</div>
-          </div>
-        </div>
-
-        {/* Following */}
-        <div className="flex items-center gap-2 px-0 py-0.5">
-          <UserCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-          <div>
-            <div className="text-base font-black text-zinc-900 leading-tight">{formatCount(followingCount)}</div>
-            <div className="text-[11px] text-zinc-400 font-medium">Following</div>
-          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sidebar: About
-// ---------------------------------------------------------------------------
-function PublicAboutSidebar({ target, isSelf }: { target: any; isSelf: boolean }) {
-  const joined = joinedDate(target?._creationTime);
-  const isVerified = target?.isBlueVerified || target?.isVerified || target?.verificationStatus === 'verified';
-  const websiteUrl =
-    target?.website && /^(https?:|blob:|data:)/.test(target.website)
-      ? target.website
-      : target?.website
-        ? `https://${target.website}`
-        : null;
-
-  return (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-100">
-        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">About</h3>
-      </div>
-      <div className="p-4 space-y-2.5">
-        {target?.bio && (
-          <p className="text-xs text-zinc-600 font-medium leading-relaxed line-clamp-4">{target.bio}</p>
-        )}
-        {target?.location && (
-          <div className="flex items-center gap-2 text-xs text-zinc-600 font-medium">
-            <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-            <span>{target.location}</span>
-          </div>
-        )}
-        {joined && (
-          <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
-            <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-            <span>Joined {joined}</span>
-          </div>
-        )}
-        {websiteUrl && (
-          <a
-            href={websiteUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs text-indigo-600 font-semibold hover:underline"
-          >
-            <Globe className="w-3.5 h-3.5 shrink-0" />
-            <span className="break-all">{target?.website}</span>
-          </a>
-        )}
-        {isVerified && (
-          <div className="flex items-center gap-2 text-xs text-emerald-700 font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>Verified Account</span>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -221,6 +165,7 @@ function UserProfileContent() {
   const [requestText, setRequestText] = useState('');
   const [isMessaging, setIsMessaging] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [interestsOpen, setInterestsOpen] = useState(false);
   const [draftPublic, setDraftPublic] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<PublicTab>('posts');
@@ -251,7 +196,7 @@ function UserProfileContent() {
   );
   const ratingsData = useQuery(
     api.rallies.listRatingsForUser,
-    validId && activeTab === 'reviews' ? { userId: validId as any } : 'skip'
+    validId && activeTab === 'about' ? { userId: validId as any } : 'skip'
   );
   const directStatus = useQuery(
     api.chatRequests.getDirectStatus,
@@ -380,11 +325,9 @@ function UserProfileContent() {
   const activeList =
     activeTab === 'posts'
       ? tabbed.posts
-      : activeTab === 'rallys'
-        ? tabbed.rallies
-        : activeTab === 'media'
-          ? tabbed.media
-          : [];
+      : activeTab === 'media'
+        ? tabbed.media
+        : [];
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -528,9 +471,9 @@ function UserProfileContent() {
   // ---------------------------------------------------------------------------
   const profileTabs: { key: PublicTab; label: string; icon: React.ReactNode }[] = [
     { key: 'posts', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
-    { key: 'reviews', label: 'Reviews', icon: <Star className="w-3.5 h-3.5" /> },
-    { key: 'rallys', label: 'RALLYS', icon: <Zap className="w-3.5 h-3.5" /> },
     { key: 'media', label: 'Media', icon: <Image className="w-3.5 h-3.5" /> },
+    { key: 'likes', label: 'Likes', icon: <Heart className="w-3.5 h-3.5" /> },
+    { key: 'about', label: 'About', icon: <Info className="w-3.5 h-3.5" /> },
   ];
 
   // ---------------------------------------------------------------------------
@@ -556,17 +499,8 @@ function UserProfileContent() {
 
   return (
     <PageShell title={profile?.name || target?.name ? `${profile?.name || target?.name}'s profile` : 'Profile'}>
-      <div className="w-full">
-        {/* ================================================================ */}
-        {/* RESPONSIVE GRID                                                  */}
-        {/* ================================================================ */}
-        <div className="flex flex-col lg:flex-row lg:items-start gap-5">
-
-          {/* ============================================================== */}
-          {/* LEFT: Profile Card + Feed                                       */}
-          {/* ============================================================== */}
-          <div className="flex-1 min-w-0">
-            <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
+      <div className="w-full max-w-2xl mx-auto">
+        <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden">
 
               {/* ---- Cover ---- */}
               <CoverBanner
@@ -712,10 +646,22 @@ function UserProfileContent() {
                           <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
                           <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
                             <button
+                              onClick={() => { setMoreOpen(false); setStatsModalOpen(true); }}
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                            >
+                              <BarChart2 className="w-4 h-4 text-indigo-500" /> Profile Stats
+                            </button>
+                            <button
+                              onClick={() => { setMoreOpen(false); setActiveTab('about'); }}
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                            >
+                              <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
+                            </button>
+                            <button
                               onClick={() => { setMoreOpen(false); shareProfile(); }}
                               className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
                             >
-                              <Share2 className="w-4 h-4 text-indigo-500" /> Share Profile
+                              <Share2 className="w-4 h-4 text-zinc-500" /> Share Profile
                             </button>
                             <button
                               onClick={openInterests}
@@ -781,10 +727,22 @@ function UserProfileContent() {
                             <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
                             <div className="absolute right-0 top-full mt-1.5 z-40 w-52 bg-white rounded-2xl shadow-lg border border-zinc-100 overflow-hidden py-1 text-left animate-in fade-in zoom-in-95 duration-150">
                               <button
+                                onClick={() => { setMoreOpen(false); setStatsModalOpen(true); }}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                              >
+                                <BarChart2 className="w-4 h-4 text-indigo-500" /> Profile Stats
+                              </button>
+                              <button
+                                onClick={() => { setMoreOpen(false); setActiveTab('about'); }}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
+                              >
+                                <Info className="w-4 h-4 text-zinc-500" /> About &amp; Reviews
+                              </button>
+                              <button
                                 onClick={() => { setMoreOpen(false); shareProfile(); }}
                                 className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors"
                               >
-                                <Share2 className="w-4 h-4 text-indigo-500" /> Share Profile
+                                <Share2 className="w-4 h-4 text-zinc-500" /> Share Profile
                               </button>
                               <Link
                                 to={`/report/${id}`}
@@ -866,103 +824,6 @@ function UserProfileContent() {
                     </div>
                   )}
 
-                  {/* REVIEWS */}
-                  {activeTab === 'reviews' && (
-                    <div>
-                      {ratingsData === undefined ? null : ratingsData.ratings.length > 0 ? (
-                        <div>
-                          <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50/70 to-orange-50/50 border-b border-amber-100 flex items-center gap-4">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-2xl font-black text-zinc-900">{ratingsData.averageScore}</span>
-                                <div className="flex items-center text-amber-400">
-                                  {[1, 2, 3, 4, 5].map((star) => (
-                                    <Star
-                                      key={star}
-                                      className={cn(
-                                        'w-4 h-4',
-                                        Math.round(ratingsData.averageScore) >= star
-                                          ? 'fill-amber-400 text-amber-400'
-                                          : 'text-zinc-300'
-                                      )}
-                                    />
-                                  ))}
-                                </div>
-                              </div>
-                              <p className="text-xs text-zinc-600 font-medium mt-0.5">
-                                Based on {ratingsData.totalCount} review{ratingsData.totalCount === 1 ? '' : 's'}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="divide-y divide-zinc-100">
-                            {ratingsData.ratings.map((r: any) => (
-                              <div key={r._id} className="p-4 sm:p-5 hover:bg-zinc-50/50 transition-colors">
-                                <div className="flex items-start justify-between gap-3 mb-2">
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <Avatar src={r.rater?.avatar} name={r.rater?.name} size="md" className="ring-1 ring-zinc-200" />
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-1">
-                                        <span className="font-bold text-zinc-900 text-sm truncate">
-                                          {r.rater?.name || 'Anonymous Neighbor'}
-                                        </span>
-                                        <ProfileVerificationCheck user={r.rater} size="sm" />
-                                      </div>
-                                      <p className="text-xs text-zinc-400 font-medium truncate">
-                                        {r.rater?.username ? `@${r.rater.username.replace(/^@+/, '')}` : ''}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    <div className="flex items-center gap-0.5 text-amber-400">
-                                      {[1, 2, 3, 4, 5].map((star) => (
-                                        <Star
-                                          key={star}
-                                          className={cn(
-                                            'w-3.5 h-3.5',
-                                            r.score >= star ? 'fill-amber-400 text-amber-400' : 'text-zinc-200'
-                                          )}
-                                        />
-                                      ))}
-                                    </div>
-                                    <span className="text-[11px] text-zinc-400 font-medium mt-0.5 block">
-                                      {new Date(r.createdAt).toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                </div>
-                                {r.review && (
-                                  <p className="text-xs sm:text-sm text-zinc-700 font-medium leading-relaxed mt-2 pl-11">
-                                    "{r.review}"
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-10 text-center text-zinc-500">
-                          <Star className="w-8 h-8 mx-auto mb-2 text-amber-300" />
-                          <p className="font-bold text-zinc-900 text-sm mb-1">No reviews yet</p>
-                          <p className="text-xs text-zinc-400">No neighbour reviews to show.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* RALLYS */}
-                  {activeTab === 'rallys' && (
-                    <div className="divide-y divide-zinc-100">
-                      {content === undefined ? null : tabbed.rallies.length > 0 ? (
-                        tabbed.rallies.map((r: any) => <RallyCard key={r._id} rally={mapRally(r) as any} />)
-                      ) : (
-                        <div className="p-10 text-center text-zinc-500">
-                          <Zap className="w-8 h-8 mx-auto mb-2 text-indigo-300" />
-                          <p className="font-bold text-zinc-900 text-sm mb-1">No RALLYS yet</p>
-                          <p className="text-xs text-zinc-400">Nothing to show here.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* MEDIA */}
                   {activeTab === 'media' && (
                     <div>
@@ -1004,6 +865,119 @@ function UserProfileContent() {
                     </div>
                   )}
 
+                  {/* LIKES */}
+                  {activeTab === 'likes' && (
+                    <div className="text-center py-16 px-4">
+                      <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                        <Heart className="w-7 h-7" />
+                      </div>
+                      <h3 className="text-lg font-black text-zinc-900 tracking-tight">Liked posts</h3>
+                      <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
+                        Posts this person likes will appear here soon.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ABOUT */}
+                  {activeTab === 'about' && (() => {
+                    const targetData = target || profile;
+                    const joined = joinedDate(targetData?._creationTime);
+                    const isVerified = targetData?.isBlueVerified || targetData?.isVerified || targetData?.verificationStatus === 'verified';
+                    const websiteUrl = targetData?.website && /^(https?:|blob:|data:)/.test(targetData.website)
+                      ? targetData.website
+                      : targetData?.website ? `https://${targetData.website}` : null;
+                    return (
+                      <div className="p-4 sm:p-6 space-y-6">
+                        <div className="space-y-3">
+                          {targetData?.bio && (
+                            <p className="text-sm text-zinc-700 font-medium leading-relaxed">{targetData.bio}</p>
+                          )}
+                          {targetData?.location && (
+                            <div className="flex items-center gap-2 text-sm text-zinc-600 font-medium">
+                              <MapPin className="w-4 h-4 text-zinc-400 shrink-0" />
+                              <span>{targetData.location}</span>
+                            </div>
+                          )}
+                          {joined && (
+                            <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium">
+                              <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
+                              <span>Joined {joined}</span>
+                            </div>
+                          )}
+                          {websiteUrl && (
+                            <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-indigo-600 font-semibold hover:underline">
+                              <Globe className="w-4 h-4 shrink-0" />
+                              <span className="break-all">{targetData?.website}</span>
+                            </a>
+                          )}
+                          {isVerified && (
+                            <div className="flex items-center gap-2 text-sm text-emerald-700 font-bold">
+                              <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <span>Verified Account</span>
+                            </div>
+                          )}
+                          {isOrgBiz && <OrgSocialLinks links={targetData?.socialLinks || []} />}
+                        </div>
+                        <div className="border-t border-zinc-100" />
+                        <div>
+                          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-4">Reviews</h3>
+                          {ratingsData === undefined ? (
+                            <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-zinc-300" /></div>
+                          ) : ratingsData.ratings.length > 0 ? (
+                            <div>
+                              <div className="mb-4 p-4 bg-gradient-to-r from-amber-50/70 to-orange-50/50 rounded-2xl border border-amber-100 flex items-center gap-4">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-2xl font-black text-zinc-900">{ratingsData.averageScore}</span>
+                                    <div className="flex items-center text-amber-400">
+                                      {[1,2,3,4,5].map((star) => (
+                                        <Star key={star} className={cn('w-4 h-4', Math.round(ratingsData.averageScore) >= star ? 'fill-amber-400 text-amber-400' : 'text-zinc-300')} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-zinc-600 font-medium mt-0.5">Based on {ratingsData.totalCount} review{ratingsData.totalCount === 1 ? '' : 's'}</p>
+                                </div>
+                              </div>
+                              <div className="divide-y divide-zinc-100">
+                                {ratingsData.ratings.map((r: any) => (
+                                  <div key={r._id} className="py-4 hover:bg-zinc-50/50 transition-colors rounded-xl px-1">
+                                    <div className="flex items-start justify-between gap-3 mb-2">
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <Avatar src={r.rater?.avatar} name={r.rater?.name} size="md" className="ring-1 ring-zinc-200" />
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1">
+                                            <span className="font-bold text-zinc-900 text-sm truncate">{r.rater?.name || 'Anonymous Neighbor'}</span>
+                                            <ProfileVerificationCheck user={r.rater} size="sm" />
+                                          </div>
+                                          <p className="text-xs text-zinc-400 font-medium truncate">{r.rater?.username ? `@${r.rater.username.replace(/^@+/, '')}` : ''}</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right shrink-0">
+                                        <div className="flex items-center gap-0.5 text-amber-400">
+                                          {[1,2,3,4,5].map((star) => (
+                                            <Star key={star} className={cn('w-3.5 h-3.5', r.score >= star ? 'fill-amber-400 text-amber-400' : 'text-zinc-200')} />
+                                          ))}
+                                        </div>
+                                        <span className="text-[11px] text-zinc-400 font-medium mt-0.5 block">{new Date(r.createdAt).toLocaleDateString()}</span>
+                                      </div>
+                                    </div>
+                                    {r.review && <p className="text-xs sm:text-sm text-zinc-700 font-medium leading-relaxed mt-2 pl-11">"{r.review}"</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-12 px-4">
+                              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3"><Star className="w-7 h-7" /></div>
+                              <h3 className="text-lg font-black text-zinc-900 tracking-tight">No reviews yet</h3>
+                              <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">No neighbour reviews to show.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 </div>
               )}
 
@@ -1020,55 +994,20 @@ function UserProfileContent() {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* ============================================================== */}
-          {/* RIGHT SIDEBAR                                                   */}
-          {/* ============================================================== */}
-          <aside className="w-full lg:w-[280px] xl:w-[300px] shrink-0 space-y-4 lg:sticky lg:top-4 order-first lg:order-none">
-
-            {/* Mobile: compact stat pills */}
-            {!isLocked && (
-              <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('reviews')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800"
-                >
-                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                  {rating !== null ? rating.toFixed(1) : '—'}
-                  <span className="text-zinc-400 font-medium">· {reviewsCountVal ?? 0} Reviews</span>
-                </button>
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800">
-                  <FileText className="w-3.5 h-3.5 text-zinc-400" />
-                  {formatCount(profile ? profile.postsCount : (stats?.posted ?? null))} Posts
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-zinc-200 shadow-xs whitespace-nowrap text-xs font-bold text-zinc-800">
-                  <Users className="w-3.5 h-3.5 text-indigo-500" />
-                  {formatCount(profile ? profile.followersCount : (followerCount ?? null))} Followers
-                </div>
-              </div>
-            )}
-
-            {/* Desktop sidebar panels */}
-            <div className="hidden lg:block space-y-4">
-              {!isLocked && (
-                <PublicStatsSidebar
-                  rating={rating}
-                  reviewsCount={reviewsCountVal}
-                  postsCount={profile ? profile.postsCount : (stats?.posted ?? null)}
-                  followersCount={profile ? profile.followersCount : (followerCount ?? null)}
-                  followingCount={profile ? profile.followingCount : (followingCount ?? null)}
-                  onRatingClick={() => setActiveTab('reviews')}
-                />
-              )}
-              <PublicAboutSidebar target={target || profile} isSelf={isSelf} />
-              {isOrgBiz && <OrgSocialLinks links={target?.socialLinks || []} />}
-            </div>
-          </aside>
-
-        </div>
       </div>
+
+      {/* Profile Stats Modal */}
+      {statsModalOpen && !isLocked && (
+        <PublicStatsModal
+          rating={rating}
+          reviewsCount={reviewsCountVal}
+          postsCount={profile ? profile.postsCount : (stats?.posted ?? null)}
+          followersCount={profile ? profile.followersCount : (followerCount ?? null)}
+          followingCount={profile ? profile.followingCount : (followingCount ?? null)}
+          onClose={() => setStatsModalOpen(false)}
+          onRatingClick={() => setActiveTab('about')}
+        />
+      )}
 
       {/* ---- Edit Interests modal (self only) ---- */}
       {interestsOpen && (
