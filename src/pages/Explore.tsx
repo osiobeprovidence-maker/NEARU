@@ -3,7 +3,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+
 import PostCard from '../components/PostCard';
 import Avatar from '../components/Avatar';
 import { ProfileVerificationCheck } from '../components/VerificationBadge';

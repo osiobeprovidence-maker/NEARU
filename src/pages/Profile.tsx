@@ -26,7 +26,7 @@ import GetVerifiedModal from '../components/GetVerifiedModal';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
 import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+
 import PostCard from '../components/PostCard';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -517,12 +517,7 @@ function ProfileContent() {
             {/* ------------------------------------------------------------- */}
             {activeTab === 'posts' && (
               <div className="divide-y divide-zinc-100">
-                {rawPosts === undefined ? (
-                  <>
-                    <RallyCardSkeleton />
-                    <RallyCardSkeleton />
-                  </>
-                ) : postsList.length > 0 ? (
+                {rawPosts === undefined ? null : postsList.length > 0 ? (
                   postsList.map((post) => (
                     <PostCard
                       key={post.id}
@@ -555,9 +550,7 @@ function ProfileContent() {
             {/* ------------------------------------------------------------- */}
             {activeTab === 'followers' && (
               <div className="divide-y divide-zinc-100">
-                {followersList === undefined ? (
-                  <UserListSkeleton />
-                ) : followersList.length > 0 ? (
+                {followersList === undefined ? null : followersList.length > 0 ? (
                   followersList.map((f: any) => (
                     <UserRow
                       key={f._id}
@@ -584,9 +577,7 @@ function ProfileContent() {
             {/* ------------------------------------------------------------- */}
             {activeTab === 'following' && (
               <div className="divide-y divide-zinc-100">
-                {followingList === undefined ? (
-                  <UserListSkeleton />
-                ) : followingList.length > 0 ? (
+                {followingList === undefined ? null : followingList.length > 0 ? (
                   followingList.map((f: any) => (
                     <UserRow
                       key={f._id}
@@ -619,9 +610,7 @@ function ProfileContent() {
             {/* ------------------------------------------------------------- */}
             {activeTab === 'rated' && (
               <div>
-                {ratingsData === undefined ? (
-                  <RatingsSkeleton />
-                ) : ratingsData.ratings.length > 0 ? (
+                {ratingsData === undefined ? null : ratingsData.ratings.length > 0 ? (
                   <div>
                     {/* Overall Rating Banner */}
                     <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50/70 to-orange-50/50 border-b border-amber-100 flex items-center justify-between gap-4">
@@ -723,12 +712,7 @@ function ProfileContent() {
             {/* ------------------------------------------------------------- */}
             {activeTab === 'done' && (
               <div className="divide-y divide-zinc-100">
-                {rawDone === undefined ? (
-                  <>
-                    <RallyCardSkeleton />
-                    <RallyCardSkeleton />
-                  </>
-                ) : doneList.length > 0 ? (
+                {rawDone === undefined ? null : doneList.length > 0 ? (
                   doneList.map((rally) => (
                     <RallyCard
                       key={rally.id}
@@ -900,45 +884,3 @@ function UserRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton loaders
-// ---------------------------------------------------------------------------
-function UserListSkeleton() {
-  return (
-    <div className="divide-y divide-zinc-100 animate-pulse">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-zinc-200 shrink-0" />
-          <div className="flex-1 space-y-1.5">
-            <div className="w-28 h-3.5 bg-zinc-200 rounded" />
-            <div className="w-20 h-3 bg-zinc-100 rounded" />
-          </div>
-          <div className="w-16 h-7 bg-zinc-200 rounded-xl" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function RatingsSkeleton() {
-  return (
-    <div className="divide-y divide-zinc-100 animate-pulse">
-      <div className="p-5 bg-amber-50/30">
-        <div className="w-32 h-6 bg-zinc-200 rounded mb-2" />
-        <div className="w-48 h-3 bg-zinc-100 rounded" />
-      </div>
-      {[1, 2].map((i) => (
-        <div key={i} className="p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-zinc-200" />
-              <div className="w-24 h-3.5 bg-zinc-200 rounded" />
-            </div>
-            <div className="w-16 h-3 bg-zinc-100 rounded" />
-          </div>
-          <div className="w-3/4 h-3 bg-zinc-100 rounded ml-10" />
-        </div>
-      ))}
-    </div>
-  );
-}

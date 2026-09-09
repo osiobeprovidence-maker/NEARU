@@ -64,11 +64,8 @@ export default function Home() {
     }
   }, [geoState, startWatching]);
 
-  useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => setIsLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, [city, radiusKm, geoState]);
+  // Loading is derived from data availability; no artificial timeout needed.
+  const loading = !feedIsLoaded;
 
   const openCreateModal = () => {
     window.dispatchEvent(new CustomEvent('open-create-rally'));
@@ -244,7 +241,7 @@ export default function Home() {
   }, [radiusKm, computeDistance, allRallies]);
 
   return (
-    <div className="w-full pt-2 md:pt-4">
+    <div className="w-full pt-2 md:pt-4 flex flex-col items-center">
       {/* Optional Notification Opt-in Prompt */}
       {showNotifPrompt && (
         <div className="px-4 md:px-6 mb-4">
@@ -283,15 +280,11 @@ export default function Home() {
       )}
 
       {/* Main Feed Container */}
-      <div className="px-0 md:px-6 pb-24 md:pb-6">
+       <div className="px-0 md:px-6 pb-8 md:pb-4">
         {/* Content Feed */}
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
-          {!feedIsLoaded || isLoading ? (
-            <>
-              <PostSkeleton />
-              <PostSkeleton />
-              <PostSkeleton />
-            </>
+          {loading ? (
+            <></>
           ) : nearbyRallies.length > 0 ? (
             <>
               {nearbyRallies.flatMap((rally, index) => {
@@ -367,51 +360,9 @@ export default function Home() {
           )}
         </div>
 
-        {/* Community Invite Footer Card */}
-        <div className="mt-8 mb-4 px-4 md:px-0">
-          <div className="bg-zinc-100 border border-zinc-200 rounded-2xl p-4 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-zinc-200 shrink-0 flex items-center justify-center">
-              <Users className="w-5 h-5 text-zinc-600" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-zinc-900 text-sm">Grow your community</h4>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Invite friends to Lalao and keep up with what's happening near you.
-              </p>
-            </div>
-            <button
-              onClick={handleInvite}
-              className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 active:scale-95 transition-all shrink-0 cursor-pointer"
-            >
-              Invite
-            </button>
-          </div>
-        </div>
+
       </div>
     </div>
   );
 }
 
-function PostSkeleton() {
-  return (
-    <div className="bg-white px-5 py-4 border-b border-zinc-100 animate-pulse">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-11 h-11 rounded-full bg-zinc-200 shrink-0" />
-        <div className="flex-1 space-y-2">
-          <div className="h-3 w-40 bg-zinc-200 rounded" />
-          <div className="h-2.5 w-24 bg-zinc-100 rounded" />
-        </div>
-      </div>
-      <div className="space-y-2 mb-4">
-        <div className="h-3 w-full bg-zinc-200 rounded" />
-        <div className="h-3 w-3/4 bg-zinc-200 rounded" />
-      </div>
-      <div className="h-56 w-full bg-zinc-100 rounded-2xl mb-4" />
-      <div className="flex items-center gap-5">
-        <div className="h-4 w-12 bg-zinc-200 rounded" />
-        <div className="h-4 w-12 bg-zinc-200 rounded" />
-        <div className="h-4 w-12 bg-zinc-200 rounded" />
-      </div>
-    </div>
-  );
-}

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+
 import Avatar from '../components/Avatar';
 import VerificationBadge, { ProfileVerificationCheck } from '../components/VerificationBadge';
 import { Tag, Users } from 'lucide-react';
@@ -115,7 +115,7 @@ export default function InterestPage() {
           </div>
           {people === undefined ? (
             <div className="divide-y divide-zinc-100">
-              <RallyCardSkeleton />
+              {null}
             </div>
           ) : people.length > 0 ? (
             people.map((p: any) => (
@@ -153,12 +153,7 @@ export default function InterestPage() {
         {/* Posts */}
         <h3 className="font-bold text-zinc-900 text-sm mb-2 px-1">Latest posts</h3>
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-          {posts === undefined ? (
-            <>
-              <RallyCardSkeleton />
-              <RallyCardSkeleton />
-            </>
-          ) : posts.length > 0 ? (
+          {posts === undefined ? null : posts.length > 0 ? (
             posts.map((r: any) => <RallyCard key={r._id} rally={mapRally(r)} />)
           ) : (
             <div className="p-12 text-center text-zinc-500">

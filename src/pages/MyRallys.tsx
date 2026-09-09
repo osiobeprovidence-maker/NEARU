@@ -3,7 +3,7 @@ import PageShell from '../components/PageShell';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+
 import { cn } from '../lib/utils';
 import { Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -122,12 +122,7 @@ export default function MyRallys() {
       </div>
 
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-        {isLoading ? (
-          <>
-            <RallyCardSkeleton />
-            <RallyCardSkeleton />
-          </>
-        ) : displayedRallies.length > 0 ? (
+        {isLoading ? null : displayedRallies.length > 0 ? (
           displayedRallies.map((rally) => (
             <RallyCard key={rally.id} rally={rally} onDeleted={handleDeleted} />
           ))

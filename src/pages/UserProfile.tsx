@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { cn, getPublicInterests } from '../lib/utils';
 import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+
 import QueryErrorBoundary from '../components/QueryErrorBoundary';
 import UserAvatarCropModal from '../components/UserAvatarCropModal';
 import {
@@ -650,12 +650,7 @@ function UserProfileContent() {
               ))}
             </div>
             <div className="divide-y divide-zinc-100">
-              {content === undefined ? (
-                <>
-                  <RallyCardSkeleton />
-                  <RallyCardSkeleton />
-                </>
-              ) : activeList.length > 0 ? (
+              {content === undefined ? null : activeList.length > 0 ? (
                 activeList.map((r: any) => <RallyCard key={r._id} rally={mapRally(r)} />)
               ) : (
                 <div className="p-10 text-center text-zinc-500">

@@ -7,7 +7,7 @@ import { api } from '../../convex/_generated/api';
 import Avatar from '../components/Avatar';
 import CoverBanner, { CoverBannerHandle } from '../components/CoverBanner';
 import RallyCard from '../components/RallyCard';
-import RallyCardSkeleton from '../components/RallyCardSkeleton';
+
 import OrgSocialLinks, {
   SOCIAL_PLATFORMS,
   normalizeSocialUrl,
@@ -341,12 +341,7 @@ export default function ManagePage() {
         </div>
 
         <div className="divide-y divide-zinc-100">
-          {isLoading ? (
-            <>
-              <RallyCardSkeleton />
-              <RallyCardSkeleton />
-            </>
-          ) : activeList.length > 0 ? (
+          {isLoading ? null : activeList.length > 0 ? (
             activeList.map((rally) => <RallyCard key={rally.id} rally={rally} />)
           ) : activeTab === 'events' ? (
             <EmptyState
