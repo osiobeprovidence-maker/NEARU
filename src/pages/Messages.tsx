@@ -21,6 +21,8 @@ import Avatar from '../components/Avatar';
 import BrandLogo from '../components/BrandLogo';
 import { ProfileVerificationCheck } from '../components/VerificationBadge';
 import { cn } from '../lib/utils';
+import CycleCreator from '../components/CycleCreator';
+import CycleViewer from '../components/CycleViewer';
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -245,7 +247,20 @@ export default function Messages() {
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
 
-  const loading = conversations === undefined || incomingRequests === undefined || outgoingRequests === undefined;
+  const activeFriendCycles = useQuery(
+    api.cycles.getActiveFriendCycles,
+    convexUserId ? {} : 'skip'
+  );
+
+  const myActiveCycles = useQuery(
+    api.cycles.getMyActiveCycles,
+    convexUserId ? {} : 'skip'
+  );
+
+  const [isCycleCreatorOpen, setIsCycleCreatorOpen] = useState(false);
+  const [selectedCycleGroup, setSelectedCycleGroup] = useState<any>(null);
+
+  const loading = conversations === undefined || incomingRequests === undefined || outgoingRequests === undefined || activeFriendCycles === undefined || myActiveCycles === undefined;
   const pendingIncoming = (incomingRequests ?? []).filter((r: any) => r.status === 'PENDING');
   const pendingOutgoing = (outgoingRequests ?? []).filter((r: any) => r.status === 'PENDING');
 
@@ -331,11 +346,41 @@ export default function Messages() {
   const filteredConversations = q ? allConversations.filter((i) => i.title.toLowerCase().includes(q)) : allConversations;
   const filteredRequests = q ? requestItems.filter((i) => i.title.toLowerCase().includes(q)) : requestItems;
 
-  // Cycle derived from real conversation participants â€” your own cycle appears first in the strip
-  const cycleParticipants = allConversations
-    .filter((c) => !c.isRally && c.avatarName !== 'User')
-    .slice(0, 10)
-    .map((c) => ({ key: c.key, name: c.title, avatar: c.avatar, hasNew: c.unread > 0, navigateTo: c.navigateTo }));
+  const cycleParticipants = [];
+  
+  if (myActiveCycles) {
+    cycleParticipants.push({
+      key: myActiveCycles.key,
+      name: 'Your Cycle',
+      avatar: myActiveCycles.avatarUrl,
+      hasNew: myActiveCycles.hasUnseen,
+      isMe: true,
+      cyclesGroup: myActiveCycles,
+    });
+  } else {
+    // Show empty self Add Cycle
+    cycleParticipants.push({
+      key: 'me-empty',
+      name: 'Add Cycle',
+      avatar: user?.avatar,
+      hasNew: false,
+      isMe: true,
+      cyclesGroup: null,
+    });
+  }
+
+  if (activeFriendCycles) {
+    activeFriendCycles.forEach(group => {
+      cycleParticipants.push({
+        key: group.key,
+        name: group.name,
+        avatar: group.avatarUrl,
+        hasNew: group.hasUnseen,
+        isMe: false,
+        cyclesGroup: group,
+      });
+    });
+  }
 
   const totalUnread = allConversations.reduce((sum, c) => sum + c.unread, 0);
 
@@ -414,11 +459,23 @@ export default function Messages() {
           </div>
           <div className="overflow-x-auto no-scrollbar">
             <div className="flex gap-2 px-4 md:px-6 pb-3">
-              <CycleAvatar avatar={user.avatar} name={user.name || 'You'} hasNew={false} isMe onClick={() => {}} />
               {cycleParticipants.map((p) => (
-                <CycleAvatar key={p.key} avatar={p.avatar} name={p.name} hasNew={p.hasNew} onClick={p.navigateTo} />
+                <CycleAvatar 
+                  key={p.key} 
+                  avatar={p.avatar} 
+                  name={p.name} 
+                  hasNew={p.hasNew} 
+                  isMe={p.isMe}
+                  onClick={() => {
+                    if (p.isMe && !p.cyclesGroup) {
+                      setIsCycleCreatorOpen(true);
+                    } else {
+                      setSelectedCycleGroup(p.cyclesGroup);
+                    }
+                  }} 
+                />
               ))}
-              {cycleParticipants.length === 0 && !loading && (
+              {cycleParticipants.length === 1 && !loading && (
                 <motion.button whileTap={{ scale: 0.93 }} onClick={() => navigate('/messages/add-friends')}
                   className="flex flex-col items-center gap-1.5 shrink-0 w-[68px] cursor-pointer">
                   <div className="w-[58px] h-[58px] rounded-full bg-zinc-100 border-2 border-dashed border-zinc-300 flex items-center justify-center">
@@ -504,6 +561,8 @@ export default function Messages() {
       )}
 
       <div className="h-6 shrink-0" />
+      <CycleCreator isOpen={isCycleCreatorOpen} onClose={() => setIsCycleCreatorOpen(false)} />
+      <CycleViewer isOpen={!!selectedCycleGroup} onClose={() => setSelectedCycleGroup(null)} cyclesGroup={selectedCycleGroup} />
     </div>
   );
 }

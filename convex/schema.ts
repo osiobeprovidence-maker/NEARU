@@ -882,5 +882,25 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_latest", ["isLatest"])
     .index("by_timestamp", ["timestamp"]),
+
+  // 24-Hour Temporary Cycle Posts
+  cycles: defineTable({
+    authorId: v.id("users"), // either the user or the page creator (or pageId could be the author, but typically pages are owned by users. Wait, I will use pageId for pages and authorId for the user who published it).
+    // The instructions say: authorType: "user" | "page"
+    authorType: v.union(v.literal("user"), v.literal("page")),
+    pageId: v.optional(v.id("pages")),
+    contentType: v.union(v.literal("text"), v.literal("image"), v.literal("video")),
+    text: v.optional(v.string()),
+    mediaStorageId: v.optional(v.string()),
+    videoDuration: v.optional(v.number()),
+    thumbnail: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    viewedBy: v.optional(v.array(v.id("users"))),
+  })
+    .index("by_author", ["authorId"])
+    .index("by_page", ["pageId"])
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_createdAt", ["createdAt"]),
 });
 
