@@ -312,6 +312,11 @@ export default function AppShell() {
     routeLocation.pathname !== '/messages/add-friends' &&
     !routeLocation.pathname.startsWith('/messages/request/');
 
+  const isCustomHeaderPage = 
+    routeLocation.pathname === '/messages' || 
+    routeLocation.pathname === '/messages/add-friends' ||
+    routeLocation.pathname === '/messages/new';
+
   return (
     <div 
       className={cn(
@@ -473,7 +478,7 @@ export default function AppShell() {
       </aside>
 
       {/* Mobile Top Header */}
-      {!isChatPage && (
+      {!isChatPage && !isCustomHeaderPage && (
         <header className="md:hidden fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md border-b border-zinc-100 z-50 px-4 py-2.5 flex items-center justify-between gap-3 safe-area-top min-h-[53px]">
           {/* Header Location Pill on Left for Home, or Page Title for other routes */}
           {!isLocationHidden ? (
@@ -614,7 +619,9 @@ export default function AppShell() {
           "flex-1 md:ml-64 flex flex-col transition-all duration-150 overflow-hidden",
           isChatPage 
             ? "pt-0 pb-0 h-full" 
-            : "pt-[53px] md:pt-0 min-h-screen pb-[65px] md:pb-0"
+            : isCustomHeaderPage
+              ? "pt-0 md:pt-0 min-h-screen pb-[65px] md:pb-0"
+              : "pt-[53px] md:pt-0 min-h-screen pb-[65px] md:pb-0"
         )}
         style={isChatPage ? { height: '100%' } : undefined}
       >
