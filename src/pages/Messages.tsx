@@ -13,6 +13,7 @@ import {
   CheckCheck,
   Send,
   UserPlus,
+  SquarePen,
 } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -89,10 +90,28 @@ function SubtitleIcon({ kind, isMe }: { kind: string; isMe?: boolean }) {
 }
 
 function CycleAvatar({
-  avatar, name, hasNew, isMe, onClick,
+  avatar, name, hasNew, isMe, isCreateAction, onClick,
 }: {
-  avatar?: string; name: string; hasNew: boolean; isMe?: boolean; onClick?: () => void;
+  avatar?: string; name: string; hasNew: boolean; isMe?: boolean; isCreateAction?: boolean; onClick?: () => void;
 }) {
+  if (isCreateAction) {
+    return (
+      <motion.button
+        whileTap={{ scale: 0.93 }}
+        onClick={onClick}
+        className="flex flex-col items-center gap-1.5 shrink-0 w-[68px] cursor-pointer"
+        type="button"
+      >
+        <div className="w-[58px] h-[58px] rounded-full bg-zinc-100 border-2 border-dashed border-zinc-300 flex items-center justify-center">
+          <Plus className="w-5 h-5 text-zinc-400" />
+        </div>
+        <span className="text-[11px] font-semibold text-zinc-500 text-center leading-tight">
+          Create Cycle
+        </span>
+      </motion.button>
+    );
+  }
+
   return (
     <motion.button
       whileTap={{ scale: 0.93 }}
@@ -102,11 +121,11 @@ function CycleAvatar({
     >
       <div className={cn(
         'w-[58px] h-[58px] rounded-full p-[2.5px]',
-        hasNew ? 'bg-gradient-to-tr from-primary to-primary-light' : 'bg-zinc-200'
+        hasNew ? 'bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500' : 'bg-zinc-200'
       )}>
         <div className="w-full h-full rounded-full overflow-hidden bg-white p-[2px] relative">
           <Avatar src={avatar} name={name} className="w-full h-full" />
-          {isMe && (
+          {isMe && !hasNew && (
             <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-primary border-2 border-white flex items-center justify-center">
               <Plus className="w-3 h-3 text-white" />
             </div>
@@ -262,13 +281,19 @@ export default function Messages() {
   const q = search.trim().toLowerCase();
   const filteredConversations = q ? allConversations.filter((i) => i.title.toLowerCase().includes(q)) : allConversations;
 
-  const cycleParticipants = [];
+  const cycleParticipants: any[] = [];
   
   if (myActiveCycles) {
+    let previewAvatar = myActiveCycles.avatarUrl;
+    const latestCycle = myActiveCycles.cycles[myActiveCycles.cycles.length - 1];
+    if (latestCycle?.mediaUrl) {
+      previewAvatar = latestCycle.mediaUrl;
+    }
+    
     cycleParticipants.push({
       key: myActiveCycles.key,
       name: 'Your Cycle',
-      avatar: myActiveCycles.avatarUrl,
+      avatar: previewAvatar,
       hasNew: myActiveCycles.hasUnseen,
       isMe: true,
       cyclesGroup: myActiveCycles,
@@ -277,13 +302,20 @@ export default function Messages() {
     // Show empty self Add Cycle
     cycleParticipants.push({
       key: 'me-empty',
-      name: 'Share to Cycle',
+      name: 'Your Cycle',
       avatar: user?.avatar,
       hasNew: false,
       isMe: true,
       cyclesGroup: null,
     });
   }
+
+  // Always add Create Cycle next
+  cycleParticipants.push({
+    key: 'create-cycle',
+    name: 'Create Cycle',
+    isCreateAction: true,
+  });
 
   if (activeFriendCycles) {
     activeFriendCycles.forEach(group => {
@@ -309,13 +341,14 @@ export default function Messages() {
           <motion.button whileTap={{ scale: 0.92 }} onClick={() => navigate('/profile')} aria-label="Profile" className="shrink-0">
             <Avatar src={user.avatar} name={user.name} size="sm" className="border-2 border-indigo-100 shadow-sm" />
           </motion.button>
-          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
-            <BrandLogo boxClassName="w-7 h-7" nameClassName="text-xl" />
-          </div>
-          <div className="flex items-center shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/add-friends')}
+              className="p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="Add Friends">
+              <UserPlus className="w-[22px] h-[22px]" />
+            </motion.button>
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigate('/messages/add-friends')}
               className="p-2 rounded-full text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 transition-colors" aria-label="New Chat">
-              <Send className="w-[22px] h-[22px]" />
+              <SquarePen className="w-[22px] h-[22px]" />
             </motion.button>
           </div>
         </div>
@@ -329,13 +362,12 @@ export default function Messages() {
         </h1>
         <div className="flex items-center gap-2">
           <motion.button whileTap={{ scale: 0.94 }} onClick={() => navigate('/messages/add-friends')}
-            className="flex items-center justify-center w-9 h-9 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm transition-all" aria-label="New Chat">
-            <Send className="w-4 h-4" />
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 text-zinc-600 hover:bg-zinc-200 shadow-sm transition-all" aria-label="Add Friends">
+            <UserPlus className="w-5 h-5" />
           </motion.button>
-          <motion.button whileTap={{ scale: 0.94 }} onClick={() => setIsCycleCreatorOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all">
-            <RefreshCw className="w-4 h-4" />
-            Share to Cycle
+          <motion.button whileTap={{ scale: 0.94 }} onClick={() => navigate('/messages/add-friends')}
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm transition-all" aria-label="New Chat">
+            <SquarePen className="w-5 h-5" />
           </motion.button>
         </div>
       </div>
@@ -370,11 +402,6 @@ export default function Messages() {
         <div className="mb-1">
           <div className="flex items-center justify-between px-4 md:px-6 mb-2.5">
             <span className="text-sm font-extrabold text-zinc-900 tracking-tight">Cycles</span>
-            <button onClick={() => setIsCycleCreatorOpen(true)}
-              className="text-xs font-bold text-primary hover:text-primary-dark transition-colors flex items-center gap-1">
-              <Plus className="w-3.5 h-3.5" />
-              Share to Cycle
-            </button>
           </div>
           <div className="overflow-x-auto no-scrollbar">
             <div className="flex gap-2 px-4 md:px-6 pb-3">
@@ -382,11 +409,14 @@ export default function Messages() {
                 <CycleAvatar 
                   key={p.key} 
                   avatar={p.avatar} 
-                  name={p.name} 
-                  hasNew={p.hasNew} 
+                  name={p.name as string} 
+                  hasNew={p.hasNew as boolean} 
                   isMe={p.isMe}
+                  isCreateAction={p.isCreateAction}
                   onClick={() => {
-                    if (p.isMe && !p.cyclesGroup) {
+                    if (p.isCreateAction) {
+                      setIsCycleCreatorOpen(true);
+                    } else if (p.isMe && !p.cyclesGroup) {
                       setIsCycleCreatorOpen(true);
                     } else {
                       setSelectedCycleGroup(p.cyclesGroup);
@@ -442,6 +472,7 @@ export default function Messages() {
       {/* Conversations */}
       {!loading && filteredConversations.length > 0 && (
         <div>
+          <h2 className="text-sm font-extrabold text-zinc-900 px-4 md:px-6 mt-2 mb-2 tracking-tight">Chats</h2>
           {filteredConversations.map((item, i) => (
             <React.Fragment key={item.key}>
               <ConversationRow item={item} />
