@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
+import { Capacitor } from "@capacitor/core";
 import {
   initializeAuth,
   getAuth,
@@ -21,34 +22,24 @@ import {
   setPersistence,
 } from "firebase/auth";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCTUPKW0oVzuTFKrCjzDto_dtqXL7ijeEI",
-  authDomain: "usenearu.firebaseapp.com",
-  projectId: "usenearu",
-  storageBucket: "usenearu.firebasestorage.app",
-  messagingSenderId: "415405275981",
-  appId: "1:415405275981:web:2ed53d7318cb345f029504",
-  measurementId: "G-NCZZ1WFE1Z",
-};
+import { firebaseConfig } from "../../auth/firebase_config.js";
+
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Auth with multi-tier browser persistence (IndexedDB -> LocalStorage -> SessionStorage)
-// and browserPopupRedirectResolver for rock-solid OAuth popup/redirect handling.
+// Platform‑specific Auth initialization.
 let authInstance;
-try {
+if (Capacitor.isNativePlatform()) {
+  // On Android/iOS the native plugin handles sign‑in; default auth instance is sufficient.
+  authInstance = getAuth(app);
+} else {
+  // On web use multi‑tier persistence for robust session handling.
   authInstance = initializeAuth(app, {
-    persistence: [
-      indexedDBLocalPersistence,
-      browserLocalPersistence,
-      browserSessionPersistence,
-    ],
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
     popupRedirectResolver: browserPopupRedirectResolver,
   });
-} catch {
-  // If already initialized (e.g. Vite fast refresh), obtain the existing instance
-  authInstance = getAuth(app);
 }
+
 
 export const auth = authInstance;
 

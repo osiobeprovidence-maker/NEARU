@@ -160,11 +160,15 @@ const AppRoutes = () => {
   if (!isLoggedIn) {
     return (
       <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/about" element={<Landing />} />
+        <Route path="/features" element={<Landing />} />
+        <Route path="/download" element={<Landing />} />
+        <Route path="/landing" element={<Landing />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signin" element={<LoginPage />} />
         <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/landing" element={<Landing />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }

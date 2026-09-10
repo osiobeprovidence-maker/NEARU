@@ -21,13 +21,28 @@ import {
   Tag,
   Compass,
   Calendar,
-  ExternalLink
+  ExternalLink,
+  Smartphone,
+  X
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/Avatar';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { ProfileVerificationCheck } from '../components/VerificationBadge';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import BrandLogo from '../components/BrandLogo';
+
+const FALLBACK_RELEASE = {
+  version: '1.0.0',
+  buildNumber: 2,
+  releaseDate: 'September 10, 2026',
+  apkUrl: 'https://rare-rooster-878.eu-west-1.convex.cloud/api/storage/c76736af-bec9-40a2-af46-8b0de74184d7',
+  apkSize: '8.7 MB',
+  minAndroidVersion: 'Android 8.0+',
+  isLatest: true,
+};
 
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
@@ -44,8 +59,12 @@ export default function Settings() {
   const [orgName, setOrgName] = useState(user.organizationName || '');
   const [pendingType, setPendingType] = useState<'organization' | 'business' | null>(null);
   const [orgModalOpen, setOrgModalOpen] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
+
+  const latestReleaseQuery = useQuery(api.releases.getLatestRelease);
+  const activeRelease = latestReleaseQuery || FALLBACK_RELEASE;
 
   const handleEnableNotifications = async () => {
     try {
@@ -429,6 +448,35 @@ export default function Settings() {
           </h3>
           <div className="bg-white md:rounded-3xl border-y md:border border-zinc-200 shadow-sm divide-y divide-zinc-100 overflow-hidden">
             
+            {/* Download Lalao App */}
+            <button
+              type="button"
+              onClick={() => setDownloadModalOpen(true)}
+              className="w-full text-left flex items-center justify-between p-3.5 sm:p-4 hover:bg-zinc-50/80 transition-colors group cursor-pointer"
+            >
+              <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-zinc-900 text-xs sm:text-sm group-hover:text-black transition-colors truncate">
+                    Download Lalao App
+                  </p>
+                  <p className="text-[11px] text-zinc-500 font-medium truncate">
+                    Get the latest Lalao Android app
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                {activeRelease.version && (
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    v{activeRelease.version}
+                  </span>
+                )}
+                <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all" />
+              </div>
+            </button>
+
             {/* Notification Settings */}
             <Link
               to="/settings/notifications"
@@ -662,6 +710,80 @@ export default function Settings() {
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Download APK Modal */}
+      {downloadModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4 animate-in fade-in duration-150"
+          onClick={() => setDownloadModalOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-white sm:rounded-[2rem] rounded-t-[2rem] p-6 sm:p-7 shadow-2xl relative animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setDownloadModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col items-center text-center pt-2 pb-1">
+              {/* Brand Logo & Android App Icon */}
+              <div className="relative mb-5">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-900 p-3 shadow-md flex items-center justify-center text-white">
+                  <BrandLogo boxClassName="w-10 h-10" rounded="rounded-xl" showName={false} />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-emerald-500 text-white rounded-full p-1.5 shadow-sm border-2 border-white">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* Title & Description */}
+              <h3 className="font-black text-zinc-900 text-xl tracking-tight mb-1.5">
+                Download Lalao for Android
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-500 font-medium max-w-xs mb-6 leading-relaxed">
+                Get the latest version of Lalao for Android.
+              </p>
+
+              {/* Release Version Card */}
+              <div className="w-full bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 mb-5 text-left flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-extrabold text-zinc-900">Lalao Android APK</p>
+                  <p className="text-[11px] text-zinc-500 font-medium">
+                    {activeRelease.minAndroidVersion || 'Android 8.0+'} • {activeRelease.apkSize || '8.7 MB'}
+                  </p>
+                </div>
+                <span className="text-xs font-black text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-lg">
+                  Version {activeRelease.version}
+                </span>
+              </div>
+
+              {/* Primary Download Button */}
+              <a
+                href={activeRelease.apkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={`lalao-v${activeRelease.version}.apk`}
+                onClick={() => {
+                  showToast('Download started', `Downloading Lalao v${activeRelease.version}`);
+                }}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 px-5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl transition-all font-bold text-sm shadow-md active:scale-98"
+              >
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>Download APK</span>
+              </a>
+
+              {/* Optional Version label under download section */}
+              <p className="mt-4 text-[11px] text-zinc-400 font-semibold tracking-wide">
+                Version {activeRelease.version}
+              </p>
             </div>
           </div>
         </div>

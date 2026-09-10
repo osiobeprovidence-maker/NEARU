@@ -419,7 +419,7 @@ export default function Messages() {
       </div>
 
       {/* Cycle Strip */}
-      {!q && (
+      {!q && cycleParticipants.length > 1 && (
         <div className="mb-1">
           <div className="flex items-center justify-between px-4 md:px-6 mb-2.5">
             <span className="text-sm font-extrabold text-zinc-900 tracking-tight">Cycles</span>
@@ -427,22 +427,23 @@ export default function Messages() {
           <div className="overflow-x-auto no-scrollbar">
             <div className="flex gap-2 px-4 md:px-6 pb-3">
               {cycleParticipants.map((p) => (
-                <CycleAvatar 
-                  key={p.key} 
-                  avatar={p.avatar} 
-                  name={p.name as string} 
-                  hasNew={p.hasNew as boolean} 
+                <CycleAvatar
+                  key={p.key}
+                  avatar={p.avatar}
+                  name={p.name as string}
+                  hasNew={p.hasNew as boolean}
                   isMe={p.isMe}
                   isCreateAction={p.isCreateAction}
                   onClick={() => {
                     if (p.isCreateAction) {
                       setIsCycleCreatorOpen(true);
-                    } else if (p.isMe && !p.cyclesGroup) {
-                      setIsCycleCreatorOpen(true);
+                    } else if (p.isMe) {
+                      // Open viewer for own cycle
+                      setSelectedCycleGroup(p.cyclesGroup);
                     } else {
                       setSelectedCycleGroup(p.cyclesGroup);
                     }
-                  }} 
+                  }}
                 />
               ))}
               {/* Removed redundant friend discovery button */}

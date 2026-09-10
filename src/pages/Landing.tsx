@@ -304,6 +304,18 @@ class DownloadErrorBoundary extends React.Component<
 export default function Landing() {
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    const path = window.location.pathname.replace(/^\/+/, '');
+    if (path === 'download' || path === 'features' || path === 'about') {
+      const el = document.getElementById(path);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+  }, []);
+
   const handleGetStarted = () => {
     navigate('/login?mode=signup');
   };
@@ -317,12 +329,19 @@ export default function Landing() {
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-zinc-100">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BrandLogo boxClassName="w-8 h-8" rounded="rounded-lg" nameClassName="text-xl" fallbackLetter="l" />
+          <div className="flex items-center gap-6">
+            <a href="/" className="flex items-center gap-2">
+              <BrandLogo boxClassName="w-8 h-8" rounded="rounded-lg" nameClassName="text-xl" fallbackLetter="l" />
+            </a>
+            <div className="hidden md:flex items-center gap-6 text-xs font-bold text-zinc-500">
+              <a href="/features" className="hover:text-zinc-900 transition-colors">Features</a>
+              <a href="/about" className="hover:text-zinc-900 transition-colors">About</a>
+              <a href="/download" className="hover:text-zinc-900 transition-colors">Download</a>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="#download"
+              href="/download"
               className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full hover:bg-indigo-100 transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
@@ -330,13 +349,13 @@ export default function Landing() {
             </a>
             <button
               onClick={handleLogin}
-              className="px-4 py-2 text-sm font-bold text-zinc-600 hover:text-zinc-900 transition-colors"
+              className="px-4 py-2 text-sm font-bold text-zinc-600 hover:text-zinc-900 transition-colors cursor-pointer"
             >
               Log In
             </button>
             <button
               onClick={handleGetStarted}
-              className="px-5 py-2 bg-zinc-900 text-white text-sm font-bold rounded-full hover:bg-zinc-800 active:scale-95 transition-all"
+              className="px-5 py-2 bg-zinc-900 text-white text-sm font-bold rounded-full hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer"
             >
               Get Started
             </button>
@@ -410,7 +429,7 @@ export default function Landing() {
       </DownloadErrorBoundary>
 
       {/* Three Pillars: ASK / HELP / JOIN */}
-      <section className="max-w-6xl mx-auto px-5 py-20 md:py-28">
+      <section id="features" className="max-w-6xl mx-auto px-5 py-20 md:py-28">
         <motion.div
           initial="hidden"
           whileInView="visible"
