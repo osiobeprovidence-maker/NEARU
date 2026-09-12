@@ -259,20 +259,25 @@ const AppRoutes = () => {
   );
 };
 
+import { EndlessVideoProvider } from './contexts/EndlessVideoContext';
+
 export default function App() {
   return (
     <AuthErrorBoundary>
       <AuthProvider>
         <PermissionProvider>
           <LocationProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
+            <EndlessVideoProvider>
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </EndlessVideoProvider>
           </LocationProvider>
         </PermissionProvider>
       </AuthProvider>
     </AuthErrorBoundary>
   );
 }
+
 
 

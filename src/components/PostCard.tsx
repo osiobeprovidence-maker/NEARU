@@ -20,7 +20,11 @@ import {
   ChevronRight,
   Repeat2,
   Megaphone,
+  Maximize2,
+  Play,
 } from 'lucide-react';
+import { useEndlessVideo } from '../contexts/EndlessVideoContext';
+
 import { Rally } from '../types';
 import { rallyAccess } from '../lib/rallyPricing';
 import { cn } from '../lib/utils';
@@ -181,8 +185,10 @@ function getRallyDetails(post: Rally, displayLocation: string, formattedAge: str
 // Main component
 // ---------------------------------------------------------------------------
 export default function PostCard({ post, onDeleted }: PostCardProps) {
+  const { openVideo } = useEndlessVideo();
   // Optimistic like state
   const [localLiked, setLocalLiked] = useState(post.isLiked ?? false);
+
   const [localLikeCount, setLocalLikeCount] = useState(post.likesCount ?? 0);
   // Optimistic RSVP / Rally Request state
   const [localRsvpd, setLocalRsvpd] = useState(post.isRsvpd ?? false);
@@ -759,18 +765,43 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
             mediaList[0].endsWith('.webm') ||
             mediaList[0].endsWith('.mov') ||
             mediaList[0].includes('stream.mux.com') ? (
-              <video
-                src={mediaList[0]}
-                className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block select-none"
-                controls
-                controlsList="nodownload no-remote-playback"
-                disablePictureInPicture
-                onContextMenu={(e) => e.preventDefault()}
-                onDragStart={(e) => e.preventDefault()}
-                playsInline
-                preload="metadata"
-                onError={() => setImgError(true)}
-              />
+              <div className="relative group/video">
+                <video
+                  src={mediaList[0]}
+                  className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block select-none cursor-pointer"
+                  controls
+                  controlsList="nodownload no-remote-playback"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                  playsInline
+                  preload="metadata"
+                  onError={() => setImgError(true)}
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openVideo({
+                      _id: post.id,
+                      title: post.title || post.description || 'Community Post Video',
+                      description: post.description || '',
+                      mediaUrl: mediaList[0],
+                      likesCount: localLikeCount,
+                      commentsCount: post.commentsCount || 0,
+                      isLiked: localLiked,
+                      locationLabel: post.locationLabel,
+                      creator: post.creator,
+                    });
+                  }}
+                  className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-full bg-black/70 hover:bg-indigo-600 text-white font-bold text-xs backdrop-blur-md border border-white/20 flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
+                  title="Open Endless Vertical Video Reel"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Full Screen Reel</span>
+                </button>
+              </div>
+
 
             ) : (
               <div className="w-full overflow-hidden flex items-center justify-center bg-zinc-100">
