@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Users, Share2, Compass, Bell, X, MapPin, Plus } from 'lucide-react';
+import { Users, Share2, Compass, Bell, X, MapPin } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useLocation } from '../contexts/LocationContext';
@@ -10,43 +10,8 @@ import AdCard from '../components/AdCard';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionContext';
 import { subscribeUserToPush } from '../utils/pushManager';
-import CycleCreator from '../components/CycleCreator';
-import CycleViewer from '../components/CycleViewer';
-import Avatar from '../components/Avatar';
-import { motion } from 'motion/react';
-import { cn } from '../lib/utils';
 
 const NOTIF_DISMISSED_KEY = 'rally_notif_dismissed';
-
-function HomeCycleAvatar({ avatar, name, hasNew, isMe, isCreateAction, onClick }: {
-  avatar?: string; name: string; hasNew: boolean; isMe?: boolean; isCreateAction?: boolean; onClick?: () => void;
-}) {
-  if (isCreateAction) {
-    return (
-      <motion.button whileTap={{ scale: 0.93 }} onClick={onClick}
-        className="flex flex-col items-center gap-1.5 shrink-0 w-[68px] cursor-pointer" type="button">
-        <div className="w-[58px] h-[58px] rounded-full bg-zinc-100 border-2 border-dashed border-zinc-300 flex items-center justify-center">
-          <Plus className="w-5 h-5 text-zinc-400" />
-        </div>
-        <span className="text-[11px] font-semibold text-zinc-500 text-center leading-tight">Create Cycle</span>
-      </motion.button>
-    );
-  }
-  return (
-    <motion.button whileTap={{ scale: 0.93 }} onClick={onClick}
-      className="flex flex-col items-center gap-1.5 shrink-0 w-[68px] cursor-pointer" type="button">
-      <div className={cn('w-[58px] h-[58px] rounded-full p-[2.5px]',
-        hasNew ? 'bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500' : 'bg-zinc-200')}>
-        <div className="w-full h-full rounded-full overflow-hidden bg-white p-[2px]">
-          <Avatar src={avatar} name={name} className="w-full h-full" />
-        </div>
-      </div>
-      <span className="text-[11px] font-semibold text-zinc-700 truncate w-full text-center leading-tight">
-        {isMe ? 'Your Cycle' : name.split(' ')[0]}
-      </span>
-    </motion.button>
-  );
-}
 
 export default function Home() {
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -63,46 +28,6 @@ export default function Home() {
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
   const { convexUserId, user } = useAuth();
-
-  // Cycles state
-  const [isCycleCreatorOpen, setIsCycleCreatorOpen] = useState(false);
-  const [selectedCycleGroup, setSelectedCycleGroup] = useState<any>(null);
-  const activeFriendCycles = useQuery(api.cycles.getActiveFriendCycles, convexUserId ? {} : 'skip');
-  const myActiveCycles = useQuery(api.cycles.getMyActiveCycles, convexUserId ? {} : 'skip');
-
-  // Build cycle participants list
-  const cycleParticipants: any[] = [];
-  cycleParticipants.push({ key: 'create-cycle', name: 'Create Cycle', isCreateAction: true });
-  if (myActiveCycles?.cycles?.length) {
-    const latestCycle = myActiveCycles.cycles[myActiveCycles.cycles.length - 1];
-    cycleParticipants.push({
-      key: myActiveCycles.key,
-      name: 'Your Cycle',
-      avatar: latestCycle?.mediaUrl || myActiveCycles.avatarUrl,
-      hasNew: myActiveCycles.hasUnseen,
-      isMe: true,
-      cyclesGroup: myActiveCycles,
-    });
-  }
-  (activeFriendCycles || []).forEach((group: any) => {
-    cycleParticipants.push({
-      key: group.key,
-      name: group.name,
-      avatar: group.avatarUrl,
-      hasNew: group.hasUnseen,
-      isMe: false,
-      cyclesGroup: group,
-    });
-  });
-
-  // Keep viewer in sync with live Convex data
-  React.useEffect(() => {
-    if (selectedCycleGroup) {
-      const all = [...(myActiveCycles ? [myActiveCycles] : []), ...(activeFriendCycles || [])];
-      const live = all.find((g: any) => g.key === selectedCycleGroup.key);
-      setSelectedCycleGroup(live || null);
-    }
-  }, [myActiveCycles, activeFriendCycles]);
   const followingIds = useQuery(
     api.follows.listFollowingIds,
     convexUserId ? { userId: convexUserId as any } : 'skip'
@@ -318,33 +243,6 @@ export default function Home() {
   return (
     <div className="w-full pt-2 md:pt-4 flex flex-col items-center">
 
-      {/* ── Cycle Strip ── */}
-      <div className="w-full mb-2">
-        <div className="flex items-center justify-between px-4 md:px-6 mb-2">
-          <span className="text-sm font-extrabold text-zinc-900 tracking-tight">Cycles</span>
-        </div>
-        <div className="overflow-x-auto no-scrollbar">
-          <div className="flex gap-2 px-4 md:px-6 pb-3">
-            {cycleParticipants.map((p) => (
-              <HomeCycleAvatar
-                key={p.key}
-                avatar={p.avatar}
-                name={p.name}
-                hasNew={!!p.hasNew}
-                isMe={p.isMe}
-                isCreateAction={p.isCreateAction}
-                onClick={() => {
-                  if (p.isCreateAction) setIsCycleCreatorOpen(true);
-                  else setSelectedCycleGroup(p.cyclesGroup);
-                }}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="h-px bg-zinc-100" />
-      </div>
-      <CycleCreator isOpen={isCycleCreatorOpen} onClose={() => setIsCycleCreatorOpen(false)} />
-      <CycleViewer isOpen={!!selectedCycleGroup} onClose={() => setSelectedCycleGroup(null)} cyclesGroup={selectedCycleGroup} />
       {/* Optional Notification Opt-in Prompt */}
       {showNotifPrompt && (
         <div className="px-4 md:px-6 mb-4">
