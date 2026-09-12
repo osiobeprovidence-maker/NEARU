@@ -1,4 +1,3 @@
-import 'user_model.dart';
 
 enum RallyType { ask, help, join, offer, community }
 
