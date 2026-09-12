@@ -98,19 +98,17 @@ export async function getAuthenticatedUserOrNull(ctx: MutationCtx | QueryCtx) {
   try {
     identity = await ctx.auth.getUserIdentity();
   } catch (err: any) {
-    console.error("[auth] Failed to retrieve user identity in getAuthenticatedUserOrNull:", err);
-    throw new Error("Authentication failure: could not verify identity credentials.");
+    console.warn("[auth] Failed to retrieve user identity in getAuthenticatedUserOrNull:", err);
+    return null;
   }
 
   if (!identity) {
-    console.warn("[auth] No authenticated Firebase identity in getAuthenticatedUserOrNull.");
-    throw new Error("Unauthenticated: you must be signed in to perform this action.");
+    return null;
   }
 
   const firebaseUid = identity.subject;
   if (!firebaseUid) {
-    console.warn("[auth] Firebase identity token missing subject claim in getAuthenticatedUserOrNull.");
-    throw new Error("Authentication error: Firebase UID missing from identity token.");
+    return null;
   }
 
   try {
@@ -122,7 +120,7 @@ export async function getAuthenticatedUserOrNull(ctx: MutationCtx | QueryCtx) {
     );
   } catch (dbErr: any) {
     console.error("[auth] Database error in getAuthenticatedUserOrNull:", dbErr);
-    throw new Error("Database error: failed to query user profile.");
+    return null;
   }
 }
 

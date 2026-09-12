@@ -1,11 +1,11 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthenticatedUser } from "./lib/auth";
+import { getAuthenticatedUser, getAuthenticatedUserOrNull } from "./lib/auth";
 
 export const getActiveFriendCycles = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getAuthenticatedUserOrNull(ctx);
     if (!user) return [];
 
     const now = Date.now();
@@ -152,7 +152,7 @@ export const getActiveFriendCycles = query({
 export const getMyActiveCycles = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getAuthenticatedUserOrNull(ctx);
     if (!user) return null;
 
     const now = Date.now();
@@ -342,7 +342,7 @@ export const deleteCycle = mutation({
 export const getCycleEngagement = query({
   args: { cycleId: v.id("cycles") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
+    const user = await getAuthenticatedUserOrNull(ctx);
     if (!user) return null;
 
     const cycle = await ctx.db.get(args.cycleId);
