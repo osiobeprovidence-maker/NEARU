@@ -44,3 +44,14 @@ ios/App/App/capacitor.config.json
 # Release APK artifacts
 dist-releases/
 *.apk
+
+# Local Flutter & SDK tools
+flutter_sdk/
+flutter.zip
+android_capacitor/
+ios_capacitor/
+.dart_tool/
+.flutter-plugins*
+.metadata
+*.iml
+

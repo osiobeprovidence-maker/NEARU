@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import VideoCard from './VideoCard';
-import VideoModal from './VideoModal';
+import EndlessVideoViewer from './EndlessVideoViewer';
 import { Play } from 'lucide-react';
 
 interface VideoDiscoveryGridProps {
@@ -14,7 +14,7 @@ export default function VideoDiscoveryGrid({
   layout = 'grid',
   columns = 3,
 }: VideoDiscoveryGridProps) {
-  const [activeVideo, setActiveVideo] = useState<any | null>(null);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
 
   if (!videos || videos.length === 0) {
     return (
@@ -39,16 +39,17 @@ export default function VideoDiscoveryGrid({
         <div className="flex items-stretch gap-3 overflow-x-auto no-scrollbar py-1 px-0.5 overscroll-x-contain">
           {videos.slice(0, 8).map((video) => (
             <div key={video._id} className="w-40 sm:w-48 shrink-0">
-              <VideoCard video={video} onClick={() => setActiveVideo(video)} />
+              <VideoCard video={video} onClick={() => setSelectedVideoId(video._id)} />
             </div>
           ))}
         </div>
 
-        {activeVideo && (
-          <VideoModal
-            video={activeVideo}
-            isOpen={!!activeVideo}
-            onClose={() => setActiveVideo(null)}
+        {selectedVideoId && (
+          <EndlessVideoViewer
+            videos={videos}
+            initialVideoId={selectedVideoId}
+            isOpen={!!selectedVideoId}
+            onClose={() => setSelectedVideoId(null)}
           />
         )}
       </>
@@ -63,16 +64,17 @@ export default function VideoDiscoveryGrid({
           <VideoCard
             key={video._id}
             video={video}
-            onClick={() => setActiveVideo(video)}
+            onClick={() => setSelectedVideoId(video._id)}
           />
         ))}
       </div>
 
-      {activeVideo && (
-        <VideoModal
-          video={activeVideo}
-          isOpen={!!activeVideo}
-          onClose={() => setActiveVideo(null)}
+      {selectedVideoId && (
+        <EndlessVideoViewer
+          videos={videos}
+          initialVideoId={selectedVideoId}
+          isOpen={!!selectedVideoId}
+          onClose={() => setSelectedVideoId(null)}
         />
       )}
     </>
