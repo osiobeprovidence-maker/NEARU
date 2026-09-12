@@ -7,7 +7,7 @@ import { haversineDistance, formatDistance } from '../lib/geo';
 import { Rally } from '../types';
 import PostCard from '../components/PostCard';
 import AdCard from '../components/AdCard';
-import CyclesBar from '../components/CyclesBar';
+
 
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionContext';
@@ -284,8 +284,6 @@ export default function Home() {
 
        {/* Main Feed Container */}
        <div className="px-0 md:px-6 pb-8 md:pb-4">
-        {/* Top Cycles & Stories Bar */}
-        <CyclesBar />
 
         {/* Content Feed */}
         <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
