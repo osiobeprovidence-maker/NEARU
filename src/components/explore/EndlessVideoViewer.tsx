@@ -20,6 +20,9 @@ import Avatar from '../Avatar';
 import { ProfileVerificationCheck } from '../VerificationBadge';
 import { cn } from '../../lib/utils';
 import VideoCommentDrawer from './VideoCommentDrawer';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface EndlessVideoViewerProps {
   videos: any[];
@@ -36,6 +39,8 @@ export default function EndlessVideoViewer({
   onClose,
   onLike,
 }: EndlessVideoViewerProps) {
+  const { convexUserId } = useAuth();
+
   // Find initial index
   const initialIndex = React.useMemo(() => {
     if (!initialVideoId || !videos?.length) return 0;
@@ -58,6 +63,11 @@ export default function EndlessVideoViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
+  // Convex mutations & queries
+  const toggleLikeMut = useMutation(api.rallies.toggleLike);
+  const followMut = useMutation(api.follows.follow);
+  const unfollowMut = useMutation(api.follows.unfollow);
+
   // Sync initial index when opened
   useEffect(() => {
     if (isOpen) {
@@ -67,6 +77,26 @@ export default function EndlessVideoViewer({
   }, [isOpen, initialIndex]);
 
   const currentVideo = videos[currentIndex];
+
+  // Creator & Video IDs
+  const currentVideoId = currentVideo?._id || currentVideo?.id;
+  const creatorId = currentVideo?.creator?._id || currentVideo?.creator?.id;
+  const isValidConvexRallyId = currentVideoId && !currentVideoId.startsWith('v-') && !currentVideoId.startsWith('opt-');
+  const isValidConvexCreatorId = creatorId && !creatorId.startsWith('u-') && creatorId !== 'creator';
+
+  // Check real follow status from Convex database
+  const realFollowStatus = useQuery(
+    api.follows.isFollowing,
+    isOpen && convexUserId && isValidConvexCreatorId
+      ? { followerId: convexUserId as any, targetId: creatorId as any }
+      : 'skip'
+  );
+
+  useEffect(() => {
+    if (realFollowStatus !== undefined && creatorId) {
+      setFollowingMap((prev) => ({ ...prev, [creatorId]: !!realFollowStatus }));
+    }
+  }, [realFollowStatus, creatorId]);
 
   // Initialize video stats maps
   useEffect(() => {
@@ -156,7 +186,7 @@ export default function EndlessVideoViewer({
     });
   };
 
-  const handleDoubleTapLike = (e: React.MouseEvent) => {
+  const handleDoubleTapLike = async (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -164,16 +194,28 @@ export default function EndlessVideoViewer({
     setShowHeartAnim({ x, y });
     setTimeout(() => setShowHeartAnim(null), 900);
 
-    const vId = currentVideo._id || currentVideo.id;
+    const vId = currentVideoId;
     if (!likedMap[vId]) {
       setLikedMap((prev) => ({ ...prev, [vId]: true }));
       setLikesCountMap((prev) => ({ ...prev, [vId]: (prev[vId] || 0) + 1 }));
       if (onLike) onLike(vId);
+
+      // Persist to real Convex DB
+      if (isValidConvexRallyId && convexUserId) {
+        try {
+          await toggleLikeMut({
+            rallyId: vId as any,
+            userId: convexUserId as any,
+          });
+        } catch (err) {
+          console.error('Failed to persist double-tap like to Convex:', err);
+        }
+      }
     }
   };
 
-  const toggleLike = () => {
-    const vId = currentVideo._id || currentVideo.id;
+  const toggleLike = async () => {
+    const vId = currentVideoId;
     const next = !likedMap[vId];
     setLikedMap((prev) => ({ ...prev, [vId]: next }));
     setLikesCountMap((prev) => ({
@@ -181,15 +223,47 @@ export default function EndlessVideoViewer({
       [vId]: next ? (prev[vId] || 0) + 1 : Math.max(0, (prev[vId] || 0) - 1),
     }));
     if (onLike) onLike(vId);
+
+    // Persist to real Convex DB
+    if (isValidConvexRallyId && convexUserId) {
+      try {
+        await toggleLikeMut({
+          rallyId: vId as any,
+          userId: convexUserId as any,
+        });
+      } catch (err) {
+        console.error('Failed to persist like toggle to Convex:', err);
+      }
+    }
   };
 
-  const toggleFollow = () => {
-    const creatorId = currentVideo.creator?._id || currentVideo.creator?.id || 'creator';
-    setFollowingMap((prev) => ({ ...prev, [creatorId]: !prev[creatorId] }));
+  const toggleFollow = async () => {
+    if (!creatorId) return;
+    const next = !followingMap[creatorId];
+    setFollowingMap((prev) => ({ ...prev, [creatorId]: next }));
+
+    // Persist follow/unfollow to real Convex DB
+    if (isValidConvexCreatorId && convexUserId) {
+      try {
+        if (next) {
+          await followMut({
+            followerId: convexUserId as any,
+            targetId: creatorId as any,
+          });
+        } else {
+          await unfollowMut({
+            followerId: convexUserId as any,
+            targetId: creatorId as any,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to persist follow state to Convex:', err);
+      }
+    }
   };
 
   const toggleBookmark = () => {
-    const vId = currentVideo._id || currentVideo.id;
+    const vId = currentVideoId;
     setBookmarkedMap((prev) => ({ ...prev, [vId]: !prev[vId] }));
   };
 
@@ -214,10 +288,8 @@ export default function EndlessVideoViewer({
     }
   };
 
-  const currentVideoId = currentVideo._id || currentVideo.id;
   const isCurrentLiked = !!likedMap[currentVideoId];
   const currentLikesCount = likesCountMap[currentVideoId] ?? (currentVideo.likesCount || 0);
-  const creatorId = currentVideo.creator?._id || currentVideo.creator?.id;
   const isFollowing = !!followingMap[creatorId];
   const isBookmarked = !!bookmarkedMap[currentVideoId];
   const cleanUsername = currentVideo.creator?.username?.replace(/^@+/, '') || '';
@@ -228,7 +300,7 @@ export default function EndlessVideoViewer({
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-4 left-4 z-50 p-3 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-all active:scale-95 border border-white/10"
+        className="absolute top-4 left-4 z-50 p-3 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-all active:scale-95 border border-white/10 cursor-pointer"
         aria-label="Close video feed"
       >
         <X className="w-5 h-5" />
@@ -239,7 +311,7 @@ export default function EndlessVideoViewer({
         <button
           type="button"
           onClick={toggleMute}
-          className="p-3 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-all active:scale-95 border border-white/10"
+          className="p-3 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-all active:scale-95 border border-white/10 cursor-pointer"
           aria-label="Toggle mute"
         >
           {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5 text-indigo-400" />}
@@ -270,7 +342,6 @@ export default function EndlessVideoViewer({
             className="w-full h-full object-cover select-none"
           />
 
-
           {/* Double Tap Heart Animation */}
           {showHeartAnim && (
             <div
@@ -299,7 +370,7 @@ export default function EndlessVideoViewer({
                   e.stopPropagation();
                   handlePrevVideo();
                 }}
-                className="p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-colors"
+                className="p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-colors cursor-pointer"
                 title="Previous Video (Up Arrow)"
               >
                 <ChevronUp className="w-5 h-5" />
@@ -312,7 +383,7 @@ export default function EndlessVideoViewer({
                   e.stopPropagation();
                   handleNextVideo();
                 }}
-                className="p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-colors"
+                className="p-2 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-colors cursor-pointer"
                 title="Next Video (Down Arrow)"
               >
                 <ChevronDown className="w-5 h-5" />
@@ -337,7 +408,7 @@ export default function EndlessVideoViewer({
                 type="button"
                 onClick={toggleFollow}
                 className={cn(
-                  'absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center text-white shadow-md transition-transform active:scale-90',
+                  'absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center text-white shadow-md transition-transform active:scale-90 cursor-pointer',
                   isFollowing ? 'bg-zinc-700' : 'bg-rose-500'
                 )}
                 title={isFollowing ? 'Following' : 'Follow Creator'}
@@ -350,7 +421,7 @@ export default function EndlessVideoViewer({
             <button
               type="button"
               onClick={toggleLike}
-              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform"
+              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform cursor-pointer"
             >
               <div
                 className={cn(
@@ -369,7 +440,7 @@ export default function EndlessVideoViewer({
             <button
               type="button"
               onClick={() => setShowCommentDrawer(true)}
-              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform"
+              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform cursor-pointer"
             >
               <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 shadow-lg">
                 <MessageCircle className="w-6 h-6" />
@@ -383,7 +454,7 @@ export default function EndlessVideoViewer({
             <button
               type="button"
               onClick={toggleBookmark}
-              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform"
+              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform cursor-pointer"
             >
               <div
                 className={cn(
@@ -400,7 +471,7 @@ export default function EndlessVideoViewer({
             <button
               type="button"
               onClick={handleShare}
-              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform"
+              className="flex flex-col items-center gap-1 group active:scale-90 transition-transform cursor-pointer"
             >
               <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 shadow-lg">
                 <Share2 className="w-5 h-5" />
@@ -478,7 +549,7 @@ export default function EndlessVideoViewer({
         </div>
       )}
 
-      {/* Slide-Up Comment Drawer */}
+      {/* Slide-Up Comment Drawer with Real Backend Queries & Mutations */}
       <VideoCommentDrawer
         isOpen={showCommentDrawer}
         onClose={() => setShowCommentDrawer(false)}
