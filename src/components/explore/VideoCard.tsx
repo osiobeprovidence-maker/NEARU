@@ -30,8 +30,13 @@ export default function VideoCard({ video, onClick }: VideoCardProps) {
             preload="metadata"
             muted
             playsInline
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+            controlsList="nodownload no-remote-playback"
+            disablePictureInPicture
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100 select-none"
           />
+
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-500 text-xs font-semibold">
             Video

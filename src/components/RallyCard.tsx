@@ -497,10 +497,15 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             <div className="relative w-full h-48">
               <video
                 src={rally.mediaUrl}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover select-none"
                 controls
+                controlsList="nodownload no-remote-playback"
+                disablePictureInPicture
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
                 onError={() => setImgError(true)}
               />
+
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
                   <Play className="w-6 h-6 text-white ml-0.5" />

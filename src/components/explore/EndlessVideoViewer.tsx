@@ -262,9 +262,14 @@ export default function EndlessVideoViewer({
             loop
             playsInline
             muted={isMuted}
+            controlsList="nodownload no-remote-playback"
+            disablePictureInPicture
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
             onTimeUpdate={() => handleTimeUpdate(currentIndex)}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover select-none"
           />
+
 
           {/* Double Tap Heart Animation */}
           {showHeartAnim && (

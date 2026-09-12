@@ -262,9 +262,14 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
                 autoPlay
                 playsInline
                 muted={false}
-                className="w-full h-full object-contain"
+                controlsList="nodownload no-remote-playback"
+                disablePictureInPicture
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+                className="w-full h-full object-contain select-none"
               />
             )}
+
           </div>
 
           {/* Engagement Footer */}

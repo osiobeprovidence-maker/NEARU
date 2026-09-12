@@ -761,12 +761,17 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
             mediaList[0].includes('stream.mux.com') ? (
               <video
                 src={mediaList[0]}
-                className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block"
+                className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block select-none"
                 controls
+                controlsList="nodownload no-remote-playback"
+                disablePictureInPicture
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
                 playsInline
                 preload="metadata"
                 onError={() => setImgError(true)}
               />
+
             ) : (
               <div className="w-full overflow-hidden flex items-center justify-center bg-zinc-100">
                 <img
