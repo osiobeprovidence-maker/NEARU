@@ -9,8 +9,9 @@ class ConvexService {
   final String deploymentUrl;
 
   ConvexService({
-    this.deploymentUrl = 'https://rare-rooster-878.eu-west-1.convex.cloud',
+    this.deploymentUrl = 'https://wary-goshawk-890.eu-west-1.convex.cloud',
   });
+
 
   /// Execute a Convex HTTP Query
   Future<dynamic> query(String path, [Map<String, dynamic>? args]) async {
