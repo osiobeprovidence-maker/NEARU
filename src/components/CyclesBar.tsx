@@ -13,14 +13,16 @@ export default function CyclesBar() {
   const [showCreator, setShowCreator] = useState(false);
 
   // Queries for live cycles / stories from Convex backend
+  // NOTE: both functions declare args:{} and resolve the caller from ctx.auth
+  // internally — do NOT pass a userId arg or Convex's validator will throw.
   const myCyclesGroup = useQuery(
     api.cycles.getMyActiveCycles,
-    convexUserId ? { userId: convexUserId as any } : 'skip'
+    convexUserId ? {} : 'skip'
   );
 
   const friendCyclesGroups = useQuery(
     api.cycles.getActiveFriendCycles,
-    convexUserId ? { userId: convexUserId as any } : 'skip'
+    convexUserId ? {} : 'skip'
   );
 
   const hasMyActiveCycles = myCyclesGroup && myCyclesGroup.cycles && myCyclesGroup.cycles.length > 0;
