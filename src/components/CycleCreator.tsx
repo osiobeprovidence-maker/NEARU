@@ -13,11 +13,13 @@ interface CycleCreatorProps {
 }
 
 type ComposerMode = 'text' | 'camera' | 'photo' | 'video';
+type CreationStage = 'capture' | 'preview';
 
 export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
   const { user } = useAuth();
-  const [mode, setMode] = useState<ComposerMode>('camera');
-  const [text, setText] = useState('');
+    const [mode, setMode] = useState<ComposerMode>('camera');
+  const [creationStage, setCreationStage] = useState<CreationStage>('capture');
+  const [text, setText] = useState(''); // caption or text post
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -29,11 +31,12 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
   const createCycle = useMutation(api.cycles.createCycle);
   const generateUploadUrl = useMutation(api.cycles.generateUploadUrl);
 
-  const resetState = () => {
+    const resetState = () => {
     setText('');
     setMediaFile(null);
     setMediaPreview(null);
     setMode('camera');
+    setCreationStage('capture');
   };
 
   const handleClose = () => {
@@ -41,19 +44,21 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
     onClose();
   };
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setMediaFile(file);
     const url = URL.createObjectURL(file);
     setMediaPreview(url);
-    // mode is already set by the button that triggered the input
+    // Move to preview stage immediately after selection
+    setCreationStage('preview');
   };
 
-  const handlePublish = async () => {
+    const handlePublish = async () => {
     if (!user) return;
-    if (mode === 'text' && !text.trim()) return;
+    // For media posts ensure media exists; for text posts ensure caption exists
     if (mode !== 'text' && !mediaFile) return;
+    if (mode === 'text' && !text.trim()) return;
 
     setIsUploading(true);
 
@@ -61,7 +66,6 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
       let storageId: string | undefined;
 
       if (mode !== 'text' && mediaFile) {
-        // Upload media to Convex
         storageId = await uploadToConvexStorage(
           mediaFile,
           () => generateUploadUrl(),
@@ -83,7 +87,6 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
       handleClose();
     } catch (err) {
       console.error('Failed to create cycle:', err);
-      // Fallback simple alert, ideally use a toast in real app
       alert('Failed to publish cycle. Please try again.');
     } finally {
       setIsUploading(false);
@@ -143,69 +146,70 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
           ) : null}
         </div>
 
-        {/* Bottom Toolbar */}
-        <div className="p-4 bg-zinc-950 flex justify-center gap-4">
-          {/* Camera (environment) */}
-          <button
-            onClick={() => {
-              setMode('camera');
-              cameraInputRef.current?.click();
-            }}
-            className={`p-3 rounded-full ${mode === 'camera' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          >
-            <Camera className="w-6 h-6" />
-          </button>
-          {/* Photo */}
-          <button
-            onClick={() => {
-              setMode('photo');
-              photoInputRef.current?.click();
-            }}
-            className={`p-3 rounded-full ${mode === 'photo' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          >
-            <ImageIcon className="w-6 h-6" />
-          </button>
-          {/* Video */}
-          <button
-            onClick={() => {
-              setMode('video');
-              videoInputRef.current?.click();
-            }}
-            className={`p-3 rounded-full ${mode === 'video' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          >
-            <Video className="w-6 h-6" />
-          </button>
-          {/* Text */}
-          <button
-            onClick={() => setMode('text')}
-            className={`p-3 rounded-full ${mode === 'text' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          >
-            <Type className="w-6 h-6" />
-          </button>
-          {/* Hidden inputs for each capture type */}
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            ref={cameraInputRef}
-            className="hidden"
-            onChange={onFileChange}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            ref={photoInputRef}
-            className="hidden"
-            onChange={onFileChange}
-          />
-          <input
-            type="file"
-            accept="video/*"
-            ref={videoInputRef}
-            className="hidden"
-            onChange={onFileChange}
-          />
-        </div>
+        {creationStage === 'capture' && (
+          <div className="p-4 bg-zinc-950 flex justify-center gap-4">
+            {/* Camera (environment) */}
+            <button
+              onClick={() => {
+                setMode('camera');
+                cameraInputRef.current?.click();
+              }}
+              className={`p-3 rounded-full ${mode === 'camera' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            >
+              <Camera className="w-6 h-6" />
+            </button>
+            {/* Photo */}
+            <button
+              onClick={() => {
+                setMode('photo');
+                photoInputRef.current?.click();
+              }}
+              className={`p-3 rounded-full ${mode === 'photo' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            >
+              <ImageIcon className="w-6 h-6" />
+            </button>
+            {/* Video */}
+            <button
+              onClick={() => {
+                setMode('video');
+                videoInputRef.current?.click();
+              }}
+              className={`p-3 rounded-full ${mode === 'video' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            >
+              <Video className="w-6 h-6" />
+            </button>
+            {/* Text */}
+            <button
+              onClick={() => setMode('text')}
+              className={`p-3 rounded-full ${mode === 'text' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            >
+              <Type className="w-6 h-6" />
+            </button>
+            {/* Hidden inputs for each capture type */}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={cameraInputRef}
+              className="hidden"
+              onChange={onFileChange}
+            />
+            <input
+              type="file"
+              accept="image/*"
+              ref={photoInputRef}
+              className="hidden"
+              onChange={onFileChange}
+            />
+            <input
+              type="file"
+              accept="video/*"
+              ref={videoInputRef}
+              className="hidden"
+              onChange={onFileChange}
+            />
+          </div>
+        )}
       </motion.div>
     </AnimatePresence>
   );
