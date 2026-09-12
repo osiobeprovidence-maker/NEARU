@@ -419,7 +419,7 @@ export default function Messages() {
       </div>
 
       {/* Cycle Strip */}
-      {!q && cycleParticipants.length > 1 && (
+      {!q && (
         <div className="mb-1">
           <div className="flex items-center justify-between px-4 md:px-6 mb-2.5">
             <span className="text-sm font-extrabold text-zinc-900 tracking-tight">Cycles</span>
