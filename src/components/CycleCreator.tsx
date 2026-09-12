@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Image as ImageIcon, Video, Type, Send, Loader2 } from 'lucide-react';
+import { X, Camera, Image as ImageIcon, Video, Type, Send, Loader2 } from 'lucide-react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { uploadToConvexStorage } from '../utils/imageUpload';
-import Avatar from './Avatar';
+
 import { useAuth } from '../contexts/AuthContext';
 
 interface CycleCreatorProps {
@@ -12,17 +12,19 @@ interface CycleCreatorProps {
   onClose: () => void;
 }
 
-type CycleMode = 'text' | 'media';
+type ComposerMode = 'text' | 'camera' | 'photo' | 'video';
 
 export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
   const { user } = useAuth();
-  const [mode, setMode] = useState<CycleMode>('text');
+  const [mode, setMode] = useState<ComposerMode>('camera');
   const [text, setText] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const createCycle = useMutation(api.cycles.createCycle);
   const generateUploadUrl = useMutation(api.cycles.generateUploadUrl);
@@ -31,7 +33,7 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
     setText('');
     setMediaFile(null);
     setMediaPreview(null);
-    setMode('text');
+    setMode('camera');
   };
 
   const handleClose = () => {
@@ -39,29 +41,26 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
     onClose();
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
-      setMediaFile(file);
-      setMode('media');
-      const url = URL.createObjectURL(file);
-      setMediaPreview(url);
-    }
+    setMediaFile(file);
+    const url = URL.createObjectURL(file);
+    setMediaPreview(url);
+    // mode is already set by the button that triggered the input
   };
 
   const handlePublish = async () => {
     if (!user) return;
     if (mode === 'text' && !text.trim()) return;
-    if (mode === 'media' && !mediaFile) return;
+    if (mode !== 'text' && !mediaFile) return;
 
     setIsUploading(true);
 
     try {
       let storageId: string | undefined;
 
-      if (mode === 'media' && mediaFile) {
+      if (mode !== 'text' && mediaFile) {
         // Upload media to Convex
         storageId = await uploadToConvexStorage(
           mediaFile,
@@ -70,7 +69,7 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
         );
       }
 
-      const contentType = mode === 'media'
+      const contentType = mode !== 'text'
         ? (mediaFile!.type.startsWith('video/') ? 'video' : 'image')
         : 'text';
 
@@ -110,14 +109,16 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
             <X className="w-6 h-6" />
           </button>
           
+{(mediaPreview || (mode === 'text' && text.trim())) && (
           <button
             onClick={handlePublish}
-            disabled={isUploading || (mode === 'text' && !text.trim()) || (mode === 'media' && !mediaFile)}
+            disabled={isUploading}
             className="flex items-center gap-2 bg-primary hover:bg-primary-light text-white px-5 py-2 rounded-full font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             {isUploading ? 'Publishing...' : 'Publish'}
           </button>
+        )}
         </div>
 
         {/* Content Area */}
@@ -143,26 +144,67 @@ export default function CycleCreator({ isOpen, onClose }: CycleCreatorProps) {
         </div>
 
         {/* Bottom Toolbar */}
-        <div className="p-6 pb-safe bg-zinc-950 flex justify-center gap-6">
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            accept="image/*,video/*"
-            onChange={handleFileSelect}
-          />
+        <div className="p-4 bg-zinc-950 flex justify-center gap-4">
+          {/* Camera (environment) */}
           <button
-            onClick={() => setMode('text')}
-            className={`p-4 rounded-full transition-colors ${mode === 'text' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            onClick={() => {
+              setMode('camera');
+              cameraInputRef.current?.click();
+            }}
+            className={`p-3 rounded-full ${mode === 'camera' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           >
-            <Type className="w-6 h-6" />
+            <Camera className="w-6 h-6" />
           </button>
+          {/* Photo */}
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className={`p-4 rounded-full transition-colors ${mode === 'media' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            onClick={() => {
+              setMode('photo');
+              photoInputRef.current?.click();
+            }}
+            className={`p-3 rounded-full ${mode === 'photo' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           >
             <ImageIcon className="w-6 h-6" />
           </button>
+          {/* Video */}
+          <button
+            onClick={() => {
+              setMode('video');
+              videoInputRef.current?.click();
+            }}
+            className={`p-3 rounded-full ${mode === 'video' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          >
+            <Video className="w-6 h-6" />
+          </button>
+          {/* Text */}
+          <button
+            onClick={() => setMode('text')}
+            className={`p-3 rounded-full ${mode === 'text' ? 'bg-primary text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          >
+            <Type className="w-6 h-6" />
+          </button>
+          {/* Hidden inputs for each capture type */}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={cameraInputRef}
+            className="hidden"
+            onChange={onFileChange}
+          />
+          <input
+            type="file"
+            accept="image/*"
+            ref={photoInputRef}
+            className="hidden"
+            onChange={onFileChange}
+          />
+          <input
+            type="file"
+            accept="video/*"
+            ref={videoInputRef}
+            className="hidden"
+            onChange={onFileChange}
+          />
         </div>
       </motion.div>
     </AnimatePresence>
