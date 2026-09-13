@@ -243,11 +243,11 @@ export default function Home() {
   }, [radiusKm, computeDistance, allRallies]);
 
   return (
-    <div className="w-full pt-2 md:pt-4 flex flex-col items-center">
+    <div className="w-full pt-2 md:pt-4 flex flex-col">
 
       {/* Optional Notification Opt-in Prompt */}
       {showNotifPrompt && (
-        <div className="px-4 md:px-6 mb-4">
+        <div className="px-4 md:px-6 mb-4 w-full max-w-full box-border">
           <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl p-4 flex items-start gap-3 shadow-lg shadow-indigo-500/20">
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 mt-0.5">
               <Bell className="w-5 h-5 text-white" />
@@ -283,10 +283,10 @@ export default function Home() {
       )}
 
        {/* Main Feed Container */}
-       <div className="px-0 md:px-6 pb-8 md:pb-4">
+       <div className="px-0 md:px-6 pb-8 md:pb-4 w-full max-w-full box-border">
 
         {/* Content Feed */}
-        <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
+        <div className="w-full max-w-full bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100 mb-6">
 
           {loading ? (
             <></>

@@ -420,7 +420,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
     <motion.article
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="px-4 md:px-6 py-4 hover:bg-zinc-50/60 transition-colors"
+      className="w-full max-w-full min-w-0 box-border px-4 md:px-6 py-4 hover:bg-zinc-50/60 transition-colors"
     >
       {/* Delete confirmation dialog */}
       <AnimatePresence>
