@@ -1,0 +1,13 @@
+{
+	"appId": "lalao.com",
+	"appName": "lalao",
+	"webDir": "dist",
+	"plugins": {
+		"FirebaseAuthentication": {
+			"skipNativeAuth": false,
+			"providers": [
+				"google.com"
+			]
+		}
+	}
+}

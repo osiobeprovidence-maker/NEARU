@@ -6,6 +6,7 @@ export interface Branding {
   brandIconUrl: string | null;
   faviconUrl: string | null;
   splashScreenUrl?: string | null;
+  desktopSplashScreenUrl?: string | null;
   brandFont: string;
   primaryColor: string;
   splashBgColor?: string | null;
@@ -17,6 +18,7 @@ const DEFAULT_BRANDING: Branding = {
   brandIconUrl: null,
   faviconUrl: null,
   splashScreenUrl: null,
+  desktopSplashScreenUrl: null,
   brandFont: 'system',
   primaryColor: '#4f46e5',
   splashBgColor: '#4f46e5',
@@ -48,10 +50,12 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   const [branding, setBranding] = useState<Branding>(() => {
     try {
       const cachedSplash = localStorage.getItem('lalao_splash_image');
+      const cachedDesktopSplash = localStorage.getItem('lalao_desktop_splash_image');
       const cachedBg = localStorage.getItem('lalao_splash_bg');
       return {
         ...DEFAULT_BRANDING,
         splashScreenUrl: cachedSplash || null,
+        desktopSplashScreenUrl: cachedDesktopSplash || null,
         splashBgColor: cachedBg || DEFAULT_BRANDING.splashBgColor,
       };
     } catch {
@@ -81,6 +85,11 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('lalao_splash_image', b.splashScreenUrl);
           } else {
             localStorage.removeItem('lalao_splash_image');
+          }
+          if (b.desktopSplashScreenUrl) {
+            localStorage.setItem('lalao_desktop_splash_image', b.desktopSplashScreenUrl);
+          } else {
+            localStorage.removeItem('lalao_desktop_splash_image');
           }
           if (b.splashBgColor) {
             localStorage.setItem('lalao_splash_bg', b.splashBgColor);

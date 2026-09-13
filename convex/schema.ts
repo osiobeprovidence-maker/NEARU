@@ -299,6 +299,24 @@ export default defineSchema({
     .index("by_rally_link", ["rallyLinkId"])
     .index("by_page", ["pageId"]),
 
+  branding: defineTable({
+    theme: v.optional(v.union(v.literal("light"), v.literal("dark"), v.literal("system"))),
+    primaryColor: v.optional(v.string()),
+    fontFamily: v.optional(v.string()),
+    logoUrl: v.optional(v.string()),
+    faviconUrl: v.optional(v.string()),
+    brandIconUrl: v.optional(v.string()),
+    appIconUrl: v.optional(v.string()),
+    splashScreenUrl: v.optional(v.string()),
+    desktopSplashScreenUrl: v.optional(v.string()),
+    splashBgColor: v.optional(v.string()),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"), // original creator / super-owner
+    isVerified: v.optional(v.boolean()),
+    createdAt: v.number(),
+  })
+    .index("by_slug", ["slug"]),
+
   // Independent Brand/Community Pages (separate from personal user profiles)
   pages: defineTable({
     name: v.string(),
@@ -674,6 +692,7 @@ export default defineSchema({
     faviconUrl: v.optional(v.string()),
     appIconUrl: v.optional(v.string()),
     splashScreenUrl: v.optional(v.string()),
+    desktopSplashScreenUrl: v.optional(v.string()),
     splashBgColor: v.optional(v.string()),
     brandFont: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
@@ -860,6 +879,106 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_created", ["createdAt"]),
 
+  // Esports & Organization Events (Phase 1)
+  events: defineTable({
+    pageId: v.id("pages"),
+    name: v.string(),
+    game: v.string(),
+    description: v.optional(v.string()),
+    bannerUrl: v.optional(v.string()),
+    bannerStorageId: v.optional(v.string()),
+    
+    // Schedule
+    eventDate: v.optional(v.string()),
+    startTime: v.optional(v.string()),
+    endTime: v.optional(v.string()),
+    location: v.optional(v.string()),
+    isOnline: v.boolean(),
+    
+    // Registration Settings
+    registrationType: v.union(v.literal("team"), v.literal("individual")),
+    registrationOpeningDate: v.optional(v.string()),
+    registrationClosingDate: v.optional(v.string()),
+    maxTeams: v.optional(v.number()),
+    minPlayersPerTeam: v.optional(v.number()),
+    maxPlayersPerTeam: v.optional(v.number()),
+    maxSubstitutes: v.optional(v.number()),
+    requireApproval: v.boolean(),
+    
+    // Details
+    entryRequirements: v.optional(v.string()),
+    prizePool: v.optional(v.string()),
+    rules: v.optional(v.string()),
+    contactInfo: v.optional(v.string()),
+    
+    // State
+    status: v.union(
+      v.literal("Draft"),
+      v.literal("Published"),
+      v.literal("Registration Open"),
+      v.literal("Registration Closed"),
+      v.literal("Completed")
+    ),
+    
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.id("users"),
+  })
+    .index("by_page", ["pageId"])
+    .index("by_status", ["status"]),
+
+  teams: defineTable({
+    eventId: v.id("events"),
+    pageId: v.id("pages"),
+    name: v.string(),
+    logoUrl: v.optional(v.string()),
+    logoStorageId: v.optional(v.string()),
+    captainId: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_captain", ["captainId"])
+    .index("by_page", ["pageId"]),
+
+  teamMembers: defineTable({
+    teamId: v.id("teams"),
+    userId: v.id("users"),
+    role: v.union(v.literal("captain"), v.literal("player"), v.literal("substitute")),
+    joinedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_user", ["userId"])
+    .index("by_team_user", ["teamId", "userId"]),
+
+  teamInvitations: defineTable({
+    teamId: v.id("teams"),
+    inviterId: v.id("users"),
+    inviteeId: v.id("users"),
+    status: v.union(v.literal("Pending"), v.literal("Accepted"), v.literal("Declined")),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_invitee", ["inviteeId", "status"]),
+
+  eventRegistrations: defineTable({
+    eventId: v.id("events"),
+    teamId: v.optional(v.id("teams")), // optional for individual registrations later
+    userId: v.optional(v.id("users")), // for individual registrations
+    status: v.union(
+      v.literal("Pending"),
+      v.literal("Approved"),
+      v.literal("Rejected"),
+      v.literal("Withdrawn")
+    ),
+    registeredAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+    reviewedBy: v.optional(v.id("users")),
+  })
+    .index("by_event", ["eventId", "status"])
+    .index("by_team", ["teamId"])
+    .index("by_user", ["userId"]),
+
   // Android Application Releases & Version History
   appReleases: defineTable({
     version: v.string(), // Semantic version, e.g. "1.0.0"
@@ -910,4 +1029,168 @@ export default defineSchema({
   })
     .index("by_cycle", ["cycleId"])
     .index("by_user_cycle", ["userId", "cycleId"]),
+  // --- EVENT MANAGEMENT PHASE 2: COMPETITION ENGINE ---
+
+  competitions: defineTable({
+    eventId: v.id("events"),
+    name: v.string(),
+    format: v.union(v.literal("Single Elimination"), v.literal("Group Stage -> Knockout")),
+    status: v.union(v.literal("Draft"), v.literal("Active"), v.literal("Completed")),
+    seedingMethod: v.union(v.literal("Manual"), v.literal("Random"), v.literal("Automatic")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_event", ["eventId"]),
+
+  stages: defineTable({
+    competitionId: v.id("competitions"),
+    name: v.string(), // e.g. "Group Stage", "Knockout"
+    type: v.union(v.literal("Group"), v.literal("Knockout")),
+    orderIndex: v.number(),
+  })
+    .index("by_competition", ["competitionId"]),
+
+  rounds: defineTable({
+    stageId: v.id("stages"),
+    name: v.string(), // e.g. "Quarterfinals", "Round 1"
+    orderIndex: v.number(), // Used to order rounds sequentially
+  })
+    .index("by_stage", ["stageId"]),
+
+  matches: defineTable({
+    eventId: v.id("events"),
+    competitionId: v.id("competitions"),
+    stageId: v.id("stages"),
+    roundId: v.id("rounds"),
+    
+    teamAId: v.optional(v.id("teams")), // Can be null if TBD (waiting for winner of previous match)
+    teamBId: v.optional(v.id("teams")),
+    
+    teamAScore: v.optional(v.number()),
+    teamBScore: v.optional(v.number()),
+    
+    winnerId: v.optional(v.id("teams")),
+    
+    nextMatchId: v.optional(v.id("matches")), // The match the winner advances to
+    
+    status: v.union(
+      v.literal("Pending"),
+      v.literal("Scheduled"),
+      v.literal("Live"),
+      v.literal("Completed"),
+      v.literal("Cancelled")
+    ),
+    
+    resultStatus: v.optional(
+      v.union(
+        v.literal("Pending Submission"),
+        v.literal("Pending Confirmation"),
+        v.literal("Confirmed")
+      )
+    ),
+    submittedByTeamId: v.optional(v.id("teams")),
+    
+    scheduledTime: v.optional(v.string()), // ISO date string
+    matchIndex: v.number(), // Ordering within the round (e.g. Match 1, Match 2)
+  })
+    .index("by_event", ["eventId"])
+    .index("by_competition", ["competitionId"])
+    .index("by_round", ["roundId"])
+    .index("by_teamA", ["teamAId"])
+    .index("by_teamB", ["teamBId"]),
+
+  standings: defineTable({
+    stageId: v.id("stages"),
+    teamId: v.id("teams"),
+    played: v.number(),
+    wins: v.number(),
+    losses: v.number(),
+    draws: v.number(),
+    points: v.number(),
+    scoreDifference: v.number(),
+    rank: v.optional(v.number()),
+  })
+    .index("by_stage", ["stageId"])
+    .index("by_team", ["teamId"]),
+
+  seeds: defineTable({
+    competitionId: v.id("competitions"),
+    teamId: v.id("teams"),
+    seedNumber: v.number(),
+  })
+    .index("by_competition", ["competitionId"]),
+
+  // --- EVENT MANAGEMENT PHASE 3: TOURNAMENT OPERATIONS ---
+  
+  matchCheckins: defineTable({
+    matchId: v.id("matches"),
+    teamId: v.id("teams"),
+    userId: v.id("users"),
+    checkedInAt: v.number(),
+  })
+    .index("by_match", ["matchId"])
+    .index("by_team", ["teamId"])
+    .index("by_user", ["userId"])
+    .index("by_match_team_user", ["matchId", "teamId", "userId"]),
+
+  matchEvidence: defineTable({
+    matchId: v.id("matches"),
+    teamId: v.id("teams"),
+    uploadedBy: v.id("users"),
+    storageId: v.string(),
+    url: v.string(),
+    type: v.string(), // "Screenshot", "Result Image", "Other"
+    createdAt: v.number(),
+  })
+    .index("by_match", ["matchId"]),
+
+  disputes: defineTable({
+    matchId: v.id("matches"),
+    reportingTeamId: v.id("teams"),
+    reason: v.string(),
+    description: v.string(),
+    status: v.union(
+      v.literal("Open"),
+      v.literal("Under Review"),
+      v.literal("Resolved"),
+      v.literal("Rejected")
+    ),
+    resolution: v.optional(v.string()), // e.g. "Confirm Team A", "Replay Match"
+    resolvedBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_match", ["matchId"])
+    .index("by_status", ["status"]),
+
+  disqualifications: defineTable({
+    eventId: v.id("events"),
+    teamId: v.id("teams"),
+    playerId: v.optional(v.id("users")), // Optional, if a specific player is disqualified
+    reason: v.string(),
+    adminId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_team", ["teamId"]),
+
+  eventAnnouncements: defineTable({
+    eventId: v.id("events"),
+    title: v.string(),
+    content: v.string(),
+    authorId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_created", ["createdAt"]),
+
+  eventAuditLogs: defineTable({
+    eventId: v.id("events"),
+    action: v.string(),
+    userId: v.id("users"),
+    details: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_created", ["createdAt"]),
 });

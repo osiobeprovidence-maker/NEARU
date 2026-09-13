@@ -12,6 +12,7 @@ import OrgSocialLinks, {
   SOCIAL_PLATFORMS,
   normalizeSocialUrl,
 } from '../components/OrgSocialLinks';
+import EventCard from '../components/events/EventCard';
 import {
   MapPin,
   Globe,
@@ -83,6 +84,11 @@ export default function ManagePage() {
       : 'skip'
   );
 
+  const orgEvents = useQuery(
+    api.events.getOrganizationEvents,
+    convexUserId ? { pageId: convexUserId as any } : 'skip'
+  );
+
   const mapped: Rally[] = useMemo(() => {
     if (!content) return [];
     return content.map((r) => ({
@@ -131,10 +137,10 @@ export default function ManagePage() {
   }, [content, convexUserId, user]);
 
   const posts = mapped.filter((r) => r.type === 'POST');
-  const events = mapped.filter((r) => r.type === 'EVENT');
+  const legacyEvents = mapped.filter((r) => r.type === 'EVENT'); // Legacy events from rallies
   const rallyItems = mapped.filter((r) => r.type !== 'POST' && r.type !== 'EVENT');
   const mediaItems = mapped.filter((r) => !!r.mediaUrl || (!!r.mediaUrls && r.mediaUrls.length > 0));
-  const isLoading = content === undefined;
+  const isLoading = content === undefined || orgEvents === undefined;
 
   const displayName = user.organizationName || user.name;
   const isBusiness = user.accountType === 'business';
@@ -152,12 +158,12 @@ export default function ManagePage() {
   const tabs: { key: 'posts' | 'rallies' | 'events' | 'media'; label: string }[] = [
     { key: 'posts', label: `Posts (${isLoading ? '…' : posts.length})` },
     { key: 'rallies', label: `RALLYs (${isLoading ? '…' : rallyItems.length})` },
-    { key: 'events', label: `Events (${isLoading ? '…' : events.length})` },
+    { key: 'events', label: `Events (${isLoading ? '…' : (orgEvents?.length ?? 0)})` },
     { key: 'media', label: `Media (${isLoading ? '…' : mediaItems.length})` },
   ];
 
   const activeList =
-    activeTab === 'posts' ? posts : activeTab === 'rallies' ? rallyItems : activeTab === 'events' ? events : mediaItems;
+    activeTab === 'posts' ? posts : activeTab === 'rallies' ? rallyItems : activeTab === 'events' ? orgEvents : mediaItems;
 
   const dispatchCreate = (type?: 'POST' | 'EVENT') => {
     window.dispatchEvent(
@@ -294,14 +300,14 @@ export default function ManagePage() {
                 <Pencil className="w-4 h-4" />
                 Edit Page
               </button>
-              <button
-                onClick={() => dispatchCreate('EVENT')}
+              <Link
+                to="/manage/events/create"
                 className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition-all active:scale-95"
                 title="Create a new Event"
               >
                 <Calendar className="w-4 h-4" />
                 Create Event
-              </button>
+              </Link>
               <Link
                 to={`/user/${convexUserId}`}
                 className="px-5 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
@@ -342,14 +348,18 @@ export default function ManagePage() {
 
         <div className="divide-y divide-zinc-100">
           {isLoading ? null : activeList.length > 0 ? (
-            activeList.map((rally) => <RallyCard key={rally.id} rally={rally} />)
+            activeTab === 'events' ? (
+              (activeList as any[]).map((event) => <EventCard key={event._id} event={event} />)
+            ) : (
+              (activeList as Rally[]).map((rally) => <RallyCard key={rally.id} rally={rally} />)
+            )
           ) : activeTab === 'events' ? (
             <EmptyState
               icon={<Calendar className="w-8 h-8" />}
               title="No events yet"
               body="Host a local event for your organization or business."
               actionLabel="Create an Event"
-              onAction={() => dispatchCreate('EVENT')}
+              onAction={() => window.location.href = "/manage/events/create"}
             />
           ) : activeTab === 'posts' ? (
             <EmptyState

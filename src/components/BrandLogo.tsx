@@ -3,58 +3,31 @@ import { useBrand } from '../contexts/BrandContext';
 import { cn } from '../lib/utils';
 
 interface BrandLogoProps {
-  /** Container box size class (e.g. "w-8 h-8"). Defaults to w-8 h-8. */
-  boxClassName?: string;
-  /** Rounded style of the badge (only used when no image logo is set). */
-  rounded?: string;
-  /** Whether to render the platform name text next to the badge. */
-  showName?: boolean;
   /** Extra classes for the text label. */
   nameClassName?: string;
-  /** Icon/letter shown when no custom logo is configured. */
+  /** Kept for backwards compatibility but unused */
+  boxClassName?: string;
+  rounded?: string;
+  showName?: boolean;
   fallbackLetter?: string;
 }
 
 export default function BrandLogo({
-  boxClassName = 'w-8 h-8',
-  rounded = 'rounded-lg',
-  showName = true,
-  nameClassName = '',
-  fallbackLetter = 'l',
+  nameClassName = 'text-2xl',
 }: BrandLogoProps) {
   const { branding } = useBrand();
 
-  const badge =
-    branding.brandLogoUrl || branding.brandIconUrl ? (
-      <img
-        src={branding.brandLogoUrl || branding.brandIconUrl || ''}
-        alt=""
-        width={32}
-        height={32}
-        className={cn('object-contain aspect-square shrink-0', boxClassName, rounded)}
-        crossOrigin="anonymous"
-        loading="eager"
-        decoding="async"
-      />
-    ) : (
-      <div
-        className={cn(boxClassName, rounded, 'flex items-center justify-center text-white')}
-        style={{ backgroundColor: branding.primaryColor }}
-      >
-        <span className="font-black tracking-tighter uppercase">{fallbackLetter}</span>
-      </div>
-    );
-
-  if (!showName) return badge;
-
   return (
-    <span className="inline-flex items-center gap-2">
-      {badge}
+    <span className="inline-flex items-center">
       <span
-        className={cn('font-black tracking-tighter text-zinc-900', nameClassName)}
-        style={{ fontFamily: 'var(--brand-font)' }}
+        className={cn('font-normal lowercase pb-1', nameClassName)}
+        style={{ 
+          fontFamily: "'Pacifico', cursive",
+          color: branding.primaryColor,
+          lineHeight: '1'
+        }}
       >
-        {branding.platformName}
+        lalao
       </span>
     </span>
   );

@@ -3,6 +3,7 @@ import PageShell from '../components/PageShell';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import RallyCard from '../components/RallyCard';
+import EventCard from '../components/events/EventCard';
 
 import { cn } from '../lib/utils';
 import { Users } from 'lucide-react';
@@ -22,7 +23,12 @@ export default function MyRallys() {
       : 'skip'
   );
 
-  const tabs = ['Created', 'Interested', 'Completed'];
+  const myEvents = useQuery(
+    api.events.getMyRegisteredEvents,
+    convexUserId && activeTab === 'Events' ? { userId: convexUserId as any } : 'skip'
+  );
+
+  const tabs = ['Created', 'Interested', 'Completed', 'Events'];
 
   // Map raw Convex result to the Rally shape that RallyCard expects
   const mappedRallies: Rally[] = React.useMemo(() => {
@@ -91,7 +97,7 @@ export default function MyRallys() {
   }, [myRallies, convexUserId, user]);
 
   const displayedRallies = mappedRallies.filter((r) => !deletedIds.has(r.id));
-  const isLoading = myRallies === undefined;
+  const isLoading = activeTab === 'Events' ? myEvents === undefined : myRallies === undefined;
 
   const handleDeleted = (id: string) => {
     setDeletedIds((prev) => new Set([...prev, id]));
@@ -122,7 +128,15 @@ export default function MyRallys() {
       </div>
 
       <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm shadow-zinc-200/50 overflow-hidden divide-y divide-zinc-100">
-        {isLoading ? null : displayedRallies.length > 0 ? (
+        {isLoading ? null : activeTab === 'Events' ? (
+          myEvents && myEvents.length > 0 ? (
+            myEvents.map((event: any) => (
+              <EventCard key={event._id} event={event} />
+            ))
+          ) : (
+            <EmptyState message="You haven't registered for any events yet." />
+          )
+        ) : displayedRallies.length > 0 ? (
           displayedRallies.map((rally) => (
             <RallyCard key={rally.id} rally={rally} onDeleted={handleDeleted} />
           ))

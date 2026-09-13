@@ -117,6 +117,7 @@ export const updateBranding = mutation({
   args: {
     appIconUrl: v.optional(v.string()),
     splashScreenUrl: v.optional(v.string()),
+    desktopSplashScreenUrl: v.optional(v.string()),
     splashBgColor: v.optional(v.string()),
     brandLogoUrl: v.optional(v.string()),
     brandIconUrl: v.optional(v.string()),

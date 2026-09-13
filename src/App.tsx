@@ -63,6 +63,13 @@ const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
 const AdminAds = React.lazy(() => import('./pages/admin/Ads'));
 const AdminMediaManagement = React.lazy(() => import('./pages/admin/MediaManagement'));
 
+// Event Pages
+const CreateEvent = React.lazy(() => import('./pages/events/CreateEvent'));
+const ManageEvent = React.lazy(() => import('./pages/events/ManageEvent'));
+const EventPublicPage = React.lazy(() => import('./pages/events/EventPublicPage'));
+const TeamRegistration = React.lazy(() => import('./pages/events/TeamRegistration'));
+const MatchDashboard = React.lazy(() => import('./pages/events/MatchDashboard'));
+
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
@@ -135,6 +142,16 @@ const AppRoutes = () => {
         localStorage.removeItem('lalao_splash_image');
       } catch {}
     }
+    
+    if (branding.desktopSplashScreenUrl) {
+      try {
+        localStorage.setItem('lalao_desktop_splash_image', branding.desktopSplashScreenUrl);
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem('lalao_desktop_splash_image');
+      } catch {}
+    }
     if (branding.splashBgColor) {
       try {
         localStorage.setItem('lalao_splash_bg', branding.splashBgColor);
@@ -152,6 +169,7 @@ const AppRoutes = () => {
     return (
       <SplashScreen
         splashScreenUrl={branding?.splashScreenUrl}
+        desktopSplashScreenUrl={branding?.desktopSplashScreenUrl}
         backgroundColor={branding?.splashBgColor}
       />
     );
@@ -177,6 +195,7 @@ const AppRoutes = () => {
     return (
       <SplashScreen
         splashScreenUrl={branding?.splashScreenUrl}
+        desktopSplashScreenUrl={branding?.desktopSplashScreenUrl}
         backgroundColor={branding?.splashBgColor}
       />
     );
@@ -198,6 +217,7 @@ const AppRoutes = () => {
         fallback={
           <SplashScreen
             splashScreenUrl={branding?.splashScreenUrl}
+        desktopSplashScreenUrl={branding?.desktopSplashScreenUrl}
             backgroundColor={branding?.splashBgColor}
           />
         }
@@ -232,6 +252,11 @@ const AppRoutes = () => {
           <Route path="pages" element={<PagesHub />} />
           <Route path="pages/:slug" element={<PageView />} />
           <Route path="manage" element={<PagesHub />} />
+          <Route path="manage/events/create" element={<CreateEvent />} />
+          <Route path="manage/events/:id" element={<ManageEvent />} />
+          <Route path="events/:id" element={<EventPublicPage />} />
+          <Route path="events/:id/register" element={<TeamRegistration />} />
+          <Route path="matches/:matchId" element={<MatchDashboard />} />
           <Route path="user/:id" element={<UserProfile />} />
           <Route path="interest/:label" element={<InterestPage />} />
           <Route path="rally/:id" element={<RallyDetail />} />

@@ -80,6 +80,7 @@ export default function AdminMediaManagement() {
   const [brandingForm, setBrandingForm] = useState({
     appIconUrl: '',
     splashScreenUrl: '',
+    desktopSplashScreenUrl: '',
     splashBgColor: '#4f46e5',
     brandLogoUrl: '',
     faviconUrl: '',
@@ -114,6 +115,7 @@ export default function AdminMediaManagement() {
       setBrandingForm({
         appIconUrl: branding.appIconUrl || '',
         splashScreenUrl: branding.splashScreenUrl || '',
+        desktopSplashScreenUrl: branding.desktopSplashScreenUrl || '',
         splashBgColor: (branding as any).splashBgColor || branding.primaryColor || '#4f46e5',
         brandLogoUrl: branding.brandLogoUrl || '',
         faviconUrl: branding.faviconUrl || '',
@@ -138,6 +140,7 @@ export default function AdminMediaManagement() {
       await updateBrandingMutation({
         appIconUrl: brandingForm.appIconUrl || undefined,
         splashScreenUrl: brandingForm.splashScreenUrl ?? '',
+        desktopSplashScreenUrl: brandingForm.desktopSplashScreenUrl ?? '',
         splashBgColor: brandingForm.splashBgColor || undefined,
         brandLogoUrl: brandingForm.brandLogoUrl || undefined,
         faviconUrl: brandingForm.faviconUrl || undefined,
@@ -309,35 +312,36 @@ export default function AdminMediaManagement() {
               />
             </div>
 
-            {/* App Splash Screen */}
-            <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-black text-zinc-900">App Splash Screen</h3>
-                  <p className="text-xs text-zinc-500">
-                    Upload any custom branding image to display prominently on the full-screen app loading screen.
-                  </p>
-                </div>
-                {brandingForm.splashScreenUrl ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Custom Image Active
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 shrink-0 self-start sm:self-auto">
-                    Default Fallback Active
-                  </span>
-                )}
+            {/* Splash Screens by Device */}
+            <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-xs space-y-8">
+              <div>
+                <h3 className="text-base font-black text-zinc-900">Splash Screens by Device</h3>
+                <p className="text-xs text-zinc-500">
+                  Upload device-specific branding images to display prominently on the full-screen app loading screen.
+                </p>
               </div>
 
-              {/* 1. Dedicated Image Uploader */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-700 block">
-                  Splash Screen Image
-                </label>
-                <p className="text-[11px] text-zinc-400">
-                  Upload any aspect ratio (PNG, JPG, WebP, SVG). The uploaded image is displayed prominently on the app startup screen.
-                </p>
+              {/* 1. Mobile Splash Screen */}
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900">📱 Mobile Splash Screen</h4>
+                    <p className="text-[11px] text-zinc-400">
+                      Upload the splash screen displayed on mobile and tablet devices. Portrait / 9:16 recommended.
+                    </p>
+                  </div>
+                  {brandingForm.splashScreenUrl ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Custom Image Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 shrink-0 self-start sm:self-auto">
+                      No image uploaded
+                    </span>
+                  )}
+                </div>
+
                 <AdminMediaUploader
                   mediaType="image"
                   value={brandingForm.splashScreenUrl}
@@ -351,6 +355,42 @@ export default function AdminMediaManagement() {
                   }
                 />
               </div>
+
+              {/* 2. Desktop Splash Screen */}
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900">🖥️ Desktop Splash Screen</h4>
+                    <p className="text-[11px] text-zinc-400">
+                      Upload the splash screen displayed on PC and desktop devices. Landscape / 16:9 recommended.
+                    </p>
+                  </div>
+                  {brandingForm.desktopSplashScreenUrl ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Custom Image Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 shrink-0 self-start sm:self-auto">
+                      No image uploaded
+                    </span>
+                  )}
+                </div>
+
+                <AdminMediaUploader
+                  mediaType="image"
+                  value={brandingForm.desktopSplashScreenUrl}
+                  previewHeightClass="h-40 sm:h-48"
+                  maxSizeMB={20}
+                  onChange={(storageId) =>
+                    setBrandingForm((prev) => ({ ...prev, desktopSplashScreenUrl: storageId }))
+                  }
+                  onRemove={() =>
+                    setBrandingForm((prev) => ({ ...prev, desktopSplashScreenUrl: '' }))
+                  }
+                />
+              </div>
+
 
               {/* 2. Solid Background Colour */}
               <div className="space-y-3 pt-2 border-t border-zinc-100">

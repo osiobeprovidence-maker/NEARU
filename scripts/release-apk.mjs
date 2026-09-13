@@ -172,7 +172,7 @@ if (!skipBuild) {
   console.log('\n🔨 Step 2/4: Building Android APK via Gradle...');
   const gradlewCmd = process.platform === 'win32' ? '.\\gradlew.bat' : './gradlew';
   try {
-    execSync(`${gradlewCmd} assembleDebug`, { cwd: ANDROID_DIR, stdio: 'inherit' });
+    execSync(`${gradlewCmd} assembleRelease`, { cwd: ANDROID_DIR, stdio: 'inherit' });
   } catch (err) {
     console.error('❌ Gradle APK build failed:', err.message);
     process.exit(1);
@@ -182,7 +182,7 @@ if (!skipBuild) {
 }
 
 // 6. Locate APK artifact
-const apkPath = path.join(ANDROID_DIR, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const apkPath = path.join(ANDROID_DIR, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
 if (!fs.existsSync(apkPath)) {
   console.error(`❌ APK artifact not found at expected path: ${apkPath}`);
   process.exit(1);
