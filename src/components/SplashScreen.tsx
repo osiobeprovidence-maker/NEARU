@@ -32,17 +32,6 @@ export default function SplashScreen({
   const directBranding = useQuery(api.media.getBranding);
   const { branding: contextBranding } = useBrand();
 
-  const [isDesktop, setIsDesktop] = React.useState(false);
-
-  React.useEffect(() => {
-    const mediaQuery = window.matchMedia('(min-width: 768px)');
-    setIsDesktop(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
   // Background color priority: explicit prop -> theme splashBgColor -> theme primaryColor -> fallback
   const solidBg =
     backgroundColor ||
@@ -57,32 +46,31 @@ export default function SplashScreen({
   const mobileImage = splashScreenUrl ?? directBranding?.splashScreenUrl ?? contextBranding?.splashScreenUrl;
   const desktopImage = desktopSplashScreenUrl ?? directBranding?.desktopSplashScreenUrl ?? contextBranding?.desktopSplashScreenUrl;
 
-  // Determine which image to show based on device width and availability
-  let activeImage = null;
-  if (isDesktop) {
-    activeImage = desktopImage || mobileImage; // Fallback to mobile if desktop missing
-  } else {
-    activeImage = mobileImage || desktopImage; // Fallback to desktop if mobile missing
-  }
+  const hasImage = mobileImage || desktopImage;
+  const fallbackSrc = mobileImage || desktopImage || '';
 
   return (
     <div
       role="status"
       aria-label="Loading"
       className={cn(
-        'fixed inset-0 z-[100] flex items-center justify-center w-[100vw] h-[100vh] min-h-[100dvh] overflow-hidden select-none',
+        'fixed inset-0 z-[100] flex items-center justify-center w-full h-full min-h-[100dvh] overflow-hidden select-none',
         className
       )}
       style={{
         backgroundColor: solidBg,
       }}
     >
-      {activeImage ? (
-        <img 
-          src={activeImage} 
-          alt="Splash Screen" 
-          className="absolute inset-0 w-full h-full object-cover" 
-        />
+      {hasImage ? (
+        <picture className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none">
+          {mobileImage && <source media="(max-width: 767px)" srcSet={mobileImage} />}
+          {desktopImage && <source media="(min-width: 768px)" srcSet={desktopImage} />}
+          <img 
+            src={fallbackSrc} 
+            alt="Splash Screen" 
+            className="w-full h-full object-contain" 
+          />
+        </picture>
       ) : (
         <Loader2 className="w-10 h-10 text-white animate-spin opacity-90 relative z-10" />
       )}
