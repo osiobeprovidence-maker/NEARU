@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, MoreHorizontal, Heart, Eye, Trash2 } from 'lucide-react';
+import { X, MoreHorizontal, Heart, Eye, Trash2, Send, Play, Pause, Volume2, VolumeX, EyeOff, Flag } from 'lucide-react';
 import Avatar from './Avatar';
 import { cn } from '../lib/utils';
 import { useMutation, useQuery } from 'convex/react';
@@ -12,26 +12,26 @@ import { useNavigate } from 'react-router-dom';
 interface CycleViewerProps {
   isOpen: boolean;
   onClose: () => void;
-  cyclesGroup: {
-    key: string;
-    name: string;
-    avatarUrl?: string;
-    authorId?: string;
-    pageId?: string;
-    cycles: any[];
-  } | null;
+  allGroups: any[];
+  initialGroupId: string;
 }
 
-export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewerProps) {
+export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId }: CycleViewerProps) {
   const { convexUserId } = useAuth();
   const navigate = useNavigate();
+
+  const [activeGroupIndex, setActiveGroupIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0); 
   
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEngagementModal, setShowEngagementModal] = useState<'likes' | 'views' | null>(null);
+
+  const [replyText, setReplyText] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -43,32 +43,93 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
   const CYCLE_DURATION_MS = 5000;
 
   useEffect(() => {
-    if (isOpen && cyclesGroup && cyclesGroup.cycles.length > 0) {
+    if (isOpen && allGroups.length > 0) {
+      const idx = allGroups.findIndex(g => (g.key || g.authorId) === initialGroupId);
+      setActiveGroupIndex(idx >= 0 ? idx : 0);
       setCurrentIndex(0);
       setProgress(0);
       setIsPaused(false);
       setShowMenu(false);
       setShowDeleteConfirm(false);
       setShowEngagementModal(null);
+      setReplyText('');
     }
-  }, [isOpen, cyclesGroup]);
+  }, [isOpen, initialGroupId, allGroups]);
 
-  const currentCycle = cyclesGroup?.cycles[currentIndex];
+  const activeGroup = allGroups[activeGroupIndex];
+  const currentCycle = activeGroup?.cycles?.[currentIndex];
 
   const engagement = useQuery(
     api.cycles.getCycleEngagement,
     isOpen && currentCycle ? { cycleId: currentCycle._id as Id<"cycles"> } : 'skip'
   );
 
+  const handleNextGroup = useCallback(() => {
+    if (activeGroupIndex < allGroups.length - 1) {
+      setActiveGroupIndex(prev => prev + 1);
+      setCurrentIndex(0);
+      setProgress(0);
+    } else {
+      onClose();
+    }
+  }, [activeGroupIndex, allGroups.length, onClose]);
+
+  const handlePrevGroup = useCallback(() => {
+    if (activeGroupIndex > 0) {
+      setActiveGroupIndex(prev => prev - 1);
+      setCurrentIndex(0);
+      setProgress(0);
+    }
+  }, [activeGroupIndex]);
+
+  const handleNextCycle = useCallback(() => {
+    if (!activeGroup) return;
+    if (currentIndex < activeGroup.cycles.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setProgress(0);
+    } else {
+      handleNextGroup();
+    }
+  }, [activeGroup, currentIndex, handleNextGroup]);
+
+  const handlePrevCycle = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      setProgress(0);
+    } else {
+      handlePrevGroup();
+    }
+  }, [currentIndex, handlePrevGroup]);
+
   useEffect(() => {
-    if (!isOpen || !cyclesGroup || cyclesGroup.cycles.length === 0 || !currentCycle) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      if (e.key === 'ArrowRight') {
+        handleNextCycle();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevCycle();
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleNextCycle, handlePrevCycle, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !activeGroup || activeGroup.cycles.length === 0 || !currentCycle) return;
     
-    // Disable background scrolling
     document.body.style.overflow = 'hidden';
 
-    // Don't advance if paused or a modal is open
-    if (isPaused || showMenu || showDeleteConfirm || showEngagementModal) {
+    if (isPaused || showMenu || showDeleteConfirm || showEngagementModal || replyText.length > 0) {
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
       return () => { document.body.style.overflow = 'auto'; };
+    } else {
+      if (videoRef.current && videoRef.current.paused) {
+        videoRef.current.play().catch(() => {});
+      }
     }
 
     markViewed({ cycleId: currentCycle._id as Id<"cycles"> }).catch(console.error);
@@ -87,7 +148,7 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
         setProgress(currentProg);
         
         if (videoRef.current.ended) {
-          handleNext();
+          handleNextCycle();
           return;
         }
       } else {
@@ -96,7 +157,7 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
         setProgress(Math.min(currentProg, 100));
 
         if (elapsed >= expectedDuration) {
-          handleNext();
+          handleNextCycle();
           return;
         }
       }
@@ -110,38 +171,20 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
       cancelAnimationFrame(animationFrame);
       document.body.style.overflow = 'auto';
     };
-  }, [currentIndex, isPaused, showMenu, showDeleteConfirm, showEngagementModal, isOpen, cyclesGroup, currentCycle]);
-
-  const handleNext = () => {
-    if (!cyclesGroup) return;
-    if (currentIndex < cyclesGroup.cycles.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-      setProgress(0);
-    } else {
-      onClose();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
-      setProgress(0);
-    }
-  };
+  }, [currentIndex, activeGroupIndex, isPaused, showMenu, showDeleteConfirm, showEngagementModal, isOpen, activeGroup, currentCycle, replyText, handleNextCycle]);
 
   const handleDelete = async () => {
     if (!currentCycle) return;
     try {
       await deleteCycle({ cycleId: currentCycle._id as Id<"cycles"> });
-      // Remove locally or close if it's the last one
-      if (cyclesGroup && cyclesGroup.cycles.length > 1) {
-         if (currentIndex === cyclesGroup.cycles.length - 1) {
-             handlePrev();
+      if (activeGroup && activeGroup.cycles.length > 1) {
+         if (currentIndex === activeGroup.cycles.length - 1) {
+             handlePrevCycle();
          } else {
-             handleNext();
+             handleNextCycle();
          }
       } else {
-         onClose();
+         onClose(); // In a real app we'd refresh groups, but closing is safe.
       }
     } catch (e) {
       console.error("Failed to delete cycle", e);
@@ -161,14 +204,14 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
     }
   };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (showMenu || showDeleteConfirm || showEngagementModal) return;
-    setIsPaused(true);
+  const handleReplySubmit = () => {
+    if (!replyText.trim()) return;
+    // Real implementation would send a DM
+    setReplyText('');
+    setIsPaused(false);
   };
-  
-  const handlePointerUp = () => setIsPaused(false);
 
-  if (!isOpen || !cyclesGroup || !currentCycle) return null;
+  if (!isOpen || !activeGroup || !currentCycle) return null;
 
   const isOwner = convexUserId && (currentCycle.authorId === convexUserId || currentCycle.pageId === convexUserId);
 
@@ -178,265 +221,357 @@ export default function CycleViewer({ isOpen, onClose, cyclesGroup }: CycleViewe
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] bg-black text-white flex flex-col sm:p-4 overflow-hidden"
+        className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl text-white flex items-center justify-center overflow-hidden"
       >
-        <div className="relative flex-1 w-full max-w-md mx-auto sm:rounded-[2rem] overflow-hidden bg-zinc-900 flex flex-col shadow-2xl">
+        <div className="w-full h-full max-w-7xl mx-auto flex flex-row items-center justify-center sm:gap-4 md:gap-8 lg:gap-12 relative p-0 sm:p-4">
           
-          {/* Progress Bars */}
-          <div className="absolute top-0 inset-x-0 pt-safe-top z-30 flex gap-1 px-3 py-3 bg-gradient-to-b from-black/50 to-transparent">
-            {cyclesGroup.cycles.map((c, i) => (
-              <div key={c._id} className="h-0.5 sm:h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-white transition-all ease-linear"
-                  style={{
-                    width: i < currentIndex ? '100%' : i === currentIndex ? `${progress}%` : '0%'
-                  }}
-                />
+          {/* Close button top right desktop */}
+          <button onClick={onClose} className="hidden sm:flex absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-50">
+            <X className="w-6 h-6 text-white" strokeWidth={2.5} />
+          </button>
+
+          {/* Left Previews (Desktop) */}
+          <div className="hidden md:flex flex-col items-end justify-center w-[200px] lg:w-[250px] gap-4">
+            {allGroups.slice(Math.max(0, activeGroupIndex - 3), activeGroupIndex).map((group, idx) => (
+              <div 
+                key={group.key || group.authorId} 
+                onClick={() => { setActiveGroupIndex(activeGroupIndex - (activeGroupIndex - Math.max(0, activeGroupIndex - 3)) + idx); setCurrentIndex(0); }}
+                className="flex items-center gap-3 w-full p-2 rounded-2xl hover:bg-white/5 cursor-pointer transition-colors opacity-60 hover:opacity-100"
+              >
+                <div className="flex-1 text-right">
+                  <p className="font-bold text-sm text-white truncate">{group.name}</p>
+                  <p className="text-xs text-zinc-400">View cycle</p>
+                </div>
+                <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-indigo-500/50">
+                  <img src={group.avatarUrl || `https://ui-avatars.com/api/?name=${group.name}`} alt="" className="w-full h-full object-cover" />
+                </div>
               </div>
             ))}
           </div>
 
-          {/* Header */}
-          <div className="absolute top-0 inset-x-0 pt-safe-top mt-5 px-4 flex items-center justify-between z-30 pointer-events-auto">
-            <div className="flex items-center gap-3">
-              <Avatar src={cyclesGroup.avatarUrl} name={cyclesGroup.name} size="sm" className="border border-white/20" />
-              <div>
-                <p className="font-bold text-[15px] leading-tight drop-shadow-md">{cyclesGroup.name}</p>
-                <p className="text-[13px] font-medium text-white/80 drop-shadow-md">
-                  {new Date(currentCycle.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
+          {/* Center Main Viewer */}
+          <div className="relative w-full max-w-md h-full sm:h-[90vh] sm:rounded-[2rem] bg-zinc-900 overflow-hidden flex flex-col shadow-2xl shrink-0">
             
-            <div className="flex items-center gap-1">
-              {isOwner && (
+            {/* Progress Bars */}
+            <div className="absolute top-0 inset-x-0 pt-safe-top z-30 flex gap-1 px-3 py-3 bg-gradient-to-b from-black/60 to-transparent">
+              {activeGroup.cycles.map((c: any, i: number) => (
+                <div key={c._id} className="h-0.5 sm:h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-white transition-all ease-linear"
+                    style={{
+                      width: i < currentIndex ? '100%' : i === currentIndex ? `${progress}%` : '0%'
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Header Controls */}
+            <div className="absolute top-0 inset-x-0 pt-safe-top mt-5 px-4 flex items-center justify-between z-30 pointer-events-auto">
+              <div 
+                className="flex items-center gap-3 cursor-pointer"
+                onClick={() => { onClose(); navigate(`/user/${activeGroup.authorId}`); }}
+              >
+                <Avatar src={activeGroup.avatarUrl} name={activeGroup.name} size="sm" className="border border-white/20" />
+                <div>
+                  <p className="font-bold text-[15px] leading-tight drop-shadow-md hover:underline">{activeGroup.name}</p>
+                  <p className="text-[13px] font-medium text-white/80 drop-shadow-md">
+                    {new Date(currentCycle.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
                 <button 
-                  onClick={() => setShowMenu(true)}
-                  className="p-2 rounded-full hover:bg-black/40 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setIsPaused(!isPaused); }}
+                  className="p-1.5 rounded-full hover:bg-black/40 transition-colors"
+                >
+                  {isPaused ? <Play className="w-5 h-5 text-white" /> : <Pause className="w-5 h-5 text-white" />}
+                </button>
+                {currentCycle.contentType === 'video' && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
+                    className="p-1.5 rounded-full hover:bg-black/40 transition-colors"
+                  >
+                    {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
+                  </button>
+                )}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setShowMenu(true); setIsPaused(true); }}
+                  className="p-1.5 rounded-full hover:bg-black/40 transition-colors"
                 >
                   <MoreHorizontal className="w-5 h-5 text-white" />
                 </button>
-              )}
-              <button onClick={onClose} className="p-2 rounded-full hover:bg-black/40 transition-colors">
-                <X className="w-6 h-6 text-white" strokeWidth={2.5} />
-              </button>
-            </div>
-          </div>
-
-          {/* Media Content Wrapper */}
-          <div 
-            className="flex-1 relative w-full h-full flex items-center justify-center bg-zinc-950"
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
-          >
-            {/* Tap Zones for Nav (only active if no modal is open) */}
-            {!showMenu && !showDeleteConfirm && !showEngagementModal && (
-              <>
-                <div className="absolute inset-y-0 left-0 w-1/3 z-10 cursor-pointer" onClick={handlePrev} />
-                <div className="absolute inset-y-0 right-0 w-2/3 z-10 cursor-pointer" onClick={handleNext} />
-              </>
-            )}
-
-            {currentCycle.contentType === 'text' && (
-              <div className="w-full h-full flex items-center justify-center p-8 bg-gradient-to-br from-indigo-900 to-primary">
-                <p className="text-[28px] sm:text-3xl font-bold text-center text-white drop-shadow-lg leading-tight max-w-[90%] break-words">
-                  {currentCycle.text}
-                </p>
-              </div>
-            )}
-
-            {currentCycle.contentType === 'image' && currentCycle.mediaUrl && (
-              <img 
-                src={currentCycle.mediaUrl} 
-                alt="Cycle" 
-                className="w-full h-full object-contain"
-                draggable={false}
-              />
-            )}
-
-            {currentCycle.contentType === 'video' && currentCycle.mediaUrl && (
-              <video 
-                ref={videoRef}
-                src={currentCycle.mediaUrl} 
-                autoPlay
-                playsInline
-                muted={false}
-                controlsList="nodownload no-remote-playback"
-                disablePictureInPicture
-                onContextMenu={(e) => e.preventDefault()}
-                onDragStart={(e) => e.preventDefault()}
-                className="w-full h-full object-contain select-none"
-              />
-            )}
-
-          </div>
-
-          {/* Engagement Footer */}
-          <div className="absolute bottom-0 inset-x-0 pb-safe-bottom z-20 pointer-events-auto bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-            <div className="flex items-center justify-between px-4 py-4 pt-8">
-              {isOwner ? (
-                <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => setShowEngagementModal('views')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-white font-bold text-[13px] transition-colors"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>{engagement?.viewCount || 0}</span>
-                  </button>
-                  <button 
-                    onClick={() => setShowEngagementModal('likes')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-white font-bold text-[13px] transition-colors"
-                  >
-                    <Heart className="w-4 h-4" />
-                    <span>{engagement?.likeCount || 0}</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="flex-1" /> // Spacer
-              )}
-              
-              {!isOwner && (
-                <button 
-                  onClick={handleToggleLike}
-                  className="flex items-center gap-1.5 ml-auto p-2 group"
-                >
-                  <Heart 
-                    className={cn(
-                      "w-7 h-7 transition-colors", 
-                      engagement?.likedByMe ? "fill-rose-500 text-rose-500" : "text-white group-hover:text-rose-200"
-                    )} 
-                  />
-                  {engagement?.likeCount && engagement.likeCount > 0 ? (
-                    <span className="font-bold text-sm text-white drop-shadow-md">
-                      {engagement.likeCount}
-                    </span>
-                  ) : null}
+                {/* Mobile Close Button inside viewer */}
+                <button onClick={onClose} className="p-1.5 sm:hidden rounded-full hover:bg-black/40 transition-colors">
+                  <X className="w-6 h-6 text-white" strokeWidth={2.5} />
                 </button>
+              </div>
+            </div>
+
+            {/* Media Content */}
+            <div 
+              className="flex-1 relative w-full h-full flex items-center justify-center bg-zinc-950 cursor-pointer"
+              onClick={() => setIsPaused(!isPaused)}
+            >
+              {/* Tap Zones for Nav */}
+              {!showMenu && !showDeleteConfirm && !showEngagementModal && (
+                <>
+                  <div className="absolute inset-y-0 left-0 w-1/4 z-10" onClick={(e) => { e.stopPropagation(); handlePrevCycle(); }} />
+                  <div className="absolute inset-y-0 right-0 w-1/4 z-10" onClick={(e) => { e.stopPropagation(); handleNextCycle(); }} />
+                </>
+              )}
+
+              {currentCycle.contentType === 'text' && (
+                <div className="w-full h-full flex items-center justify-center p-8 bg-gradient-to-br from-indigo-900 to-primary">
+                  <p className="text-[28px] sm:text-3xl font-bold text-center text-white drop-shadow-lg leading-tight max-w-[90%] break-words">
+                    {currentCycle.text}
+                  </p>
+                </div>
+              )}
+
+              {currentCycle.contentType === 'image' && currentCycle.mediaUrl && (
+                <img 
+                  src={currentCycle.mediaUrl} 
+                  alt="Cycle" 
+                  className="w-full h-full object-contain"
+                  draggable={false}
+                />
+              )}
+
+              {currentCycle.contentType === 'video' && currentCycle.mediaUrl && (
+                <video 
+                  ref={videoRef}
+                  src={currentCycle.mediaUrl} 
+                  autoPlay
+                  playsInline
+                  muted={isMuted}
+                  controlsList="nodownload no-remote-playback"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                  className="w-full h-full object-contain select-none"
+                />
               )}
             </div>
+
+            {/* Bottom Bar: Reply & Like */}
+            <div className="absolute bottom-0 inset-x-0 pb-safe-bottom z-20 pointer-events-auto bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+              <div className="px-4 py-4 pt-8 flex items-center gap-3">
+                {!isOwner ? (
+                  <>
+                    <div className="flex-1 relative">
+                      <input 
+                        type="text"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onFocus={() => setIsPaused(true)}
+                        onBlur={() => setIsPaused(false)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleReplySubmit()}
+                        placeholder={`Reply to @${activeGroup.name?.split(' ')[0]}...`}
+                        className="w-full bg-white/10 border border-white/20 text-white placeholder-white/60 text-sm rounded-full py-2.5 pl-4 pr-10 focus:outline-none focus:bg-white/20 transition-colors"
+                      />
+                      {replyText && (
+                        <button onClick={handleReplySubmit} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 rounded-full text-white hover:bg-indigo-500 transition-colors">
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <button onClick={handleToggleLike} className="p-2 group shrink-0">
+                      <Heart className={cn("w-7 h-7 transition-colors", engagement?.likedByMe ? "fill-rose-500 text-rose-500" : "text-white group-hover:text-rose-200")} />
+                    </button>
+                    <button className="p-2 text-white hover:text-indigo-300 transition-colors shrink-0">
+                      <Send className="w-6 h-6" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex w-full items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => setShowEngagementModal('views')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-[13px] transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>{engagement?.viewCount || 0}</span>
+                      </button>
+                      <button 
+                        onClick={() => setShowEngagementModal('likes')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-[13px] transition-colors"
+                      >
+                        <Heart className="w-4 h-4" />
+                        <span>{engagement?.likeCount || 0}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Three-Dot Menu */}
+            <AnimatePresence>
+              {showMenu && (
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-40 bg-black/50 flex flex-col justify-end"
+                  onClick={() => { setShowMenu(false); setIsPaused(false); }}
+                >
+                  <motion.div 
+                    initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                    className="bg-zinc-900 rounded-t-3xl pb-safe-bottom overflow-hidden"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="p-2">
+                      {isOwner ? (
+                        <button 
+                          onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}
+                          className="w-full flex items-center justify-between px-4 py-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-red-500 font-bold transition-colors"
+                        >
+                          Delete Cycle
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={() => { setShowMenu(false); setIsPaused(false); }}
+                            className="w-full flex items-center justify-between px-4 py-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-colors"
+                          >
+                            Mute Cycles
+                            <VolumeX className="w-5 h-5 text-zinc-400" />
+                          </button>
+                          <button 
+                            onClick={() => { setShowMenu(false); setIsPaused(false); }}
+                            className="w-full flex items-center justify-between px-4 py-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition-colors border-t border-white/5"
+                          >
+                            Hide Cycles
+                            <EyeOff className="w-5 h-5 text-zinc-400" />
+                          </button>
+                          <button 
+                            onClick={() => { setShowMenu(false); setIsPaused(false); }}
+                            className="w-full flex items-center justify-between px-4 py-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-red-500 font-bold transition-colors border-t border-white/5"
+                          >
+                            Report
+                            <Flag className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                      <button 
+                        onClick={() => { setShowMenu(false); setIsPaused(false); }}
+                        className="w-full flex items-center justify-center mt-2 py-4 rounded-xl bg-zinc-800 text-white font-bold transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Delete Confirmation */}
+            <AnimatePresence>
+              {showDeleteConfirm && (
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                >
+                  <motion.div 
+                    initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
+                    className="bg-zinc-900 p-6 rounded-3xl w-full max-w-sm text-center shadow-2xl border border-white/5"
+                  >
+                    <h3 className="text-xl font-bold text-white mb-2">Delete this Cycle?</h3>
+                    <p className="text-zinc-400 text-sm mb-6 font-medium">This cannot be undone.</p>
+                    
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => { setShowDeleteConfirm(false); setIsPaused(false); }}
+                        className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleDelete}
+                        className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Engagement Modals (Views / Likes) */}
+            <AnimatePresence>
+              {showEngagementModal && (
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-40 bg-black/80 flex flex-col justify-end"
+                  onClick={() => setShowEngagementModal(null)}
+                >
+                  <motion.div 
+                    initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                    className="bg-zinc-900 rounded-t-3xl h-[60%] flex flex-col pb-safe-bottom"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between p-4 border-b border-white/5">
+                      <h3 className="font-bold text-white text-lg">
+                        {showEngagementModal === 'likes' ? 'Likes' : 'Viewed by'}
+                      </h3>
+                      <button onClick={() => { setShowEngagementModal(null); setIsPaused(false); }} className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700">
+                        <X className="w-5 h-5 text-white" />
+                      </button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                      {showEngagementModal === 'likes' && engagement?.likers?.length === 0 && (
+                        <p className="text-zinc-500 text-center font-medium mt-10">No likes yet.</p>
+                      )}
+                      {showEngagementModal === 'views' && engagement?.viewers?.length === 0 && (
+                        <p className="text-zinc-500 text-center font-medium mt-10">No views yet.</p>
+                      )}
+
+                      {(showEngagementModal === 'likes' ? engagement?.likers : engagement?.viewers)?.map((u: any) => (
+                        <div 
+                          key={u._id} 
+                          className="flex items-center gap-3 cursor-pointer"
+                          onClick={() => {
+                            setShowEngagementModal(null);
+                            onClose();
+                            navigate(`/user/${u._id}`);
+                          }}
+                        >
+                          <Avatar src={u.avatar} name={u.name} size="sm" />
+                          <div>
+                            <p className="font-bold text-white text-sm">{u.name}</p>
+                            <p className="text-zinc-400 text-xs font-medium">@{u.username}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
           </div>
 
-          {/* Modals & Overlays */}
-          
-          {/* Owner Context Menu */}
-          <AnimatePresence>
-            {showMenu && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 z-40 bg-black/50 flex flex-col justify-end"
-                onClick={() => setShowMenu(false)}
+          {/* Right Previews (Desktop) */}
+          <div className="hidden md:flex flex-col items-start justify-center w-[200px] lg:w-[250px] gap-4">
+            {allGroups.slice(activeGroupIndex + 1, activeGroupIndex + 4).map((group, idx) => (
+              <div 
+                key={group.key || group.authorId} 
+                onClick={() => { setActiveGroupIndex(activeGroupIndex + 1 + idx); setCurrentIndex(0); }}
+                className="flex items-center gap-3 w-full p-2 rounded-2xl hover:bg-white/5 cursor-pointer transition-colors opacity-60 hover:opacity-100"
               >
-                <motion.div 
-                  initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-                  className="bg-zinc-900 rounded-t-3xl pb-safe-bottom"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="p-4 space-y-2">
-                    <button 
-                      onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}
-                      className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-zinc-800/50 hover:bg-red-500/10 text-red-500 font-bold transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                      Delete Cycle
-                    </button>
-                    <button 
-                      onClick={() => setShowMenu(false)}
-                      className="w-full flex items-center justify-center py-4 rounded-2xl bg-zinc-800 text-white font-bold transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Delete Confirmation */}
-          <AnimatePresence>
-            {showDeleteConfirm && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-              >
-                <motion.div 
-                  initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-                  className="bg-zinc-900 p-6 rounded-3xl w-full max-w-sm text-center shadow-2xl border border-white/5"
-                >
-                  <h3 className="text-xl font-bold text-white mb-2">Delete this Cycle?</h3>
-                  <p className="text-zinc-400 text-sm mb-6 font-medium">This cannot be undone.</p>
-                  
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={handleDelete}
-                      className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Engagement Modals (Views / Likes) */}
-          <AnimatePresence>
-            {showEngagementModal && (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="absolute inset-0 z-40 bg-black/80 flex flex-col justify-end"
-                onClick={() => setShowEngagementModal(null)}
-              >
-                <motion.div 
-                  initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-                  className="bg-zinc-900 rounded-t-3xl h-[60%] flex flex-col pb-safe-bottom"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between p-4 border-b border-white/5">
-                    <h3 className="font-bold text-white text-lg">
-                      {showEngagementModal === 'likes' ? 'Likes' : 'Viewed by'}
-                    </h3>
-                    <button onClick={() => setShowEngagementModal(null)} className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700">
-                      <X className="w-5 h-5 text-white" />
-                    </button>
-                  </div>
-                  
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-                    {showEngagementModal === 'likes' && engagement?.likers?.length === 0 && (
-                      <p className="text-zinc-500 text-center font-medium mt-10">No likes yet.</p>
-                    )}
-                    {showEngagementModal === 'views' && engagement?.viewers?.length === 0 && (
-                      <p className="text-zinc-500 text-center font-medium mt-10">No views yet.</p>
-                    )}
-
-                    {(showEngagementModal === 'likes' ? engagement?.likers : engagement?.viewers)?.map((u: any) => (
-                      <div 
-                        key={u._id} 
-                        className="flex items-center gap-3 cursor-pointer"
-                        onClick={() => {
-                          setShowEngagementModal(null);
-                          onClose();
-                          navigate(`/user/${u._id}`);
-                        }}
-                      >
-                        <Avatar src={u.avatar} name={u.name} size="sm" />
-                        <div>
-                          <p className="font-bold text-white text-sm">{u.name}</p>
-                          <p className="text-zinc-400 text-xs font-medium">@{u.username}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-indigo-500/50">
+                  <img src={group.avatarUrl || `https://ui-avatars.com/api/?name=${group.name}`} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-bold text-sm text-white truncate">{group.name}</p>
+                  <p className="text-xs text-zinc-400">View cycle</p>
+                </div>
+              </div>
+            ))}
+          </div>
 
         </div>
       </motion.div>

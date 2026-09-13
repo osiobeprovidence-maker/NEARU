@@ -143,7 +143,8 @@ export default function CyclesBar() {
         <CycleViewer
           isOpen={!!selectedGroup}
           onClose={() => setSelectedGroup(null)}
-          cyclesGroup={selectedGroup}
+          allGroups={[...(hasMyActiveCycles ? [myCyclesGroup] : []), ...(friendCyclesGroups || [])]}
+          initialGroupId={selectedGroup.key || selectedGroup.authorId}
         />
       )}
     </>
