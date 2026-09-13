@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuthenticatedUser } from "./adminHelpers";
+import { getAuthenticatedUser } from "./lib/auth";
 
 export const createTeam = mutation({
   args: {
@@ -9,7 +9,7 @@ export const createTeam = mutation({
     logoStorageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuthenticatedUser(ctx);
+    const user = await getAuthenticatedUser(ctx);
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new Error("Event not found");
 
@@ -87,7 +87,7 @@ export const registerTeam = mutation({
     teamId: v.id("teams"),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuthenticatedUser(ctx);
+    const user = await getAuthenticatedUser(ctx);
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
     if (team.captainId !== user._id) throw new Error("Only the captain can register the team");
@@ -137,7 +137,7 @@ export const approveRegistration = mutation({
     approve: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuthenticatedUser(ctx);
+    const user = await getAuthenticatedUser(ctx);
     const reg = await ctx.db.get(args.registrationId);
     if (!reg) throw new Error("Registration not found");
     

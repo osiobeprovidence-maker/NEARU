@@ -315,7 +315,7 @@ export default defineSchema({
     isVerified: v.optional(v.boolean()),
     createdAt: v.number(),
   })
-    .index("by_slug", ["slug"]),
+    ,
 
   // Independent Brand/Community Pages (separate from personal user profiles)
   pages: defineTable({

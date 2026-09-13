@@ -245,6 +245,27 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [videoEnded, setVideoEnded] = useState(false);
+  const touchStartY = useRef(0);
+
+  const triggerEndlessReel = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    openVideo({
+      _id: post.id,
+      title: post.title || post.description || 'Community Post Video',
+      description: post.description || '',
+      mediaUrl: mediaList[0],
+      likesCount: localLikeCount,
+      commentsCount: post.commentsCount || 0,
+      isLiked: localLiked,
+      locationLabel: post.locationLabel,
+      creator: post.creator,
+    });
+  }, [openVideo, post, mediaList, localLikeCount, localLiked]);
+
   const { convexUserId } = useAuth();
 
   const toggleLikeMut   = useMutation(api.rallies.toggleLike);
@@ -765,7 +786,18 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
             mediaList[0].endsWith('.webm') ||
             mediaList[0].endsWith('.mov') ||
             mediaList[0].includes('stream.mux.com') ? (
-              <div className="relative group/video">
+              <div 
+                className="relative group/video w-full h-full"
+                onTouchStart={(e) => {
+                  touchStartY.current = e.touches[0].clientY;
+                }}
+                onTouchEnd={(e) => {
+                  const touchEndY = e.changedTouches[0].clientY;
+                  if (touchStartY.current - touchEndY > 50) {
+                    triggerEndlessReel(e);
+                  }
+                }}
+              >
                 <video
                   src={mediaList[0]}
                   className="w-full max-h-[480px] sm:max-h-[520px] object-cover bg-black block select-none cursor-pointer"
@@ -776,30 +808,23 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
                   onDragStart={(e) => e.preventDefault()}
                   playsInline
                   preload="metadata"
+                  onEnded={() => setVideoEnded(true)}
+                  onPlay={() => setVideoEnded(false)}
                   onError={() => setImgError(true)}
                 />
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openVideo({
-                      _id: post.id,
-                      title: post.title || post.description || 'Community Post Video',
-                      description: post.description || '',
-                      mediaUrl: mediaList[0],
-                      likesCount: localLikeCount,
-                      commentsCount: post.commentsCount || 0,
-                      isLiked: localLiked,
-                      locationLabel: post.locationLabel,
-                      creator: post.creator,
-                    });
-                  }}
-                  className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-full bg-black/70 hover:bg-indigo-600 text-white font-bold text-xs backdrop-blur-md border border-white/20 flex items-center gap-1.5 shadow-lg transition-all active:scale-95 cursor-pointer"
-                  title="Open Endless Vertical Video Reel"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Full Screen Reel</span>
-                </button>
+
+                {videoEnded && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20 backdrop-blur-sm transition-all duration-300">
+                    <button
+                      type="button"
+                      onClick={triggerEndlessReel}
+                      className="px-6 py-3 rounded-full bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      Next Video
+                    </button>
+                  </div>
+                )}
               </div>
 
 

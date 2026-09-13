@@ -1,13 +1,13 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuthenticatedUser } from "./adminHelpers";
+import { getAuthenticatedUser } from "./lib/auth";
 
 /**
  * Ensures the user has permission to manage the given page.
  * Returns the page member object if successful, throws otherwise.
  */
 async function requirePageManager(ctx: any, pageId: string) {
-  const user = await requireAuthenticatedUser(ctx);
+  const user = await getAuthenticatedUser(ctx);
   const member = await ctx.db
     .query("pageMembers")
     .withIndex("by_page_user", (q: any) => q.eq("pageId", pageId).eq("userId", user._id))
