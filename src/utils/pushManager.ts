@@ -2,7 +2,7 @@
 // Utility for managing Web Push API subscriptions and OS-level push notifications
 
 export const VAPID_PUBLIC_KEY =
-  'BAWBNIsZ2WbXzOVVIaAKbq1Gg-gMM9dHZxgeAcHUxi2GRr6LQIv603aKpPqplfu7KIy6N0kO1YkoBfi1iSJZc6Q';
+  'BJZdG574sbYrKv8ZNRRylPJCJLqwA1aG6GZ8PdgF77E7wdHTi4Ae4E72GbFPFGsZDILkryJZQEkRkEJnzD_3qAs';
 
 /**
  * Converts a base64 URL safe string to a Uint8Array for Web Push applicationServerKey
