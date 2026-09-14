@@ -1242,7 +1242,29 @@ export const addComment = mutation({
 });
 
 /**
- * Delete a comment. Only the commenter may delete it.
+ * Update a comment. Only the commenter may edit it.
+ */
+export const updateComment = mutation({
+  args: { commentId: v.id("comments"), userId: v.id("users"), text: v.string() },
+  handler: async (ctx, args) => {
+    const caller = await getAuthenticatedUser(ctx);
+    if (caller._id.toString() !== args.userId.toString()) {
+      throw new Error("Forbidden: you can only edit your own comments.");
+    }
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+    if (comment.userId.toString() !== caller._id.toString()) {
+      throw new Error("Forbidden: you can only edit your own comments.");
+    }
+    const nextText = args.text.trim();
+    if (!nextText) throw new Error("Comment cannot be empty");
+    await ctx.db.patch(args.commentId, { text: nextText });
+    return { success: true };
+  },
+});
+
+/**
+ * Delete a comment. The commenter may delete their own comment, and the post creator may delete any comment on their post.
  */
 export const deleteComment = mutation({
   args: { commentId: v.id("comments"), userId: v.id("users") },
@@ -1250,9 +1272,16 @@ export const deleteComment = mutation({
     const caller = await getAuthenticatedUser(ctx);
     const comment = await ctx.db.get(args.commentId);
     if (!comment) return;
-    if (comment.userId.toString() !== caller._id.toString()) {
-      throw new Error("Forbidden: you can only delete your own comments.");
+
+    const isCommentOwner = comment.userId.toString() === caller._id.toString();
+    if (!isCommentOwner) {
+      const rally = await ctx.db.get(comment.rallyId);
+      const isPostCreator = rally && rally.creatorId.toString() === caller._id.toString();
+      if (!isPostCreator) {
+        throw new Error("Forbidden: you can only delete your own comments or comments on your own post.");
+      }
     }
+
     await ctx.db.delete(args.commentId);
   },
 });

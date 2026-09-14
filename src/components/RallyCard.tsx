@@ -37,12 +37,14 @@ interface RallyCardProps {
 }
 
 export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
+  const safeRally = rally || ({} as Partial<Rally>);
+
   // Optimistic like state
-  const [localLiked, setLocalLiked] = useState(rally.isLiked ?? false);
-  const [localLikeCount, setLocalLikeCount] = useState(rally.likesCount ?? 0);
+  const [localLiked, setLocalLiked] = useState(safeRally.isLiked ?? false);
+  const [localLikeCount, setLocalLikeCount] = useState(safeRally.likesCount ?? 0);
   // Optimistic RSVP state
-  const [localRsvpd, setLocalRsvpd] = useState(rally.isRsvpd ?? false);
-  const [localRsvpCount, setLocalRsvpCount] = useState(rally.rsvpsCount ?? 0);
+  const [localRsvpd, setLocalRsvpd] = useState(safeRally.isRsvpd ?? false);
+  const [localRsvpCount, setLocalRsvpCount] = useState(safeRally.rsvpsCount ?? 0);
 
   const [imgError, setImgError] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -60,18 +62,23 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
   const toggleRsvpMut   = useMutation(api.rallies.toggleRsvp);
   const joinRallyMut    = useMutation(api.rallies.joinRally);
   const leaveRallyMut   = useMutation(api.rallies.leaveRally);
-  const addCommentMut   = useMutation(api.rallies.addComment);
+  const addCommentMut    = useMutation(api.rallies.addComment);
+  const updateCommentMut = useMutation(api.rallies.updateComment);
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
-  const deleteRallyMut  = useMutation(api.rallies.deleteRally);
+  const deleteRallyMut   = useMutation(api.rallies.deleteRally);
 
   const [commentPage, setCommentPage] = useState(0);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
 
   const comments = useQuery(
     api.rallies.getComments,
-    (rally.commentsCount && rally.commentsCount > 0) || showComments ? { rallyId: rally.id as any } : 'skip'
+    (rally && rally.commentsCount && rally.commentsCount > 0) || showComments ? { rallyId: (rally?.id || '') as any } : 'skip'
   );
 
-  const isOwner = !!convexUserId && convexUserId === rally.creator.id;
+  if (!rally || !rally.id) return null;
+
+  const isOwner = !!convexUserId && convexUserId === rally.creator?.id;
 
   const isEvent = rally.type === 'EVENT';
   const isPost = rally.type === 'POST';
@@ -225,6 +232,43 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
       showToast('Error', 'Could not post comment.');
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (comment: any) => {
+    if (!convexUserId) return;
+    const canDelete = comment.userId === convexUserId || rally.creator.id === convexUserId;
+    if (!canDelete) {
+      showToast('Permission denied', 'You can only delete your own comments or comments on your own post.');
+      return;
+    }
+
+    try {
+      await deleteCommentMut({ commentId: comment._id, userId: convexUserId as any });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not delete comment.';
+      showToast('Error', msg);
+    }
+  };
+
+  const handleSaveCommentEdit = async (comment: any) => {
+    if (!convexUserId || !editingText.trim()) return;
+    if (comment.userId !== convexUserId) {
+      showToast('Permission denied', 'You can only edit your own comments.');
+      return;
+    }
+
+    try {
+      await updateCommentMut({
+        commentId: comment._id,
+        userId: convexUserId as any,
+        text: editingText.trim(),
+      });
+      setEditingCommentId(null);
+      setEditingText('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not edit comment.';
+      showToast('Error', msg);
     }
   };
 
@@ -720,36 +764,77 @@ export default function RallyCard({ rally, onDeleted }: RallyCardProps) {
             ) : comments.length === 0 ? (
               <div className="text-xs text-zinc-400 text-center py-2">No comments yet. Be the first!</div>
             ) : (
-              comments.map((c: any) => (
-                <div key={c._id} className="flex gap-2.5">
-                  <Avatar src={c.user?.avatar} name={c.user?.name} size="sm" />
-                  <div className="flex-1 bg-zinc-50 p-2.5 rounded-xl rounded-tl-none relative group/comment">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="font-bold text-xs text-zinc-900">
-                        {c.user?.name || 'User'}
-                      </span>
-                      <span className="text-[10px] text-zinc-400">
-                        {new Date(c.createdAt).toLocaleDateString()}
-                      </span>
+              comments.map((c: any) => {
+                const canDelete = c.userId === convexUserId || rally.creator.id === convexUserId;
+                const canEdit = c.userId === convexUserId;
+                const isEditing = editingCommentId === c._id;
+
+                return (
+                  <div key={c._id} className="flex gap-2.5">
+                    <Avatar src={c.user?.avatar} name={c.user?.name} size="sm" />
+                    <div className="flex-1 bg-zinc-50 p-2.5 rounded-xl rounded-tl-none relative group/comment">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-bold text-xs text-zinc-900">
+                          {c.user?.name || 'User'}
+                        </span>
+                        <span className="text-[10px] text-zinc-400">
+                          {new Date(c.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            className="w-full bg-white border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-700 focus:outline-none focus:border-indigo-500 min-h-[72px] resize-none"
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => { setEditingCommentId(null); setEditingText(''); }}
+                              className="px-2.5 py-1.5 rounded-lg bg-zinc-100 text-zinc-700 text-xs font-semibold"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleSaveCommentEdit(c)}
+                              disabled={!editingText.trim()}
+                              className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold disabled:opacity-40"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-zinc-700">{c.text}</p>
+                      )}
+
+                      {(canEdit || canDelete) && !isEditing && (
+                        <div className="absolute -right-2 -top-2 flex gap-1 opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                          {canEdit && (
+                            <button
+                              onClick={() => { setEditingCommentId(c._id); setEditingText(c.text); }}
+                              className="p-1 bg-white shadow-sm border border-zinc-200 rounded-full text-zinc-600 hover:text-indigo-600"
+                              title="Edit comment"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3 h-3"><path d="M12 20h9"/><path d="m16.5 3.5 4 4L7 21l-5 1 1-5 14.5-13.5Z"/></svg>
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => handleDeleteComment(c)}
+                              className="p-1 bg-white shadow-sm border border-zinc-200 rounded-full text-rose-500 hover:text-rose-600"
+                              title="Delete comment"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-zinc-700">{c.text}</p>
-                    {c.userId === convexUserId && (
-                      <button
-                        onClick={async () => {
-                          await deleteCommentMut({
-                            commentId: c._id,
-                            userId: convexUserId as any,
-                          });
-                        }}
-                        className="absolute -right-2 -top-2 p-1 bg-white shadow-sm border border-zinc-200 rounded-full text-rose-500 opacity-0 group-hover/comment:opacity-100 transition-opacity"
-                        title="Delete comment"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

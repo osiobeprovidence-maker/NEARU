@@ -314,7 +314,7 @@ export default function Home() {
                   const ad = activeAds[adIndex % activeAds.length];
                   items.push(
                     <AdCard
-                      key={`ad-${ad._id}`}
+                      key={`ad-${ad._id}-${index}`}
                       title={ad.title}
                       description={ad.description}
                       imageUrl={ad.imageUrl}

@@ -185,32 +185,43 @@ function getRallyDetails(post: Rally, displayLocation: string, formattedAge: str
 // Main component
 // ---------------------------------------------------------------------------
 export default function PostCard({ post, onDeleted }: PostCardProps) {
+  const safePost = post || ({} as Partial<Rally>);
+
   const { openVideo } = useEndlessVideo();
   // Optimistic like state
-  const [localLiked, setLocalLiked] = useState(post.isLiked ?? false);
+  const [localLiked, setLocalLiked] = useState(safePost.isLiked ?? false);
 
-  const [localLikeCount, setLocalLikeCount] = useState(post.likesCount ?? 0);
+  const [localLikeCount, setLocalLikeCount] = useState(safePost.likesCount ?? 0);
   // Optimistic RSVP / Rally Request state
-  const [localRsvpd, setLocalRsvpd] = useState(post.isRsvpd ?? false);
-  const [localRsvpCount, setLocalRsvpCount] = useState(post.rsvpsCount ?? 0);
+  const [localRsvpd, setLocalRsvpd] = useState(safePost.isRsvpd ?? false);
+  const [localRsvpCount, setLocalRsvpCount] = useState(safePost.rsvpsCount ?? 0);
   // Optimistic Repost state
   const [localReposted, setLocalReposted] = useState(false);
   const [localRepostCount, setLocalRepostCount] = useState(
-    (post as any).repostsCount ?? 0
+    (safePost as any).repostsCount ?? 0
   );
+
+  useEffect(() => {
+    if (post) {
+      setLocalLiked(post.isLiked ?? false);
+      setLocalLikeCount(post.likesCount ?? 0);
+      setLocalRsvpd(post.isRsvpd ?? false);
+      setLocalRsvpCount(post.rsvpsCount ?? 0);
+    }
+  }, [post?.isLiked, post?.likesCount, post?.isRsvpd, post?.rsvpsCount]);
 
   const [imgError, setImgError] = useState(false);
 
   // Normalized list of media URLs for multi-image support
   const mediaList = useMemo(() => {
-    if (post.mediaUrls && post.mediaUrls.length > 0) {
-      return post.mediaUrls;
+    if (safePost.mediaUrls && safePost.mediaUrls.length > 0) {
+      return safePost.mediaUrls;
     }
-    if (post.mediaUrl) {
-      return [post.mediaUrl];
+    if (safePost.mediaUrl) {
+      return [safePost.mediaUrl];
     }
     return [];
-  }, [post.mediaUrls, post.mediaUrl]);
+  }, [safePost.mediaUrls, safePost.mediaUrl]);
 
   const [activeSlide, setActiveSlide] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -218,7 +229,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   useEffect(() => {
     setImgError(false);
     setActiveSlide(0);
-  }, [post.mediaUrl, post.mediaUrls]);
+  }, [safePost.mediaUrl, safePost.mediaUrls]);
 
   const handleCarouselScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -249,6 +260,7 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   const touchStartY = useRef(0);
 
   const triggerEndlessReel = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    if (!post) return;
     if (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -280,8 +292,10 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
 
   const comments = useQuery(
     api.rallies.getComments,
-    (post.commentsCount && post.commentsCount > 0) || showComments ? { rallyId: post.id as any } : 'skip'
+    (post && post.commentsCount && post.commentsCount > 0) || showComments ? { rallyId: (post?.id || '') as any } : 'skip'
   );
+
+  if (!post || !post.id) return null;
 
   const isPagePost = post.authorType === 'page' && !!post.pageAuthor;
   const isOwner = !!convexUserId && (

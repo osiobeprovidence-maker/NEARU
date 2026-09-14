@@ -321,7 +321,15 @@ export const listConversationsWithParticipants = query({
     for (const pid of allParticipantIds) {
       const user: any = await ctx.db.get(pid as any);
       if (user) {
-        participants[pid] = { _id: user._id, name: user.name, username: user.username, avatar: user.avatar, isNINVerified: user.isNINVerified, badges: user.badges };
+        let avatar = user.avatar || "";
+        if (avatar && !avatar.startsWith("http") && !avatar.startsWith("data:") && !avatar.startsWith("blob:")) {
+          try {
+            avatar = (await ctx.storage.getUrl(avatar as any)) || avatar;
+          } catch {
+            avatar = "";
+          }
+        }
+        participants[pid] = { _id: user._id, name: user.name, username: user.username, avatar, isNINVerified: user.isNINVerified, badges: user.badges };
       }
     }
 

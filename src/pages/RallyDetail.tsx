@@ -64,11 +64,14 @@ export default function RallyDetail() {
   const updateStatusMut = useMutation(api.rallies.updateStatus);
   const toggleLikeMut = useMutation(api.rallies.toggleLike);
   const addCommentMut = useMutation(api.rallies.addComment);
+  const updateCommentMut = useMutation(api.rallies.updateComment);
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
   const deleteRallyMut = useMutation(api.rallies.deleteRally);
   const saveMuxResult = useMutation(api.rallies.saveMuxResult);
 
   const [commentText, setCommentText] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -253,6 +256,43 @@ export default function RallyDetail() {
       showToast('Error', 'Could not post comment.');
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (comment: any) => {
+    if (!convexUserId) return;
+    const canDelete = comment.userId === convexUserId || rallyDoc.creatorId?.toString() === convexUserId;
+    if (!canDelete) {
+      showToast('Permission denied', 'You can only delete your own comments or comments on your own post.');
+      return;
+    }
+
+    try {
+      await deleteCommentMut({ commentId: comment._id, userId: convexUserId as any });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not delete comment.';
+      showToast('Error', msg);
+    }
+  };
+
+  const handleSaveCommentEdit = async (comment: any) => {
+    if (!convexUserId || !editingText.trim()) return;
+    if (comment.userId !== convexUserId) {
+      showToast('Permission denied', 'You can only edit your own comments.');
+      return;
+    }
+
+    try {
+      await updateCommentMut({
+        commentId: comment._id,
+        userId: convexUserId as any,
+        text: editingText.trim(),
+      });
+      setEditingCommentId(null);
+      setEditingText('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not edit comment.';
+      showToast('Error', msg);
     }
   };
 
@@ -801,48 +841,84 @@ export default function RallyDetail() {
               No comments yet. Be the first to leave a thought!
             </div>
           ) : (
-            comments.map((c: any) => (
-              <div key={c._id} className="flex gap-3 items-start group/comment">
-                <Link to={`/user/${c.userId}`} className="shrink-0">
-                  <Avatar src={c.user?.avatar} name={c.user?.name} size="sm" />
-                </Link>
-                <div className="flex-1 bg-zinc-50/90 rounded-2xl p-3 border border-zinc-100">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        to={`/user/${c.userId}`}
-                        className="font-bold text-xs text-zinc-900 hover:text-indigo-600 transition-colors"
-                      >
-                        {c.user?.name || 'User'}
-                      </Link>
-                      <ProfileVerificationCheck user={c.user} size="sm" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-400">
-                        {timeAgo(c.createdAt)}
-                      </span>
-                      {c.userId === convexUserId && (
-                        <button
-                          onClick={async () => {
-                            await deleteCommentMut({
-                              commentId: c._id,
-                              userId: convexUserId as any,
-                            });
-                          }}
-                          className="text-zinc-400 hover:text-rose-500 transition-colors"
-                          title="Delete comment"
+            comments.map((c: any) => {
+              const canEdit = c.userId === convexUserId;
+              const canDelete = c.userId === convexUserId || rallyDoc.creatorId?.toString() === convexUserId;
+              const isEditing = editingCommentId === c._id;
+
+              return (
+                <div key={c._id} className="flex gap-3 items-start group/comment">
+                  <Link to={`/user/${c.userId}`} className="shrink-0">
+                    <Avatar src={c.user?.avatar} name={c.user?.name} size="sm" />
+                  </Link>
+                  <div className="flex-1 bg-zinc-50/90 rounded-2xl p-3 border border-zinc-100">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          to={`/user/${c.userId}`}
+                          className="font-bold text-xs text-zinc-900 hover:text-indigo-600 transition-colors"
                         >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
+                          {c.user?.name || 'User'}
+                        </Link>
+                        <ProfileVerificationCheck user={c.user} size="sm" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-400">
+                          {timeAgo(c.createdAt)}
+                        </span>
+                        {canEdit && !isEditing && (
+                          <button
+                            onClick={() => { setEditingCommentId(c._id); setEditingText(c.text); }}
+                            className="text-zinc-400 hover:text-indigo-600 transition-colors"
+                            title="Edit comment"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3 h-3"><path d="M12 20h9"/><path d="m16.5 3.5 4 4L7 21l-5 1 1-5 14.5-13.5Z"/></svg>
+                          </button>
+                        )}
+                        {canDelete && !isEditing && (
+                          <button
+                            onClick={() => handleDeleteComment(c)}
+                            className="text-zinc-400 hover:text-rose-500 transition-colors"
+                            title="Delete comment"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-sm text-zinc-700 focus:outline-none focus:border-indigo-500 min-h-[72px] resize-none"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => { setEditingCommentId(null); setEditingText(''); }}
+                            className="px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-700 text-xs font-semibold"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveCommentEdit(c)}
+                            disabled={!editingText.trim()}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold disabled:opacity-40"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap break-words">
+                        {c.text}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-sm text-zinc-800 leading-relaxed whitespace-pre-wrap break-words">
-                    {c.text}
-                  </p>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

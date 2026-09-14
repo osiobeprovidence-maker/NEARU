@@ -47,13 +47,19 @@ export default function Avatar({ src, name, size = 'md', className }: AvatarProp
 
   const resolvedSrc = useMemo(() => {
     if (!src) return null;
+    const value = String(src).trim();
+    if (!value || value === 'undefined' || value === 'null') return null;
     if (
-      src.startsWith('http://') || 
-      src.startsWith('https://') || 
-      src.startsWith('blob:') || 
-      src.startsWith('data:')
+      value.startsWith('http://') ||
+      value.startsWith('https://') ||
+      value.startsWith('blob:') ||
+      value.startsWith('data:') ||
+      value.startsWith('/') ||
+      value.includes('/api/storage/') ||
+      value.includes('storage.googleapis.com') ||
+      value.includes('convex.cloud')
     ) {
-      return src;
+      return value;
     }
     return null;
   }, [src]);

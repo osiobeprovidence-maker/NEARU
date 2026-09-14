@@ -92,14 +92,14 @@ export const getActiveFriendCycles = query({
         const page = await ctx.db.get(cycles[0].pageId);
         if (page) {
           name = page.name || "Unknown Page";
-          avatarUrl = page.avatar;
+          avatarUrl = page.avatar && !page.avatar.startsWith("http") ? (await ctx.storage.getUrl(page.avatar as any)) ?? page.avatar : page.avatar;
           resolvedAuthor = true;
         }
       } else if (cycles[0].authorType === "user" && cycles[0].authorId) {
         const author = await ctx.db.get(cycles[0].authorId);
         if (author) {
           name = author.name || "Unknown User";
-          avatarUrl = author.avatar;
+          avatarUrl = author.avatar && !author.avatar.startsWith("http") ? (await ctx.storage.getUrl(author.avatar as any)) ?? author.avatar : author.avatar;
           resolvedAuthor = true;
         }
       }
@@ -192,7 +192,7 @@ export const getMyActiveCycles = query({
       authorType: "user",
       authorId: user._id,
       name: user.name || "You",
-      avatarUrl: user.avatar,
+      avatarUrl: user.avatar && !user.avatar.startsWith("http") ? (await ctx.storage.getUrl(user.avatar as any)) ?? user.avatar : user.avatar,
       hasUnseen, // For self, usually everything is seen if they just posted it, but we track it anyway
       cycles: enrichedCycles,
       latestUpdate: myCycles[myCycles.length - 1].createdAt || 0,
