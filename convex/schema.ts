@@ -309,6 +309,7 @@ export default defineSchema({
     appIconUrl: v.optional(v.string()),
     splashScreenUrl: v.optional(v.string()),
     desktopSplashScreenUrl: v.optional(v.string()),
+    loadingScreenUrl: v.optional(v.string()),
     splashBgColor: v.optional(v.string()),
     updatedAt: v.number(),
     updatedBy: v.id("users"), // original creator / super-owner
@@ -693,6 +694,7 @@ export default defineSchema({
     appIconUrl: v.optional(v.string()),
     splashScreenUrl: v.optional(v.string()),
     desktopSplashScreenUrl: v.optional(v.string()),
+    loadingScreenUrl: v.optional(v.string()),
     splashBgColor: v.optional(v.string()),
     brandFont: v.optional(v.string()),
     primaryColor: v.optional(v.string()),

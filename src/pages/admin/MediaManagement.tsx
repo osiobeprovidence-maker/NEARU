@@ -81,6 +81,7 @@ export default function AdminMediaManagement() {
     appIconUrl: '',
     splashScreenUrl: '',
     desktopSplashScreenUrl: '',
+    loadingScreenUrl: '',
     splashBgColor: '#4f46e5',
     brandLogoUrl: '',
     faviconUrl: '',
@@ -116,6 +117,7 @@ export default function AdminMediaManagement() {
         appIconUrl: branding.appIconUrl || '',
         splashScreenUrl: branding.splashScreenUrl || '',
         desktopSplashScreenUrl: branding.desktopSplashScreenUrl || '',
+        loadingScreenUrl: branding.loadingScreenUrl || '',
         splashBgColor: (branding as any).splashBgColor || branding.primaryColor || '#4f46e5',
         brandLogoUrl: branding.brandLogoUrl || '',
         faviconUrl: branding.faviconUrl || '',
@@ -141,6 +143,7 @@ export default function AdminMediaManagement() {
         appIconUrl: brandingForm.appIconUrl || undefined,
         splashScreenUrl: brandingForm.splashScreenUrl ?? '',
         desktopSplashScreenUrl: brandingForm.desktopSplashScreenUrl ?? '',
+        loadingScreenUrl: brandingForm.loadingScreenUrl ?? '',
         splashBgColor: brandingForm.splashBgColor || undefined,
         brandLogoUrl: brandingForm.brandLogoUrl || undefined,
         faviconUrl: brandingForm.faviconUrl || undefined,
@@ -391,8 +394,43 @@ export default function AdminMediaManagement() {
                 />
               </div>
 
+              {/* 3. Application Loading Screen */}
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900">⏳ Application Loading Screen</h4>
+                    <p className="text-[11px] text-zinc-400">
+                      Upload an animated loading indicator (GIF/WebP/AVIF) displayed during initial app boot.
+                    </p>
+                  </div>
+                  {brandingForm.loadingScreenUrl ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 self-start sm:self-auto">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Custom Loader Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200 shrink-0 self-start sm:self-auto">
+                      Built-in Spinner
+                    </span>
+                  )}
+                </div>
 
-              {/* 2. Solid Background Colour */}
+                <AdminMediaUploader
+                  mediaType="image"
+                  value={brandingForm.loadingScreenUrl}
+                  previewHeightClass="h-40 sm:h-48"
+                  maxSizeMB={10}
+                  onChange={(storageId) =>
+                    setBrandingForm((prev) => ({ ...prev, loadingScreenUrl: storageId }))
+                  }
+                  onRemove={() =>
+                    setBrandingForm((prev) => ({ ...prev, loadingScreenUrl: '' }))
+                  }
+                />
+              </div>
+
+
+              {/* 4. Solid Background Colour */}
               <div className="space-y-3 pt-2 border-t border-zinc-100">
                 <div>
                   <label className="text-xs font-bold text-zinc-700 block">

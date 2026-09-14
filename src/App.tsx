@@ -17,6 +17,7 @@ import Landing from './pages/Landing';
 import LoginPage from './pages/LoginPage';
 import Onboarding from './pages/Onboarding';
 import SplashScreen from './components/SplashScreen';
+import LoadingScreen from './components/LoadingScreen';
 
 // Lazy load pages for now
 const Home = React.lazy(() => import('./pages/Home'));
@@ -152,6 +153,15 @@ const AppRoutes = () => {
         localStorage.removeItem('lalao_desktop_splash_image');
       } catch {}
     }
+    if (branding.loadingScreenUrl) {
+      try {
+        localStorage.setItem('lalao_loading_screen', branding.loadingScreenUrl);
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem('lalao_loading_screen');
+      } catch {}
+    }
     if (branding.splashBgColor) {
       try {
         localStorage.setItem('lalao_splash_bg', branding.splashBgColor);
@@ -167,9 +177,8 @@ const AppRoutes = () => {
 
   if (isAuthLoading) {
     return (
-      <SplashScreen
-        splashScreenUrl={branding?.splashScreenUrl}
-        desktopSplashScreenUrl={branding?.desktopSplashScreenUrl}
+      <LoadingScreen
+        loadingScreenUrl={branding?.loadingScreenUrl}
         backgroundColor={branding?.splashBgColor}
       />
     );
@@ -193,9 +202,8 @@ const AppRoutes = () => {
 
   if (isProfileLoading) {
     return (
-      <SplashScreen
-        splashScreenUrl={branding?.splashScreenUrl}
-        desktopSplashScreenUrl={branding?.desktopSplashScreenUrl}
+      <LoadingScreen
+        loadingScreenUrl={branding?.loadingScreenUrl}
         backgroundColor={branding?.splashBgColor}
       />
     );
@@ -215,11 +223,9 @@ const AppRoutes = () => {
     <ChunkErrorBoundary>
       <React.Suspense
         fallback={
-          <SplashScreen
-            splashScreenUrl={branding?.splashScreenUrl}
-        desktopSplashScreenUrl={branding?.desktopSplashScreenUrl}
-            backgroundColor={branding?.splashBgColor}
-          />
+          <div className="flex items-center justify-center min-h-[50vh] w-full">
+            <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin opacity-50" />
+          </div>
         }
       >
         <Routes>

@@ -7,6 +7,7 @@ export interface Branding {
   faviconUrl: string | null;
   splashScreenUrl?: string | null;
   desktopSplashScreenUrl?: string | null;
+  loadingScreenUrl?: string | null;
   brandFont: string;
   primaryColor: string;
   splashBgColor?: string | null;
@@ -19,6 +20,7 @@ const DEFAULT_BRANDING: Branding = {
   faviconUrl: null,
   splashScreenUrl: null,
   desktopSplashScreenUrl: null,
+  loadingScreenUrl: null,
   brandFont: 'system',
   primaryColor: '#4f46e5',
   splashBgColor: '#4f46e5',
@@ -51,11 +53,13 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     try {
       const cachedSplash = localStorage.getItem('lalao_splash_image');
       const cachedDesktopSplash = localStorage.getItem('lalao_desktop_splash_image');
+      const cachedLoading = localStorage.getItem('lalao_loading_screen');
       const cachedBg = localStorage.getItem('lalao_splash_bg');
       return {
         ...DEFAULT_BRANDING,
         splashScreenUrl: cachedSplash || null,
         desktopSplashScreenUrl: cachedDesktopSplash || null,
+        loadingScreenUrl: cachedLoading || null,
         splashBgColor: cachedBg || DEFAULT_BRANDING.splashBgColor,
       };
     } catch {
@@ -90,6 +94,11 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('lalao_desktop_splash_image', b.desktopSplashScreenUrl);
           } else {
             localStorage.removeItem('lalao_desktop_splash_image');
+          }
+          if (b.loadingScreenUrl) {
+            localStorage.setItem('lalao_loading_screen', b.loadingScreenUrl);
+          } else {
+            localStorage.removeItem('lalao_loading_screen');
           }
           if (b.splashBgColor) {
             localStorage.setItem('lalao_splash_bg', b.splashBgColor);
