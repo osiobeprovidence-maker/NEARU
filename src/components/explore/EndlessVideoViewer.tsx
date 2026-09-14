@@ -88,7 +88,7 @@ export default function EndlessVideoViewer({
   const realFollowStatus = useQuery(
     api.follows.isFollowing,
     isOpen && convexUserId && isValidConvexCreatorId
-      ? { followerId: convexUserId as any, targetId: creatorId as any }
+      ? { followerId: convexUserId as any, followingId: creatorId as any }
       : 'skip'
   );
 
