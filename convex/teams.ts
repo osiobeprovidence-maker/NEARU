@@ -260,6 +260,10 @@ export const leaveTeam = mutation({
       throw new Error("Captains cannot leave the team directly. Please transfer captaincy or delete the team.");
     }
 
+    await ctx.db.delete(membership._id);
+  },
+});
+
 export const invitePlayer = mutation({
   args: {
     teamId: v.id("teams"),
