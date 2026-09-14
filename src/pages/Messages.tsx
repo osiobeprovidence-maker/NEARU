@@ -244,14 +244,17 @@ export default function Messages() {
   const [isCycleCreatorOpen, setIsCycleCreatorOpen] = useState(false);
   const [selectedCycleGroup, setSelectedCycleGroup] = useState<any>(null);
 
+  const allLiveGroups = React.useMemo(() => {
+    return [
+      ...(myActiveCycles ? [myActiveCycles] : []),
+      ...(activeFriendCycles || [])
+    ];
+  }, [myActiveCycles, activeFriendCycles]);
+
   // Synchronize the selected cycle group with live data from Convex
   // so that if a cycle is deleted, the viewer instantly updates or closes.
   React.useEffect(() => {
     if (selectedCycleGroup) {
-      const allLiveGroups = [
-        ...(myActiveCycles ? [myActiveCycles] : []),
-        ...(activeFriendCycles || [])
-      ];
       const liveGroup = allLiveGroups.find(g => g.key === selectedCycleGroup.key);
       if (liveGroup) {
         setSelectedCycleGroup(liveGroup);
@@ -259,7 +262,8 @@ export default function Messages() {
         setSelectedCycleGroup(null);
       }
     }
-  }, [myActiveCycles, activeFriendCycles]);
+  }, [allLiveGroups]);
+
 
   const loading = conversations === undefined || activeFriendCycles === undefined || myActiveCycles === undefined;
 
@@ -492,7 +496,12 @@ export default function Messages() {
 
       <div className="h-6 shrink-0" />
       <CycleCreator isOpen={isCycleCreatorOpen} onClose={() => setIsCycleCreatorOpen(false)} />
-      <CycleViewer isOpen={!!selectedCycleGroup} onClose={() => setSelectedCycleGroup(null)} cyclesGroup={selectedCycleGroup} />
+      <CycleViewer 
+        isOpen={!!selectedCycleGroup} 
+        onClose={() => setSelectedCycleGroup(null)} 
+        allGroups={allLiveGroups} 
+        initialGroupId={selectedCycleGroup?.key || ''} 
+      />
     </div>
   );
 }
