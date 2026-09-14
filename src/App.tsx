@@ -69,6 +69,7 @@ const CreateEvent = React.lazy(() => import('./pages/events/CreateEvent'));
 const ManageEvent = React.lazy(() => import('./pages/events/ManageEvent'));
 const EventPublicPage = React.lazy(() => import('./pages/events/EventPublicPage'));
 const TeamRegistration = React.lazy(() => import('./pages/events/TeamRegistration'));
+const TeamPage = React.lazy(() => import('./pages/events/TeamPage'));
 const MatchDashboard = React.lazy(() => import('./pages/events/MatchDashboard'));
 
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
@@ -262,6 +263,7 @@ const AppRoutes = () => {
           <Route path="manage/events/:id" element={<ManageEvent />} />
           <Route path="events/:id" element={<EventPublicPage />} />
           <Route path="events/:id/register" element={<TeamRegistration />} />
+          <Route path="teams/:id" element={<TeamPage />} />
           <Route path="matches/:matchId" element={<MatchDashboard />} />
           <Route path="user/:id" element={<UserProfile />} />
           <Route path="interest/:label" element={<InterestPage />} />

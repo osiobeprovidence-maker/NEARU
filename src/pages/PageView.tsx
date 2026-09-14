@@ -32,13 +32,15 @@ import { Rally } from '../types';
 import { processAndCompressImage, uploadToConvexStorage } from '../utils/imageUpload';
 import PageImageCropModal from '../components/PageImageCropModal';
 
+import PageEventsTab from '../components/PageEventsTab';
+
 export default function PageView() {
   const { slug } = useParams<{ slug: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, convexUserId } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'posts' | 'about'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'events' | 'about'>('posts');
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -474,64 +476,78 @@ export default function PageView() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-zinc-100 px-4 sm:px-6">
-          <button
-            onClick={() => setActiveTab('posts')}
-            className={cn(
-              'py-3.5 px-4 font-bold text-sm border-b-2 transition-colors',
-              activeTab === 'posts'
-                ? 'border-zinc-900 text-zinc-900'
-                : 'border-transparent text-zinc-400 hover:text-zinc-600'
-            )}
-          >
-            Posts ({page.postsCount ?? 0})
-          </button>
-          <button
-            onClick={() => setActiveTab('about')}
-            className={cn(
-              'py-3.5 px-4 font-bold text-sm border-b-2 transition-colors',
-              activeTab === 'about'
-                ? 'border-zinc-900 text-zinc-900'
-                : 'border-transparent text-zinc-400 hover:text-zinc-600'
-            )}
-          >
-            About
-          </button>
+        <div className="border-b border-zinc-100 px-4 sm:px-6">
+          {/* Desktop Tabs */}
+          <div className="hidden md:flex border-b border-zinc-200">
+            <button
+              onClick={() => setActiveTab('posts')}
+              className={cn(
+                "px-6 py-4 text-sm font-bold border-b-2 transition-colors",
+                activeTab === 'posts' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+              )}
+            >
+              Posts
+            </button>
+            <button
+              onClick={() => setActiveTab('events')}
+              className={cn(
+                "px-6 py-4 text-sm font-bold border-b-2 transition-colors",
+                activeTab === 'events' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+              )}
+            >
+              Events
+            </button>
+            <button
+              onClick={() => setActiveTab('about')}
+              className={cn(
+                "px-6 py-4 text-sm font-bold border-b-2 transition-colors",
+                activeTab === 'about' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+              )}
+            >
+              About
+            </button>
+          </div>
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'posts' && (
-          <div className="divide-y divide-zinc-100">
-            {mappedPosts.length > 0 ? (
-              mappedPosts.map((post) => <PostCard key={post.id} post={post} />)
-            ) : (
-              <div className="p-12 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-100 flex items-center justify-center mx-auto mb-3 text-zinc-400">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-black text-zinc-900 mb-1">
-                  No Posts Yet
-                </h3>
-                <p className="text-xs text-zinc-500 max-w-xs mx-auto mb-4">
-                  {isManager
-                    ? 'Publish your first post on behalf of this Page! It will display with this Page as the public author.'
-                    : `@${page.slug} hasn't posted anything yet.`}
-                </p>
-                {isManager && (
-                  <button
-                    onClick={() => setIsCreatePostOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Create First Post</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="mt-6 md:p-6 p-4">
+          {activeTab === 'posts' && (
+            <div className="space-y-6">
+              {isManager && (
+                <button
+                  onClick={() => setIsCreatePostOpen(true)}
+                  className="w-full bg-white border border-zinc-200 rounded-2xl p-4 flex items-center gap-3 text-zinc-500 hover:bg-zinc-50 transition-colors shadow-sm"
+                >
+                  <Avatar src={page.avatar} fallback={page.name.charAt(0)} size="sm" />
+                  <span className="font-medium text-sm">Write a post as {page.name}...</span>
+                </button>
+              )}
 
-        {activeTab === 'about' && (
+              {mappedPosts.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-8 h-8 text-zinc-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-zinc-900 mb-2">No posts yet</h3>
+                  <p className="text-zinc-500 text-sm">
+                    {isManager ? "Create your first post to engage with your followers." : "This page hasn't posted anything yet."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {mappedPosts.map((post) => (
+                    <PostCard key={post.id} rally={post} currentUserId={convexUserId as string} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'events' && (
+            <PageEventsTab pageId={page._id} isManager={isManager} />
+          )}
+
+          {activeTab === 'about' && (
           <div className="p-6 space-y-6">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">

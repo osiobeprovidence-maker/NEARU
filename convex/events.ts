@@ -201,3 +201,34 @@ export const getMyRegisteredEvents = query({
     return events.filter(Boolean);
   }
 });
+
+export const getEventTeams = query({
+  args: {
+    eventId: v.id("events"),
+  },
+  handler: async (ctx, args) => {
+    const teams = await ctx.db
+      .query("teams")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect();
+
+    const teamsWithCounts = await Promise.all(
+      teams.map(async (team) => {
+        const members = await ctx.db
+          .query("teamMembers")
+          .withIndex("by_team", (q) => q.eq("teamId", team._id))
+          .collect();
+
+        const captain = await ctx.db.get(team.captainId);
+
+        return {
+          ...team,
+          memberCount: members.length,
+          captainName: captain?.name || captain?.username || "Unknown",
+        };
+      })
+    );
+
+    return teamsWithCounts;
+  },
+});

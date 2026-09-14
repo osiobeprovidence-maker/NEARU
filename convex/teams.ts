@@ -160,3 +160,108 @@ export const approveRegistration = mutation({
     });
   },
 });
+
+export const getMyTeams = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const memberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const teams = await Promise.all(
+      memberships.map(async (m) => {
+        const team = await ctx.db.get(m.teamId);
+        if (!team) return null;
+        
+        const event = await ctx.db.get(team.eventId);
+        return {
+          ...team,
+          role: m.role,
+          event,
+        };
+      })
+    );
+
+    return teams.filter(Boolean);
+  },
+});
+
+export const joinTeam = mutation({
+  args: {
+    teamId: v.id("teams"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    
+    const team = await ctx.db.get(args.teamId);
+    if (!team) throw new Error("Team not found");
+    
+    const event = await ctx.db.get(team.eventId);
+    if (!event) throw new Error("Event not found");
+
+    if (event.status !== "Registration Open") {
+      throw new Error("Registration is closed for this event.");
+    }
+
+    // Check if user is already in a team for this event
+    const userTeams = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+      
+    for (const member of userTeams) {
+      const existingTeam = await ctx.db.get(member.teamId);
+      if (existingTeam?.eventId === event._id) {
+        throw new Error("You are already on a team for this event.");
+      }
+    }
+
+    // Check capacity
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team", (q) => q.eq("teamId", team._id))
+      .collect();
+      
+    if (event.maxPlayersPerTeam && members.length >= event.maxPlayersPerTeam) {
+      throw new Error("This team is already full.");
+    }
+
+    await ctx.db.insert("teamMembers", {
+      teamId: team._id,
+      userId: user._id,
+      role: "player",
+      joinedAt: Date.now(),
+    });
+    
+    return true;
+  },
+});
+
+export const leaveTeam = mutation({
+  args: {
+    teamId: v.id("teams"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    
+    const membership = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team_user", (q) => q.eq("teamId", args.teamId).eq("userId", user._id))
+      .first();
+      
+    if (!membership) {
+      throw new Error("You are not a member of this team");
+    }
+
+    if (membership.role === "captain") {
+      throw new Error("Captains cannot leave the team directly. Please transfer captaincy or delete the team.");
+    }
+
+    await ctx.db.delete(membership._id);
+    return true;
+  },
+});
+

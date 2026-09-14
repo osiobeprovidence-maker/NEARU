@@ -36,12 +36,13 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { cn, getPublicInterests } from '../lib/utils';
 import { Rally } from '../types';
+import { Trophy } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-type ProfileTab = 'posts' | 'media' | 'likes' | 'about';
-const VALID_TABS: ProfileTab[] = ['posts', 'media', 'likes', 'about'];
+type ProfileTab = 'posts' | 'media' | 'likes' | 'about' | 'teams';
+const VALID_TABS: ProfileTab[] = ['posts', 'media', 'likes', 'about', 'teams'];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -488,12 +489,17 @@ function ProfileContent() {
   };
 
   // ---------------------------------------------------------------------------
+  const notificationsMut = useMutation(api.push.savePushSubscription);
+  const myTeams = useQuery(api.teams.getMyTeams);
+
+  // ---------------------------------------------------------------------------
   // Tab definitions — conditional on account type
   // ---------------------------------------------------------------------------
   const profileTabs: { key: ProfileTab; label: string; icon: React.ReactNode }[] = [
     { key: 'posts', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
     { key: 'media', label: 'Media', icon: <Image className="w-3.5 h-3.5" /> },
     { key: 'likes', label: 'Likes', icon: <Heart className="w-3.5 h-3.5" /> },
+    { key: 'teams', label: 'Teams', icon: <Users className="w-3.5 h-3.5" /> },
     ...(isOrgBiz ? [{ key: 'about' as ProfileTab, label: 'About', icon: <Info className="w-3.5 h-3.5" /> }] : []),
   ];
 
@@ -855,6 +861,51 @@ function ProfileContent() {
                 <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
                   Posts you like will appear here soon.
                 </p>
+              </div>
+            )}
+
+            {/* TEAMS */}
+            {activeTab === 'teams' && (
+              <div className="p-4 sm:p-6 space-y-6">
+                {!myTeams ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-5 h-5 animate-spin text-zinc-300" />
+                  </div>
+                ) : myTeams.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+                      <Trophy className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-black text-zinc-900 tracking-tight">No teams yet</h3>
+                    <p className="text-xs text-zinc-500 font-medium mt-1 max-w-xs mx-auto">
+                      You haven't joined any teams yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {myTeams.map((teamData) => {
+                      const { team, member } = teamData;
+                      return (
+                        <Link key={team._id} to={`/teams/${team._id}`} className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4">
+                          {team.logoUrl ? (
+                            <img src={team.logoUrl} alt={team.name} className="w-12 h-12 rounded-xl object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400 font-bold text-lg">
+                              {team.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-zinc-900 truncate">{team.name}</h3>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {member.role === 'captain' && <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />}
+                              <span className="text-xs font-semibold text-zinc-500 capitalize">{member.role}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

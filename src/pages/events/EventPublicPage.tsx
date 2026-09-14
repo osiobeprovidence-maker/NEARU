@@ -5,9 +5,11 @@ import { api } from '../../../convex/_generated/api';
 import PageShell from '../../components/PageShell';
 import { Id } from '../../../convex/_generated/dataModel';
 import StatusBadge from '../../components/events/StatusBadge';
-import { Calendar, Users, MapPin, Trophy, ShieldAlert, ArrowRight, Megaphone, PlayCircle } from 'lucide-react';
+import { Calendar, Users, MapPin, Trophy, ShieldAlert, ArrowRight, Megaphone, PlayCircle, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import BracketView from '../../components/events/BracketView';
+import { useAuth } from '../../contexts/AuthContext';
+import { useMutation } from 'convex/react';
 
 export default function EventPublicPage() {
   const { id } = useParams();
@@ -15,8 +17,31 @@ export default function EventPublicPage() {
   
   const event = useQuery(api.events.getEvent, { eventId });
   const announcements = useQuery(api.operations.getEventAnnouncements, { eventId });
+  const teams = useQuery(api.events.getEventTeams, { eventId });
+  const joinTeam = useMutation(api.teams.joinTeam);
   
-  const [activeTab, setActiveTab] = useState<'Details' | 'Bracket' | 'Live'>('Details');
+  const [activeTab, setActiveTab] = useState<'Details' | 'Teams' | 'Bracket' | 'Live'>('Details');
+  const [isJoining, setIsJoining] = useState<string | null>(null);
+
+  const handleJoinTeam = async (teamId: Id<"teams">) => {
+    setIsJoining(teamId);
+    try {
+      await joinTeam({ teamId });
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: { title: 'Success', subtitle: 'You have joined the team!' }
+        })
+      );
+    } catch (err: any) {
+      window.dispatchEvent(
+        new CustomEvent('show-toast', {
+          detail: { title: 'Failed to join', subtitle: err.message }
+        })
+      );
+    } finally {
+      setIsJoining(null);
+    }
+  };
 
   return (
     <PageShell title="Event Details">
@@ -52,12 +77,20 @@ export default function EventPublicPage() {
                   <div className="flex flex-col items-end gap-2">
                     <StatusBadge status={event.status} />
                     {event.status === 'Registration Open' && (
-                      <Link
-                        to={`/events/${eventId}/register`}
-                        className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all active:scale-95 flex items-center gap-2 shadow-sm"
-                      >
-                        Register Now <ArrowRight className="w-4 h-4" />
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setActiveTab('Teams')}
+                          className="px-6 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-bold text-sm transition-all active:scale-95 flex items-center gap-2 shadow-sm"
+                        >
+                          <Users className="w-4 h-4" /> Join as Player
+                        </button>
+                        <Link
+                          to={`/events/${eventId}/register`}
+                          className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm transition-all active:scale-95 flex items-center gap-2 shadow-sm"
+                        >
+                          <Trophy className="w-4 h-4" /> Create a Team
+                        </Link>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -104,6 +137,15 @@ export default function EventPublicPage() {
                 Event Details
               </button>
               <button
+                onClick={() => setActiveTab('Teams')}
+                className={cn(
+                  "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
+                  activeTab === 'Teams' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                )}
+              >
+                Teams ({teams?.length || 0})
+              </button>
+              <button
                 onClick={() => setActiveTab('Bracket')}
                 className={cn(
                   "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
@@ -143,6 +185,74 @@ export default function EventPublicPage() {
                     <p className="text-zinc-600 whitespace-pre-wrap leading-relaxed text-sm">
                       {event.rules}
                     </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Teams Tab */}
+            {activeTab === 'Teams' && (
+              <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm p-6 md:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-black text-zinc-900">Available Teams</h2>
+                  {event.status === 'Registration Open' && (
+                    <Link
+                      to={`/events/${eventId}/register`}
+                      className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" /> Create Team
+                    </Link>
+                  )}
+                </div>
+
+                {!teams ? (
+                  <div className="text-center py-12 text-zinc-500 font-medium">Loading teams...</div>
+                ) : teams.length === 0 ? (
+                  <div className="text-center py-12 bg-zinc-50 rounded-2xl border border-zinc-100">
+                    <Trophy className="w-12 h-12 text-zinc-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-zinc-900 mb-1">No Teams Yet</h3>
+                    <p className="text-sm text-zinc-500">Be the first to create a team for this event!</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {teams.map((team) => (
+                      <div key={team._id} className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <Link to={`/teams/${team._id}`} className="flex items-center gap-4 mb-4">
+                          {team.logoUrl ? (
+                            <img src={team.logoUrl} alt={team.name} className="w-12 h-12 rounded-xl object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400 font-bold text-lg">
+                              {team.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <h3 className="font-bold text-zinc-900 hover:text-indigo-600 transition-colors">{team.name}</h3>
+                            <p className="text-xs text-zinc-500 font-medium">Captain: {team.captainName}</p>
+                          </div>
+                        </Link>
+                        
+                        <div className="flex items-center justify-between pt-4 border-t border-zinc-100">
+                          <div className="flex items-center gap-1.5 text-sm font-semibold text-zinc-600">
+                            <Users className="w-4 h-4" />
+                            {team.memberCount} / {event.maxPlayersPerTeam || '∞'} members
+                          </div>
+                          
+                          {event.status === 'Registration Open' && (!event.maxPlayersPerTeam || team.memberCount < event.maxPlayersPerTeam) ? (
+                            <button
+                              onClick={() => handleJoinTeam(team._id)}
+                              disabled={isJoining === team._id}
+                              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm transition-colors disabled:opacity-50"
+                            >
+                              {isJoining === team._id ? 'Joining...' : 'Join Team'}
+                            </button>
+                          ) : (
+                            <span className="px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-500 text-xs font-bold uppercase">
+                              {event.status !== 'Registration Open' ? 'Closed' : 'Full'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
