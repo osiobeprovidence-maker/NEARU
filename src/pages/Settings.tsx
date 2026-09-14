@@ -23,7 +23,11 @@ import {
   Calendar,
   ExternalLink,
   Smartphone,
-  X
+  X,
+  Key,
+  Eye,
+  EyeOff,
+  Loader2
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -47,7 +51,7 @@ const FALLBACK_RELEASE = {
 const SUPER_ADMIN_EMAIL = 'osiobeprovidence@gmail.com';
 
 export default function Settings() {
-  const { logout, user, convexUserId, persistProfile, setAccountType } = useAuth();
+  const { logout, user, convexUserId, persistProfile, setAccountType, addOrUpdatePassword } = useAuth();
   const navigate = useNavigate();
   const isAdmin =
     user.email === SUPER_ADMIN_EMAIL ||
@@ -62,6 +66,39 @@ export default function Settings() {
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
+
+  // Password modal state
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    setSavingPassword(true);
+    setPasswordError('');
+    try {
+      await addOrUpdatePassword(newPassword);
+      showToast('Password Updated', 'You can now sign in with your email or @username!');
+      setPasswordModalOpen(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Could not update password.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   const latestReleaseQuery = useQuery(api.releases.getLatestRelease);
   const activeRelease = latestReleaseQuery || FALLBACK_RELEASE;
@@ -382,6 +419,33 @@ export default function Settings() {
               </div>
               <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
             </Link>
+
+            {/* Account Password */}
+            <button
+              type="button"
+              onClick={() => {
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError('');
+                setPasswordModalOpen(true);
+              }}
+              className="w-full text-left flex items-center justify-between p-3.5 sm:p-4 hover:bg-zinc-50/80 transition-colors group"
+            >
+              <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-zinc-900 text-xs sm:text-sm group-hover:text-black transition-colors truncate">
+                    Account Password
+                  </p>
+                  <p className="text-[11px] text-zinc-500 font-medium truncate">
+                    Add or update password to sign in with email or @username
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-zinc-900 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
+            </button>
 
           </div>
         </div>
@@ -785,6 +849,101 @@ export default function Settings() {
                 Version {activeRelease.version}
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Modal */}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={() => setPasswordModalOpen(false)}
+              className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-zinc-900">Set Account Password</h3>
+                <p className="text-xs text-zinc-500">Sign in using email or @{user.username || 'username'}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-600 bg-zinc-50 p-3 rounded-2xl border border-zinc-200/80 leading-relaxed">
+              Adding a password allows you to log into your account anytime using either your email address or your <strong>@{user.username || 'username'}</strong>.
+            </p>
+
+            <form onSubmit={handleSavePassword} className="space-y-3.5 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">New Password</label>
+                <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={newPassword}
+                    onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); }}
+                    placeholder="At least 6 characters"
+                    className="block w-full px-4 py-3 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-400 hover:text-zinc-600"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">Confirm Password</label>
+                <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); }}
+                    placeholder="Repeat password"
+                    className="block w-full px-4 py-3 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none pr-10"
+                  />
+                </div>
+              </div>
+
+              {passwordError && (
+                <p className="text-xs font-semibold text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-100">
+                  {passwordError}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalOpen(false)}
+                  className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-sm rounded-2xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPassword || !newPassword || newPassword.length < 6}
+                  className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm rounded-2xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
+                  {savingPassword ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'Save Password'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -232,13 +232,16 @@ export default function LoginPage() {
             <>
               <BackButton onClick={goBack} />
               <h2 className="text-2xl font-black text-zinc-900 tracking-tight mt-6 mb-1">Sign in</h2>
-              <p className="text-sm text-zinc-500 mb-5">Enter your email and password.</p>
+              <p className="text-sm text-zinc-500 mb-5">Enter your email or @username and password.</p>
               <form onSubmit={handleEmailSignIn} className="space-y-3">
-                <EmailInput value={email} onChange={v => { setEmail(v); setError(''); }} autoFocus />
+                <EmailInput value={email} onChange={v => { setEmail(v); setError(''); }} autoFocus placeholder="Email or @username" />
                 <PasswordInput value={password} onChange={v => { setPassword(v); setError(''); }} show={showPw} onToggle={() => setShowPw(p => !p)} placeholder="Password" />
                 {error && <ErrorMsg msg={error} />}
                 <SubmitBtn label="Sign In" loading={isLoading} disabled={!email || !password} />
               </form>
+              <p className="mt-2 text-center text-[11px] text-zinc-400 font-medium">
+                You can sign in using your registered email or your @username.
+              </p>
               <div className="flex justify-between mt-3">
                 <button type="button" onClick={() => { reset(); setScreen('forgot'); }} className="text-xs font-semibold text-zinc-400 hover:text-indigo-600 transition-colors">
                   Forgot password?
@@ -341,15 +344,15 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function EmailInput({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+function EmailInput({ value, onChange, autoFocus, placeholder = "Email or @username" }: { value: string; onChange: (v: string) => void; autoFocus?: boolean; placeholder?: string }) {
   return (
     <div className="relative rounded-2xl border border-zinc-200 bg-white focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
       <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
         <Mail className="w-4 h-4 text-zinc-400" />
       </div>
-      <input type="email" autoFocus={autoFocus} required value={value} onChange={e => onChange(e.target.value)}
+      <input type="text" autoCapitalize="none" autoCorrect="off" autoFocus={autoFocus} required value={value} onChange={e => onChange(e.target.value)}
         className="block w-full pl-11 pr-4 py-3.5 text-sm border-0 rounded-2xl font-medium bg-transparent focus:ring-0 focus:outline-none"
-        placeholder="you@example.com" autoComplete="email" />
+        placeholder={placeholder} autoComplete="username" />
     </div>
   );
 }

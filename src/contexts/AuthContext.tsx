@@ -13,6 +13,9 @@ import {
   isSignInWithEmailLink,
   signInWithEmailLink,
   reload,
+  updatePassword,
+  linkWithCredential,
+  EmailAuthProvider,
 } from '../lib/firebase';
 import { GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged, User as FirebaseUser, getRedirectResult } from 'firebase/auth';
 import { useQuery, useMutation } from 'convex/react';
@@ -39,6 +42,7 @@ interface AuthContextType {
   sendMagicLink: (email: string) => Promise<void>;
   loginWithMagicLink: () => Promise<boolean>;
   resetPassword: (email: string) => Promise<void>;
+  addOrUpdatePassword: (newPassword: string) => Promise<void>;
   logout: () => void;
   // Profile helpers
   updateUser: (updates: Partial<User>) => void;
@@ -147,6 +151,7 @@ const AuthContext = createContext<AuthContextType>({
   sendMagicLink: async () => {},
   loginWithMagicLink: async () => false,
   resetPassword: async () => {},
+  addOrUpdatePassword: async () => {},
   logout: () => {},
   updateUser: () => {},
   waitForEmailVerification: async () => false,
@@ -475,17 +480,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------------------
 
   const login = async (emailOrUsername: string, password: string) => {
-    let email = emailOrUsername;
-    if (!emailOrUsername.includes('@')) {
-      const res = await fetch('/api/login-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: emailOrUsername }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.email) throw new Error('Username not found');
-      email = data.email;
+    let email = emailOrUsername.trim();
+    if (!email.includes('@')) {
+      const cleanUsername = email.replace(/^@+/, '').trim().toLowerCase();
+      let resolvedEmail: string | null = null;
+      try {
+        const res = await fetch('/api/login-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: cleanUsername }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.email) resolvedEmail = data.email;
+        }
+      } catch {
+        // Fallthrough to direct Convex query
+      }
+
+      if (!resolvedEmail) {
+        try {
+          const convexUrl = import.meta.env.VITE_CONVEX_URL;
+          if (convexUrl) {
+            const queryRes = await fetch(`${convexUrl.replace(/\/$/, '')}/api/query`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path: 'users:getByUsername',
+                format: 'json',
+                args: [{ username: cleanUsername }],
+              }),
+            });
+            if (queryRes.ok) {
+              const body = await queryRes.json();
+              if (body?.status === 'success' && body?.value?.email) {
+                resolvedEmail = body.value.email;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[AuthContext] Convex username lookup error:', e);
+        }
+      }
+
+      if (!resolvedEmail) {
+        throw new Error('No account found with this username. Please check your username or sign in with your email address.');
+      }
+      email = resolvedEmail;
     }
+
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
@@ -576,6 +619,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Please enter a valid email address.');
       }
       // Otherwise swallow — we show "if an account exists we've sent a link"
+    }
+  };
+
+  const addOrUpdatePassword = async (newPassword: string) => {
+    if (!auth.currentUser) {
+      throw new Error('You must be signed in to add or update your password.');
+    }
+    if (newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+    const fbUser = auth.currentUser;
+    try {
+      await updatePassword(fbUser, newPassword);
+    } catch (err: any) {
+      if (err?.code === 'auth/requires-recent-login') {
+        throw new Error('For security reasons, please sign out and sign back in before setting a password.');
+      }
+      if (fbUser.email) {
+        try {
+          const cred = EmailAuthProvider.credential(fbUser.email, newPassword);
+          await linkWithCredential(fbUser, cred);
+        } catch (linkErr: any) {
+          if (linkErr?.code === 'auth/credential-already-in-use' || linkErr?.code === 'auth/provider-already-linked') {
+            try {
+              await updatePassword(fbUser, newPassword);
+              return;
+            } catch (e: any) {
+              throw new Error(friendlyAuthError(e));
+            }
+          }
+          throw new Error(friendlyAuthError(linkErr));
+        }
+      } else {
+        throw new Error(friendlyAuthError(err));
+      }
     }
   };
 
@@ -962,6 +1040,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sendMagicLink,
         loginWithMagicLink,
         resetPassword,
+        addOrUpdatePassword,
         logout,
         updateUser,
         waitForEmailVerification,

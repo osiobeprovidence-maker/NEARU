@@ -598,6 +598,7 @@ export default function PageView() {
           </div>
         )}
       </div>
+    </div>
 
       {/* Mobile Bottom Tabs */}
       <div className="md:hidden fixed bottom-[60px] left-0 right-0 bg-white border-t border-zinc-100 flex justify-around items-center px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.02)] z-30">

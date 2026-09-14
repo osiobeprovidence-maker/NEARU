@@ -11,6 +11,9 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  updatePassword,
+  linkWithCredential,
+  EmailAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
@@ -54,6 +57,9 @@ googleProvider.addScope("email");
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
 export {
+  updatePassword,
+  linkWithCredential,
+  EmailAuthProvider,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
