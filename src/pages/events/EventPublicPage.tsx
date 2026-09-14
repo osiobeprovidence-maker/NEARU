@@ -5,7 +5,9 @@ import { api } from '../../../convex/_generated/api';
 import PageShell from '../../components/PageShell';
 import { Id } from '../../../convex/_generated/dataModel';
 import StatusBadge from '../../components/events/StatusBadge';
-import { Calendar, Users, MapPin, Trophy, ShieldAlert, ArrowRight, Megaphone, Plus, Clock, Info, CheckCircle2, UserPlus } from 'lucide-react';
+import BracketView from '../../components/events/BracketView';
+import StandingsView from '../../components/events/StandingsView';
+import { Calendar, Users, MapPin, Trophy, ShieldAlert, ArrowRight, Megaphone, Plus, Clock, Info, CheckCircle2, UserPlus, PlayCircle, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -15,6 +17,12 @@ export default function EventPublicPage() {
   const { convexUserId } = useAuth();
   
   const event = useQuery(api.events.getEvent, { eventId });
+  const competition = useQuery(api.competitions.getCompetition, { eventId });
+  const matches = useQuery(api.competitions.getMatches, competition ? { competitionId: competition._id } : "skip");
+  const rounds = useQuery(api.competitions.getRounds, competition ? { competitionId: competition._id } : "skip");
+  const standings = useQuery(api.competitions.getStandings, competition ? { competitionId: competition._id } : "skip");
+  const playerPosition = useQuery(api.competitions.getPlayerTournamentPosition, convexUserId ? { eventId, userId: convexUserId as Id<"users"> } : "skip");
+
   const announcements = useQuery(api.operations.getEventAnnouncements, { eventId });
   const teams = useQuery(api.events.getEventTeams, { eventId });
   const registrations = useQuery(api.events.getEventRegistrations, { eventId });
@@ -22,7 +30,7 @@ export default function EventPublicPage() {
   
   const joinTeam = useMutation(api.teams.joinTeam);
   
-  const [activeTab, setActiveTab] = useState<'Details' | 'Teams' | 'Rules' | 'Announcements'>('Details');
+  const [activeTab, setActiveTab] = useState<'Details' | 'Bracket' | 'Standings' | 'Teams' | 'Rules' | 'Announcements'>('Details');
   const [isJoining, setIsJoining] = useState<string | null>(null);
 
   // Check if player is already on a team in this event
@@ -102,9 +110,9 @@ export default function EventPublicPage() {
                       <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 w-full sm:w-auto flex items-center gap-3">
                         <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0" />
                         <div>
-                          <div className="text-xs font-black text-indigo-900">You are registered!</div>
+                          <div className="text-xs font-black text-indigo-900">Registered Team</div>
                           <div className="text-xs text-indigo-700 font-medium">
-                            Team: <Link to={`/teams/${playerCurrentTeam._id}`} className="font-bold underline">{playerCurrentTeam.name}</Link> ({teamRegistration?.status || 'Registered'})
+                            <Link to={`/teams/${playerCurrentTeam._id}`} className="font-bold underline">{playerCurrentTeam.name}</Link> ({teamRegistration?.status || 'Registered'})
                           </div>
                         </div>
                       </div>
@@ -124,6 +132,38 @@ export default function EventPublicPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Player Active Tournament Position Banner */}
+                {playerPosition && playerPosition.team && (
+                  <div className="my-6 p-5 bg-gradient-to-r from-zinc-900 to-indigo-950 text-white rounded-2xl shadow-lg border border-indigo-500/30 flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-400 font-black">
+                        <Trophy className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-indigo-400">Your Tournament Status</div>
+                        <div className="font-black text-sm text-white">
+                          Team {playerPosition.team.name}
+                        </div>
+                        {playerPosition.upcomingMatch ? (
+                          <div className="text-xs text-zinc-300 mt-0.5">
+                            Upcoming: <strong>{playerPosition.upcomingMatch.round?.name}</strong> vs {playerPosition.upcomingMatch.opponent?.name || 'TBD'}
+                            {playerPosition.upcomingMatch.scheduledTime ? ` (${playerPosition.upcomingMatch.scheduledTime})` : ''}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-400 mt-0.5">No active upcoming match scheduled</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveTab('Bracket')}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-colors shrink-0"
+                    >
+                      View Bracket Position
+                    </button>
+                  </div>
+                )}
 
                 {/* Key Metrics */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6 border-y border-zinc-100 my-6">
@@ -169,6 +209,31 @@ export default function EventPublicPage() {
               >
                 Overview & Details
               </button>
+
+              {competition && (
+                <button
+                  onClick={() => setActiveTab('Bracket')}
+                  className={cn(
+                    "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5",
+                    activeTab === 'Bracket' ? "border-indigo-600 text-indigo-600" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                  )}
+                >
+                  <Trophy className="w-4 h-4" /> Bracket
+                </button>
+              )}
+
+              {competition && competition.format.includes('Group') && (
+                <button
+                  onClick={() => setActiveTab('Standings')}
+                  className={cn(
+                    "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
+                    activeTab === 'Standings' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                  )}
+                >
+                  Group Standings
+                </button>
+              )}
+
               <button
                 onClick={() => setActiveTab('Teams')}
                 className={cn(
@@ -176,8 +241,9 @@ export default function EventPublicPage() {
                   activeTab === 'Teams' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
                 )}
               >
-                Registered Teams ({teams?.length || 0})
+                Teams ({teams?.length || 0})
               </button>
+
               <button
                 onClick={() => setActiveTab('Rules')}
                 className={cn(
@@ -187,6 +253,7 @@ export default function EventPublicPage() {
               >
                 Rules & Requirements
               </button>
+
               <button
                 onClick={() => setActiveTab('Announcements')}
                 className={cn(
@@ -234,6 +301,34 @@ export default function EventPublicPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Bracket Tab */}
+            {activeTab === 'Bracket' && (
+              <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm p-6 md:p-8 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-black text-zinc-900">Tournament Bracket</h2>
+                    <p className="text-xs text-zinc-500 font-medium">Follow live match progression through the knockout rounds.</p>
+                  </div>
+                  {competition && (
+                    <span className="px-2.5 py-1 rounded text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                      {competition.format}
+                    </span>
+                  )}
+                </div>
+
+                <BracketView
+                  matches={matches || []}
+                  rounds={rounds || []}
+                  readOnly={true}
+                />
+              </div>
+            )}
+
+            {/* Standings Tab */}
+            {activeTab === 'Standings' && (
+              <StandingsView standings={standings || []} />
             )}
 
             {/* Teams Tab */}
