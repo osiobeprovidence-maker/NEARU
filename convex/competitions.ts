@@ -77,7 +77,7 @@ export const generateSingleElimination = mutation({
       .map((r) => r.teamId!);
 
     if (approvedTeams.length < 2) {
-      throw new Error("Not enough approved teams to generate a competition.");
+      return null;
     }
 
     // 2. Create competition

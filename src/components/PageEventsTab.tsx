@@ -19,6 +19,18 @@ export default function PageEventsTab({ pageId, isManager }: { pageId: Id<"pages
 
   return (
     <div className="space-y-6">
+      {isManager && (
+        <div className="flex justify-end">
+          <Link
+            to={`/manage/events/create?pageId=${pageId}`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            Create Event
+          </Link>
+        </div>
+      )}
+
       {events.length === 0 ? (
         <div className="text-center py-16 bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm">
           <Trophy className="w-12 h-12 text-zinc-300 mx-auto mb-4" />
@@ -26,6 +38,15 @@ export default function PageEventsTab({ pageId, isManager }: { pageId: Id<"pages
           <p className="text-sm text-zinc-500 max-w-sm mx-auto mb-6">
             This page hasn't hosted any events recently.
           </p>
+          {isManager && (
+            <Link
+              to={`/manage/events/create?pageId=${pageId}`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-sm transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Create an Event
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import PageShell from '../../components/PageShell';
@@ -14,9 +14,11 @@ import { cn } from '../../lib/utils';
 
 export default function CreateEvent() {
   const { user, convexUserId } = useAuth();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const createEventMutation = useMutation(api.events.createEvent);
   const generateUploadUrl = useMutation(api.users.generateCoverUploadUrl);
+  const pageId = (searchParams.get('pageId') as string | null) || null;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +52,11 @@ export default function CreateEvent() {
       return;
     }
 
+    if (!pageId) {
+      setError('Please open this form from a page you manage.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
@@ -66,7 +73,7 @@ export default function CreateEvent() {
       }
 
       const eventId = await createEventMutation({
-        pageId: convexUserId as any,
+        pageId: pageId as any,
         name,
         game,
         description,

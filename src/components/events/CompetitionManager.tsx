@@ -16,10 +16,15 @@ export default function CompetitionManager({ eventId }: { eventId: Id<"events"> 
     setIsGenerating(true);
     setError(null);
     try {
-      await generateSingleElimination({
+      const result = await generateSingleElimination({
         eventId,
         name: "Main Tournament",
       });
+
+      if (!result) {
+        setError("At least 2 approved teams are required before generating a bracket.");
+        return;
+      }
     } catch (err: any) {
       setError(err.message || "Failed to generate competition.");
     } finally {
