@@ -1031,6 +1031,13 @@ export default defineSchema({
   })
     .index("by_cycle", ["cycleId"])
     .index("by_user_cycle", ["userId", "cycleId"]),
+
+  cycleComments: defineTable({
+    cycleId: v.id("cycles"),
+    userId: v.id("users"),
+    text: v.string(),
+    createdAt: v.number(),
+  }).index("by_cycle", ["cycleId"]),
   // --- EVENT MANAGEMENT PHASE 2: COMPETITION ENGINE ---
 
   competitions: defineTable({

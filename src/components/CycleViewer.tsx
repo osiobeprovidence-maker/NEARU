@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, MoreHorizontal, Heart, Eye, Trash2, Send, Play, Pause, Volume2, VolumeX, EyeOff, Flag } from 'lucide-react';
+import { X, MoreHorizontal, Heart, Eye, Trash2, Send, Play, Pause, Volume2, VolumeX, EyeOff, Flag, MessageSquare, Loader2, AlertCircle } from 'lucide-react';
 import Avatar from './Avatar';
 import { cn } from '../lib/utils';
 import { useMutation, useQuery } from 'convex/react';
@@ -39,6 +39,15 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
   const likeCycle = useMutation(api.cycles.likeCycle);
   const unlikeCycle = useMutation(api.cycles.unlikeCycle);
   const deleteCycle = useMutation(api.cycles.deleteCycle);
+  const addCommentMutation = useMutation(api.cycles.addComment);
+
+  const [imgError, setImgError] = useState(false);
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [activeGroupIndex, currentIndex]);
 
   const CYCLE_DURATION_MS = 5000;
 
@@ -52,6 +61,7 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
       setShowMenu(false);
       setShowDeleteConfirm(false);
       setShowEngagementModal(null);
+      setShowCommentsModal(false);
       setReplyText('');
     }
   }, [isOpen, initialGroupId, allGroups]);
@@ -62,6 +72,11 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
   const engagement = useQuery(
     api.cycles.getCycleEngagement,
     isOpen && currentCycle ? { cycleId: currentCycle._id as Id<"cycles"> } : 'skip'
+  );
+
+  const cycleComments = useQuery(
+    api.cycles.getComments,
+    showCommentsModal && currentCycle ? { cycleId: currentCycle._id as Id<"cycles"> } : 'skip'
   );
 
   const handleNextGroup = useCallback(() => {
@@ -121,7 +136,7 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
     
     document.body.style.overflow = 'hidden';
 
-    if (isPaused || showMenu || showDeleteConfirm || showEngagementModal || replyText.length > 0) {
+    if (isPaused || showMenu || showDeleteConfirm || showEngagementModal || showCommentsModal || replyText.length > 0) {
       if (videoRef.current && !videoRef.current.paused) {
         videoRef.current.pause();
       }
@@ -171,7 +186,7 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
       cancelAnimationFrame(animationFrame);
       document.body.style.overflow = 'auto';
     };
-  }, [currentIndex, activeGroupIndex, isPaused, showMenu, showDeleteConfirm, showEngagementModal, isOpen, activeGroup, currentCycle, replyText, handleNextCycle]);
+  }, [currentIndex, activeGroupIndex, isPaused, showMenu, showDeleteConfirm, showEngagementModal, showCommentsModal, isOpen, activeGroup, currentCycle, replyText, handleNextCycle]);
 
   const handleDelete = async () => {
     if (!currentCycle) return;
@@ -204,11 +219,24 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
     }
   };
 
-  const handleReplySubmit = () => {
-    if (!replyText.trim()) return;
-    // Real implementation would send a DM
-    setReplyText('');
-    setIsPaused(false);
+  const handleReplySubmit = async () => {
+    if (!replyText.trim() || !currentCycle) return;
+    try {
+      setIsSubmittingComment(true);
+      await addCommentMutation({
+        cycleId: currentCycle._id as Id<"cycles">,
+        text: replyText
+      });
+      setReplyText('');
+    } catch (error) {
+      console.error("Failed to post comment:", error);
+      window.dispatchEvent(new CustomEvent('show-toast', { 
+        detail: { message: "Failed to post comment", type: "error" } 
+      }));
+    } finally {
+      setIsSubmittingComment(false);
+      setIsPaused(false);
+    }
   };
 
   if (!isOpen || !activeGroup || !currentCycle) return null;
@@ -315,7 +343,7 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
               onClick={() => setIsPaused(!isPaused)}
             >
               {/* Tap Zones for Nav */}
-              {!showMenu && !showDeleteConfirm && !showEngagementModal && (
+              {!showMenu && !showDeleteConfirm && !showEngagementModal && !showCommentsModal && (
                 <>
                   <div className="absolute inset-y-0 left-0 w-1/4 z-10" onClick={(e) => { e.stopPropagation(); handlePrevCycle(); }} />
                   <div className="absolute inset-y-0 right-0 w-1/4 z-10" onClick={(e) => { e.stopPropagation(); handleNextCycle(); }} />
@@ -330,13 +358,21 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
                 </div>
               )}
 
-              {currentCycle.contentType === 'image' && currentCycle.mediaUrl && (
+              {currentCycle.contentType === 'image' && currentCycle.mediaUrl && !imgError && (
                 <img 
                   src={currentCycle.mediaUrl} 
                   alt="Cycle" 
                   className="w-full h-full object-contain"
                   draggable={false}
+                  onError={() => setImgError(true)}
                 />
+              )}
+
+              {currentCycle.contentType === 'image' && (!currentCycle.mediaUrl || imgError) && (
+                <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-zinc-900">
+                  <AlertCircle className="w-12 h-12 text-zinc-600 mb-4" />
+                  <p className="text-zinc-500 font-medium text-center">Media unavailable</p>
+                </div>
               )}
 
               {currentCycle.contentType === 'video' && currentCycle.mediaUrl && (
@@ -368,20 +404,30 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
                         onFocus={() => setIsPaused(true)}
                         onBlur={() => setIsPaused(false)}
                         onKeyDown={(e) => e.key === 'Enter' && handleReplySubmit()}
-                        placeholder={`Reply to @${activeGroup.name?.split(' ')[0]}...`}
+                        placeholder={`Comment on this story...`}
                         className="w-full bg-white/10 border border-white/20 text-white placeholder-white/60 text-sm rounded-full py-2.5 pl-4 pr-10 focus:outline-none focus:bg-white/20 transition-colors"
                       />
                       {replyText && (
-                        <button onClick={handleReplySubmit} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 rounded-full text-white hover:bg-indigo-500 transition-colors">
-                          <Send className="w-3.5 h-3.5" />
+                        <button 
+                          onClick={handleReplySubmit} 
+                          disabled={isSubmittingComment}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 rounded-full text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                        >
+                          {isSubmittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                         </button>
                       )}
                     </div>
                     <button onClick={handleToggleLike} className="p-2 group shrink-0">
                       <Heart className={cn("w-7 h-7 transition-colors", engagement?.likedByMe ? "fill-rose-500 text-rose-500" : "text-white group-hover:text-rose-200")} />
                     </button>
-                    <button className="p-2 text-white hover:text-indigo-300 transition-colors shrink-0">
-                      <Send className="w-6 h-6" />
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setShowCommentsModal(true); setIsPaused(true); }} 
+                      className="flex items-center gap-1.5 p-2 text-white hover:text-indigo-300 transition-colors shrink-0"
+                    >
+                      <MessageSquare className="w-6 h-6" />
+                      {engagement?.commentCount ? (
+                        <span className="font-bold text-sm">{engagement.commentCount}</span>
+                      ) : null}
                     </button>
                   </>
                 ) : (
@@ -400,6 +446,13 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
                       >
                         <Heart className="w-4 h-4" />
                         <span>{engagement?.likeCount || 0}</span>
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setShowCommentsModal(true); setIsPaused(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-[13px] transition-colors"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        <span>{engagement?.commentCount || 0}</span>
                       </button>
                     </div>
                   </div>
@@ -546,6 +599,87 @@ export default function CycleViewer({ isOpen, onClose, allGroups, initialGroupId
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Comments Modal */}
+            <AnimatePresence>
+              {showCommentsModal && (
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-50 bg-black/60 flex flex-col justify-end"
+                  onClick={() => { setShowCommentsModal(false); setIsPaused(false); }}
+                >
+                  <motion.div 
+                    initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    className="bg-zinc-900 w-full h-[70%] sm:h-[80%] rounded-t-3xl flex flex-col overflow-hidden border-t border-white/10"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between p-4 border-b border-white/10">
+                      <h3 className="text-white font-bold text-lg">Comments</h3>
+                      <button 
+                        onClick={() => { setShowCommentsModal(false); setIsPaused(false); }}
+                        className="p-2 rounded-full hover:bg-white/10 text-zinc-400 transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                      {cycleComments === undefined ? (
+                        <div className="flex justify-center py-10">
+                          <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+                        </div>
+                      ) : cycleComments.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <MessageSquare className="w-12 h-12 text-zinc-700 mb-3" />
+                          <p className="text-zinc-400 font-bold">No comments yet</p>
+                          <p className="text-sm text-zinc-500">Be the first to comment on this story.</p>
+                        </div>
+                      ) : (
+                        cycleComments.map(comment => (
+                          <div key={comment._id} className="flex gap-3">
+                            <Avatar src={comment.author?.avatar} name={comment.author?.name || 'User'} size="sm" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-baseline gap-2">
+                                <span className="font-bold text-white text-[13px]">{comment.author?.name || 'Unknown'}</span>
+                                <span className="text-[11px] text-zinc-500">
+                                  {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-[14px] text-zinc-200 mt-0.5 break-words whitespace-pre-wrap">{comment.text}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="p-4 border-t border-white/10 bg-zinc-900 pb-safe-bottom">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={undefined} name="You" size="sm" />
+                        <div className="flex-1 relative">
+                          <input 
+                            type="text"
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleReplySubmit()}
+                            placeholder="Add a comment..."
+                            className="w-full bg-white/10 border border-white/20 text-white placeholder-white/50 text-sm rounded-full py-2.5 pl-4 pr-10 focus:outline-none focus:border-white/40 transition-colors"
+                          />
+                          {replyText && (
+                            <button 
+                              onClick={handleReplySubmit}
+                              disabled={isSubmittingComment}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 rounded-full text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+                            >
+                              {isSubmittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 </motion.div>

@@ -365,6 +365,10 @@ export const getCycleEngagement = query({
         viewCount: cycle.viewedBy?.length || 0,
         likers: [],
         viewers: [],
+        commentCount: (await ctx.db
+          .query("cycleComments")
+          .withIndex("by_cycle", (q) => q.eq("cycleId", args.cycleId))
+          .collect()).length,
       };
     }
 
@@ -403,7 +407,59 @@ export const getCycleEngagement = query({
       viewCount: cycle.viewedBy?.length || 0,
       likers: likers.filter(Boolean),
       viewers: viewers.filter(Boolean),
+      commentCount: (await ctx.db
+        .query("cycleComments")
+        .withIndex("by_cycle", (q) => q.eq("cycleId", args.cycleId))
+        .collect()).length,
     };
+  },
+});
+
+export const addComment = mutation({
+  args: { cycleId: v.id("cycles"), text: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthenticated");
+
+    if (!args.text.trim()) throw new Error("Comment cannot be empty");
+    
+    await ctx.db.insert("cycleComments", {
+      cycleId: args.cycleId,
+      userId: user._id,
+      text: args.text.trim(),
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const getComments = query({
+  args: { cycleId: v.id("cycles") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUserOrNull(ctx);
+    if (!user) return [];
+
+    const comments = await ctx.db
+      .query("cycleComments")
+      .withIndex("by_cycle", (q) => q.eq("cycleId", args.cycleId))
+      .order("asc")
+      .collect();
+
+    return await Promise.all(
+      comments.map(async (c) => {
+        const u = await ctx.db.get(c.userId);
+        return {
+          ...c,
+          author: u
+            ? {
+                _id: u._id,
+                name: u.name,
+                username: u.username,
+                avatar: u.avatar,
+              }
+            : null,
+        };
+      })
+    );
   },
 });
 
