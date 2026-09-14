@@ -77,21 +77,38 @@ export default function ManagePage() {
     api.follows.getFollowingCount,
     convexUserId ? { userId: convexUserId as any } : 'skip'
   );
+  const managedPages = useQuery(
+    api.pages.listUserManagedPages,
+    convexUserId ? { userId: convexUserId as any } : 'skip'
+  );
+  const activePage = managedPages && managedPages.length > 0 ? managedPages[0] : null;
+  const targetPageId = activePage ? activePage._id : (convexUserId as any);
+
   const content = useQuery(
     api.rallies.listByCreator,
     convexUserId
-      ? { creatorId: convexUserId as any, userId: convexUserId as any }
+      ? { creatorId: convexUserId as any, userId: convexUserId as any, includePagePosts: true }
       : 'skip'
+  );
+
+  const pagePosts = useQuery(
+    api.rallies.listByPage,
+    activePage ? { pageId: activePage._id, userId: convexUserId as any } : 'skip'
   );
 
   const orgEvents = useQuery(
     api.events.getOrganizationEvents,
-    convexUserId ? { pageId: convexUserId as any } : 'skip'
+    targetPageId ? { pageId: targetPageId } : 'skip'
   );
 
   const mapped: Rally[] = useMemo(() => {
-    if (!content) return [];
-    return content.map((r) => ({
+    const combined = [...(content || []), ...(pagePosts || [])];
+    const uniqueMap = new Map();
+    for (const r of combined) {
+      uniqueMap.set(r._id, r);
+    }
+    const allItems = Array.from(uniqueMap.values());
+    return allItems.map((r: any) => ({
       id: r._id,
       type: r.type,
       title: r.title,
@@ -103,7 +120,10 @@ export default function ManagePage() {
       isPaid: r.isPaid,
       price: r.price,
       pricing: r.pricing,
-      creator: {
+      authorType: r.authorType,
+      pageId: r.pageId,
+      pageAuthor: r.pageAuthor,
+      creator: r.creator || {
         id: convexUserId || 'me',
         name: user.name,
         username: user.username,
@@ -134,7 +154,7 @@ export default function ManagePage() {
       isLiked: r.isLiked,
       isRsvpd: r.isRsvpd,
     }));
-  }, [content, convexUserId, user]);
+  }, [content, pagePosts, convexUserId, user]);
 
   const posts = mapped.filter((r) => r.type === 'POST');
   const legacyEvents = mapped.filter((r) => r.type === 'EVENT'); // Legacy events from rallies

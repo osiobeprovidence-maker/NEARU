@@ -272,6 +272,7 @@ export const listByCreator = query({
     creatorId: v.union(v.id("users"), v.string()),
     userId: v.optional(v.union(v.id("users"), v.string(), v.null())),
     tab: v.optional(v.union(v.literal("Created"), v.literal("Interested"), v.literal("Completed"), v.string())),
+    includePagePosts: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const creatorId = ctx.db.normalizeId("users", args.creatorId);
@@ -301,11 +302,15 @@ export const listByCreator = query({
         .withIndex("by_creator", (q) => q.eq("creatorId", creatorId))
         .order("desc")
         .collect();
-      const personalRallies = rallies.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
+
+      const filteredRallies = args.includePagePosts
+        ? rallies
+        : rallies.filter((r) => (!r.authorType || r.authorType === "user") && !r.pageId);
+
       if (tab === "Completed") {
-        targetRallies = personalRallies.filter((r) => r.status === "COMPLETED");
+        targetRallies = filteredRallies.filter((r) => r.status === "COMPLETED");
       } else {
-        targetRallies = personalRallies;
+        targetRallies = filteredRallies;
       }
     }
 
