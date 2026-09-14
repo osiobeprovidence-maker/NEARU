@@ -197,7 +197,7 @@ export const getSeeds = query({
 export const getPlayerTournamentPosition = query({
   args: {
     eventId: v.id("events"),
-    userId: v.id("users"),
+    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const competition = await ctx.db
@@ -207,10 +207,25 @@ export const getPlayerTournamentPosition = query({
 
     if (!competition) return null;
 
+    // Resolve user document safely by Convex ID or by_firebase_uid
+    let targetUser: any = null;
+    try {
+      targetUser = await ctx.db.get(args.userId as Id<"users">);
+    } catch (_) {}
+
+    if (!targetUser) {
+      targetUser = await ctx.db
+        .query("users")
+        .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId))
+        .first();
+    }
+
+    if (!targetUser) return { competition, team: null };
+
     // Find player's team for this event
     const memberships = await ctx.db
       .query("teamMembers")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", targetUser._id))
       .collect();
 
     let playerTeam: any = null;
