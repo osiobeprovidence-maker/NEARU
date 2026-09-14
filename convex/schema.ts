@@ -912,6 +912,9 @@ export default defineSchema({
     prizePool: v.optional(v.string()),
     rules: v.optional(v.string()),
     contactInfo: v.optional(v.string()),
+    checkInWindowMinutes: v.optional(v.number()),
+    championTeamId: v.optional(v.id("teams")),
+    runnerUpTeamId: v.optional(v.id("teams")),
     
     // State
     status: v.union(
@@ -1101,6 +1104,9 @@ export default defineSchema({
     
     scheduledTime: v.optional(v.string()), // ISO date string
     matchIndex: v.number(), // Ordering within the round (e.g. Match 1, Match 2)
+    assignedRefereeId: v.optional(v.id("users")),
+    notes: v.optional(v.string()),
+    pauseReason: v.optional(v.string()),
   })
     .index("by_event", ["eventId"])
     .index("by_competition", ["competitionId"])
@@ -1158,6 +1164,7 @@ export default defineSchema({
     reportingTeamId: v.id("teams"),
     reason: v.string(),
     description: v.string(),
+    evidenceUrl: v.optional(v.string()),
     status: v.union(
       v.literal("Open"),
       v.literal("Under Review"),
@@ -1188,6 +1195,7 @@ export default defineSchema({
     title: v.string(),
     content: v.string(),
     authorId: v.id("users"),
+    priority: v.optional(v.union(v.literal("Normal"), v.literal("Important"), v.literal("Emergency"))),
     createdAt: v.number(),
   })
     .index("by_event", ["eventId"])

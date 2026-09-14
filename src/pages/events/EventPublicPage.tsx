@@ -7,7 +7,24 @@ import { Id } from '../../../convex/_generated/dataModel';
 import StatusBadge from '../../components/events/StatusBadge';
 import BracketView from '../../components/events/BracketView';
 import StandingsView from '../../components/events/StandingsView';
-import { Calendar, Users, MapPin, Trophy, ShieldAlert, ArrowRight, Megaphone, Plus, Clock, Info, CheckCircle2, UserPlus, PlayCircle, Shield } from 'lucide-react';
+import TournamentOperationsDashboard from '../../components/events/TournamentOperationsDashboard';
+import {
+  Calendar,
+  Users,
+  Trophy,
+  ShieldAlert,
+  Megaphone,
+  Plus,
+  Clock,
+  CheckCircle2,
+  UserPlus,
+  PlayCircle,
+  Award,
+  Settings,
+  Flame,
+  ArrowRight,
+  Shield,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -15,29 +32,32 @@ export default function EventPublicPage() {
   const { id } = useParams();
   const eventId = id as Id<"events">;
   const { convexUserId } = useAuth();
-  
+
   const event = useQuery(api.events.getEvent, { eventId });
   const competition = useQuery(api.competitions.getCompetition, { eventId });
   const matches = useQuery(api.competitions.getMatches, competition ? { competitionId: competition._id } : "skip");
   const rounds = useQuery(api.competitions.getRounds, competition ? { competitionId: competition._id } : "skip");
   const standings = useQuery(api.competitions.getStandings, competition ? { competitionId: competition._id } : "skip");
-  const playerPosition = useQuery(api.competitions.getPlayerTournamentPosition, convexUserId ? { eventId, userId: convexUserId as Id<"users"> } : "skip");
+  const playerPosition = useQuery(
+    api.competitions.getPlayerTournamentPosition,
+    convexUserId ? { eventId, userId: convexUserId as Id<"users"> } : "skip"
+  );
 
+  const liveOverview = useQuery(api.operations.getLiveEventOverview, { eventId });
   const announcements = useQuery(api.operations.getEventAnnouncements, { eventId });
   const teams = useQuery(api.events.getEventTeams, { eventId });
   const registrations = useQuery(api.events.getEventRegistrations, { eventId });
   const myTeams = useQuery(api.teams.getMyTeams, convexUserId ? { userId: convexUserId as Id<"users"> } : "skip");
-  
+
   const joinTeam = useMutation(api.teams.joinTeam);
-  
+
   const [activeTab, setActiveTab] = useState<'Details' | 'Bracket' | 'Standings' | 'Teams' | 'Rules' | 'Announcements'>('Details');
   const [isJoining, setIsJoining] = useState<string | null>(null);
+  const [showOpsDashboard, setShowOpsDashboard] = useState<boolean>(false);
 
   // Check if player is already on a team in this event
-  const playerCurrentTeam = myTeams?.find(t => t.eventId === eventId);
-  const teamRegistration = playerCurrentTeam
-    ? registrations?.find(r => r.teamId === playerCurrentTeam._id)
-    : null;
+  const playerCurrentTeam = myTeams?.find((t) => t.eventId === eventId);
+  const teamRegistration = playerCurrentTeam ? registrations?.find((r) => r.teamId === playerCurrentTeam._id) : null;
 
   const handleJoinTeam = async (teamId: Id<"teams">) => {
     setIsJoining(teamId);
@@ -45,13 +65,13 @@ export default function EventPublicPage() {
       await joinTeam({ teamId });
       window.dispatchEvent(
         new CustomEvent('show-toast', {
-          detail: { title: 'Success', subtitle: 'You have joined the team!' }
+          detail: { title: 'Success', subtitle: 'You have joined the team!' },
         })
       );
     } catch (err: any) {
       window.dispatchEvent(
         new CustomEvent('show-toast', {
-          detail: { title: 'Failed to join', subtitle: err.message }
+          detail: { title: 'Failed to join', subtitle: err.message },
         })
       );
     } finally {
@@ -61,16 +81,114 @@ export default function EventPublicPage() {
 
   const isRegistrationOpen = event?.status === 'Registration Open';
   const isRegistrationClosed = event?.status === 'Registration Closed' || event?.status === 'Completed';
+  const isEventAdmin = convexUserId && (event?.createdBy === convexUserId || event?.page?.creatorId === convexUserId);
 
   return (
-    <PageShell title="Event Details">
+    <PageShell title="Event Hub">
       <div className="max-w-4xl mx-auto pb-20">
         {!event ? (
-          <div className="animate-pulse bg-white md:rounded-[2rem] border border-zinc-200 h-64"></div>
+          <div className="animate-pulse bg-white md:rounded-[2rem] border border-zinc-200 h-64" />
         ) : (
           <div className="space-y-6">
+            {/* Top Operations Toggle Banner for Admins */}
+            {isEventAdmin && (
+              <div className="bg-gradient-to-r from-zinc-900 via-indigo-950 to-zinc-900 p-4 md:rounded-2xl border border-indigo-500/30 text-white flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Settings className="w-5 h-5 text-indigo-400 animate-spin-slow" />
+                  <div>
+                    <div className="font-black text-sm">Tournament Administrator Access</div>
+                    <div className="text-xs text-zinc-400">Manage live matches, check-ins, disputes, and announcements.</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowOpsDashboard(!showOpsDashboard)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs rounded-xl shadow-md transition-all whitespace-nowrap"
+                >
+                  {showOpsDashboard ? 'Close Operations Desk' : 'Launch Operations Desk'}
+                </button>
+              </div>
+            )}
+
+            {/* Embedded Admin Operations Dashboard */}
+            {showOpsDashboard && convexUserId && (
+              <TournamentOperationsDashboard
+                eventId={eventId}
+                currentUserId={convexUserId as Id<"users">}
+                onClose={() => setShowOpsDashboard(false)}
+              />
+            )}
+
+            {/* LIVE MATCHES TICKER BANNER (Phase 3) */}
+            {liveOverview && liveOverview.liveMatches.length > 0 && (
+              <div className="bg-rose-950/90 border border-rose-500/40 rounded-2xl p-4 text-white shadow-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                    <span className="font-black text-xs uppercase tracking-wider text-rose-400">LIVE MATCHES IN PROGRESS</span>
+                  </div>
+                  <span className="text-xs text-rose-300 font-semibold">{liveOverview.liveMatches.length} Active Game(s)</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {liveOverview.liveMatches.map((lm) => (
+                    <div key={lm._id} className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 flex justify-between items-center text-xs">
+                      <div>
+                        <div className="text-[10px] text-zinc-400 font-bold uppercase">{lm.roundName}</div>
+                        <div className="font-bold text-sm text-white mt-0.5">
+                          {lm.teamA?.name || 'TBD'} <span className="text-indigo-400 font-black">{lm.teamAScore ?? 0} - {lm.teamBScore ?? 0}</span> {lm.teamB?.name || 'TBD'}
+                        </div>
+                      </div>
+                      <Link
+                        to={`/matches/${lm._id}`}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-[11px] flex items-center gap-1"
+                      >
+                        <PlayCircle className="w-3.5 h-3.5" /> Room
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TOURNAMENT CHAMPION PODIUM (Phase 3 Completion) */}
+            {liveOverview && liveOverview.champion && (
+              <div className="bg-gradient-to-r from-amber-950 via-zinc-900 to-amber-950 border border-amber-500/40 rounded-3xl p-6 md:p-8 text-white shadow-2xl space-y-4">
+                <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-widest">
+                  <Trophy className="w-5 h-5 text-amber-400 animate-bounce" /> Official Tournament Results
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-amber-500/20 border-2 border-amber-500 rounded-2xl flex items-center justify-center font-black text-2xl text-amber-300">
+                      🏆
+                    </div>
+                    <div>
+                      <div className="text-xs text-amber-400 font-bold uppercase">Champion</div>
+                      <h2 className="text-2xl font-black text-white">{liveOverview.champion.name}</h2>
+                    </div>
+                  </div>
+
+                  {liveOverview.runnerUp && (
+                    <div className="flex items-center gap-3 bg-zinc-900/80 px-4 py-3 rounded-2xl border border-zinc-800">
+                      <Award className="w-8 h-8 text-zinc-400" />
+                      <div>
+                        <div className="text-[10px] text-zinc-400 font-bold uppercase">Runner-up 🥈</div>
+                        <div className="text-sm font-bold text-zinc-200">{liveOverview.runnerUp.name}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-amber-500/20 flex gap-6 text-xs text-zinc-400 font-medium">
+                  <span>Total Matches: <strong className="text-white">{liveOverview.totalMatches}</strong></span>
+                  <span>Completed: <strong className="text-white">{liveOverview.completedMatchesCount}</strong></span>
+                  <span>Status: <strong className="text-emerald-400 font-bold">Official History Preserved</strong></span>
+                </div>
+              </div>
+            )}
+
+            {/* MAIN EVENT CARD & HEADER */}
             <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm overflow-hidden">
-              {/* Banner Header */}
               {event.bannerUrl ? (
                 <div className="w-full h-48 sm:h-64 bg-zinc-900 relative">
                   <img src={event.bannerUrl} alt={event.name} className="w-full h-full object-cover" />
@@ -87,7 +205,7 @@ export default function EventPublicPage() {
                   </div>
                 </div>
               )}
-              
+
               <div className="p-6 md:p-8">
                 <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
                   <div className="space-y-2">
@@ -97,7 +215,10 @@ export default function EventPublicPage() {
                       </span>
                       {event.page && (
                         <span className="text-sm font-semibold text-zinc-500">
-                          Organized by <Link to={`/user/${event.pageId}`} className="text-indigo-600 font-bold hover:underline">{event.page.name || event.page.organizationName}</Link>
+                          Organized by{' '}
+                          <Link to={`/user/${event.pageId}`} className="text-indigo-600 font-bold hover:underline">
+                            {event.page.name || event.page.organizationName}
+                          </Link>
                         </span>
                       )}
                     </div>
@@ -112,7 +233,10 @@ export default function EventPublicPage() {
                         <div>
                           <div className="text-xs font-black text-indigo-900">Registered Team</div>
                           <div className="text-xs text-indigo-700 font-medium">
-                            <Link to={`/teams/${playerCurrentTeam._id}`} className="font-bold underline">{playerCurrentTeam.name}</Link> ({teamRegistration?.status || 'Registered'})
+                            <Link to={`/teams/${playerCurrentTeam._id}`} className="font-bold underline">
+                              {playerCurrentTeam.name}
+                            </Link>{' '}
+                            ({teamRegistration?.status || 'Registered'})
                           </div>
                         </div>
                       </div>
@@ -141,14 +265,17 @@ export default function EventPublicPage() {
                         <Trophy className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-indigo-400">Your Tournament Status</div>
-                        <div className="font-black text-sm text-white">
-                          Team {playerPosition.team.name}
+                        <div className="text-[10px] font-black uppercase tracking-wider text-indigo-400">
+                          Your Tournament Status
                         </div>
+                        <div className="font-black text-sm text-white">Team {playerPosition.team.name}</div>
                         {playerPosition.upcomingMatch ? (
                           <div className="text-xs text-zinc-300 mt-0.5">
-                            Upcoming: <strong>{playerPosition.upcomingMatch.round?.name}</strong> vs {playerPosition.upcomingMatch.opponent?.name || 'TBD'}
-                            {playerPosition.upcomingMatch.scheduledTime ? ` (${playerPosition.upcomingMatch.scheduledTime})` : ''}
+                            Upcoming: <strong>{playerPosition.upcomingMatch.round?.name}</strong> vs{' '}
+                            {playerPosition.upcomingMatch.opponent?.name || 'TBD'}
+                            {playerPosition.upcomingMatch.scheduledTime
+                              ? ` (${playerPosition.upcomingMatch.scheduledTime})`
+                              : ''}
                           </div>
                         ) : (
                           <div className="text-xs text-zinc-400 mt-0.5">No active upcoming match scheduled</div>
@@ -156,12 +283,22 @@ export default function EventPublicPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setActiveTab('Bracket')}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-colors shrink-0"
-                    >
-                      View Bracket Position
-                    </button>
+                    <div className="flex gap-2">
+                      {playerPosition.upcomingMatch && (
+                        <Link
+                          to={`/matches/${playerPosition.upcomingMatch._id}`}
+                          className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors shrink-0"
+                        >
+                          Match Room & Check-in
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => setActiveTab('Bracket')}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-colors shrink-0"
+                      >
+                        Bracket Position
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -194,7 +331,6 @@ export default function EventPublicPage() {
                     <div className="text-sm font-bold text-zinc-900">{event.prizePool || 'Bragging Rights'}</div>
                   </div>
                 </div>
-
               </div>
             </div>
 
@@ -203,8 +339,10 @@ export default function EventPublicPage() {
               <button
                 onClick={() => setActiveTab('Details')}
                 className={cn(
-                  "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
-                  activeTab === 'Details' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                  'px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap',
+                  activeTab === 'Details'
+                    ? 'border-zinc-900 text-zinc-900'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-700'
                 )}
               >
                 Overview & Details
@@ -214,8 +352,10 @@ export default function EventPublicPage() {
                 <button
                   onClick={() => setActiveTab('Bracket')}
                   className={cn(
-                    "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5",
-                    activeTab === 'Bracket' ? "border-indigo-600 text-indigo-600" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                    'px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5',
+                    activeTab === 'Bracket'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-700'
                   )}
                 >
                   <Trophy className="w-4 h-4" /> Bracket
@@ -226,8 +366,10 @@ export default function EventPublicPage() {
                 <button
                   onClick={() => setActiveTab('Standings')}
                   className={cn(
-                    "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
-                    activeTab === 'Standings' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                    'px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap',
+                    activeTab === 'Standings'
+                      ? 'border-zinc-900 text-zinc-900'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-700'
                   )}
                 >
                   Group Standings
@@ -237,8 +379,10 @@ export default function EventPublicPage() {
               <button
                 onClick={() => setActiveTab('Teams')}
                 className={cn(
-                  "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
-                  activeTab === 'Teams' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                  'px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap',
+                  activeTab === 'Teams'
+                    ? 'border-zinc-900 text-zinc-900'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-700'
                 )}
               >
                 Teams ({teams?.length || 0})
@@ -247,8 +391,10 @@ export default function EventPublicPage() {
               <button
                 onClick={() => setActiveTab('Rules')}
                 className={cn(
-                  "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap",
-                  activeTab === 'Rules' ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                  'px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap',
+                  activeTab === 'Rules'
+                    ? 'border-zinc-900 text-zinc-900'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-700'
                 )}
               >
                 Rules & Requirements
@@ -257,8 +403,10 @@ export default function EventPublicPage() {
               <button
                 onClick={() => setActiveTab('Announcements')}
                 className={cn(
-                  "px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap flex items-center gap-2",
-                  activeTab === 'Announcements' ? "border-indigo-600 text-indigo-600" : "border-transparent text-zinc-500 hover:text-zinc-700"
+                  'px-6 py-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap flex items-center gap-2',
+                  activeTab === 'Announcements'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-700'
                 )}
               >
                 <Megaphone className="w-4 h-4" /> Announcements ({announcements?.length || 0})
@@ -271,14 +419,12 @@ export default function EventPublicPage() {
                 {event.description ? (
                   <div>
                     <h2 className="text-lg font-black text-zinc-900 mb-2">About this event</h2>
-                    <p className="text-zinc-600 whitespace-pre-wrap leading-relaxed text-sm">
-                      {event.description}
-                    </p>
+                    <p className="text-zinc-600 whitespace-pre-wrap leading-relaxed text-sm">{event.description}</p>
                   </div>
                 ) : (
                   <p className="text-zinc-400 text-sm font-medium">No description provided for this event.</p>
                 )}
-                
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100">
                     <h3 className="font-black text-sm text-zinc-900 mb-2">Format & Location</h3>
@@ -286,18 +432,18 @@ export default function EventPublicPage() {
                       <strong>Location:</strong> {event.isOnline ? 'Online Event' : event.location || 'TBA'}
                     </p>
                     <p className="text-xs text-zinc-600 mt-1">
-                      <strong>Registration Type:</strong> {event.registrationType === 'team' ? 'Team Roster' : 'Individual'}
+                      <strong>Registration Type:</strong>{' '}
+                      {event.registrationType === 'team' ? 'Team Roster' : 'Individual'}
                     </p>
                     <p className="text-xs text-zinc-600 mt-1">
-                      <strong>Team Capacity:</strong> {event.minPlayersPerTeam || 1} - {event.maxPlayersPerTeam || '∞'} players (+{event.maxSubstitutes || 0} subs)
+                      <strong>Team Capacity:</strong> {event.minPlayersPerTeam || 1} -{' '}
+                      {event.maxPlayersPerTeam || '∞'} players (+{event.maxSubstitutes || 0} subs)
                     </p>
                   </div>
 
                   <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100">
                     <h3 className="font-black text-sm text-zinc-900 mb-2">Organizer Contact</h3>
-                    <p className="text-xs text-zinc-600">
-                      {event.contactInfo || 'Contact via Organization page.'}
-                    </p>
+                    <p className="text-xs text-zinc-600">{event.contactInfo || 'Contact via Organization page.'}</p>
                   </div>
                 </div>
               </div>
@@ -309,7 +455,9 @@ export default function EventPublicPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-xl font-black text-zinc-900">Tournament Bracket</h2>
-                    <p className="text-xs text-zinc-500 font-medium">Follow live match progression through the knockout rounds.</p>
+                    <p className="text-xs text-zinc-500 font-medium">
+                      Follow live match progression through the knockout rounds.
+                    </p>
                   </div>
                   {competition && (
                     <span className="px-2.5 py-1 rounded text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200">
@@ -318,18 +466,12 @@ export default function EventPublicPage() {
                   )}
                 </div>
 
-                <BracketView
-                  matches={matches || []}
-                  rounds={rounds || []}
-                  readOnly={true}
-                />
+                <BracketView matches={matches || []} rounds={rounds || []} readOnly={true} />
               </div>
             )}
 
             {/* Standings Tab */}
-            {activeTab === 'Standings' && (
-              <StandingsView standings={standings || []} />
-            )}
+            {activeTab === 'Standings' && <StandingsView standings={standings || []} />}
 
             {/* Teams Tab */}
             {activeTab === 'Teams' && (
@@ -360,7 +502,10 @@ export default function EventPublicPage() {
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-2">
                     {teams.map((team) => (
-                      <div key={team._id} className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                      <div
+                        key={team._id}
+                        className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm hover:shadow-md transition-shadow"
+                      >
                         <Link to={`/teams/${team._id}`} className="flex items-center gap-4 mb-4">
                           {team.logoUrl ? (
                             <img src={team.logoUrl} alt={team.name} className="w-12 h-12 rounded-xl object-cover" />
@@ -370,18 +515,22 @@ export default function EventPublicPage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-zinc-900 hover:text-indigo-600 transition-colors truncate">{team.name}</h3>
+                            <h3 className="font-bold text-zinc-900 hover:text-indigo-600 transition-colors truncate">
+                              {team.name}
+                            </h3>
                             <p className="text-xs text-zinc-500 font-medium truncate">Captain: {team.captainName}</p>
                           </div>
                         </Link>
-                        
+
                         <div className="flex items-center justify-between pt-4 border-t border-zinc-100">
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600">
                             <Users className="w-4 h-4 text-zinc-400" />
                             {team.memberCount} / {event.maxPlayersPerTeam || '∞'} members
                           </div>
-                          
-                          {isRegistrationOpen && !playerCurrentTeam && (!event.maxPlayersPerTeam || team.memberCount < event.maxPlayersPerTeam) ? (
+
+                          {isRegistrationOpen &&
+                          !playerCurrentTeam &&
+                          (!event.maxPlayersPerTeam || team.memberCount < event.maxPlayersPerTeam) ? (
                             <button
                               onClick={() => handleJoinTeam(team._id)}
                               disabled={isJoining === team._id}
@@ -392,7 +541,11 @@ export default function EventPublicPage() {
                             </button>
                           ) : (
                             <span className="px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-500 text-[10px] font-black uppercase tracking-wider">
-                              {isRegistrationClosed ? 'Closed' : team.memberCount >= (event.maxPlayersPerTeam || 99) ? 'Full' : 'In Roster'}
+                              {isRegistrationClosed
+                                ? 'Closed'
+                                : team.memberCount >= (event.maxPlayersPerTeam || 99)
+                                ? 'Full'
+                                : 'In Roster'}
                             </span>
                           )}
                         </div>
@@ -437,13 +590,28 @@ export default function EventPublicPage() {
                   <Megaphone className="w-6 h-6 text-indigo-600" />
                   <h2 className="text-xl font-black text-zinc-900">Official Announcements</h2>
                 </div>
-                
+
                 {announcements && announcements.length > 0 ? (
                   <div className="space-y-4">
                     {announcements.map((announcement) => (
                       <div key={announcement._id} className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100">
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-bold text-zinc-900">{announcement.title}</h3>
+                          <h3 className="font-bold text-zinc-900 flex items-center gap-2">
+                            {announcement.title}
+                            {announcement.priority && (
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                  announcement.priority === 'Emergency'
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : announcement.priority === 'Important'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-zinc-200 text-zinc-700'
+                                }`}
+                              >
+                                {announcement.priority}
+                              </span>
+                            )}
+                          </h3>
                           <span className="text-xs font-semibold text-zinc-400">
                             {new Date(announcement.createdAt).toLocaleDateString()}
                           </span>
@@ -459,7 +627,6 @@ export default function EventPublicPage() {
                 )}
               </div>
             )}
-
           </div>
         )}
       </div>

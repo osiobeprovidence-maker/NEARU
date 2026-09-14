@@ -5,12 +5,16 @@ import { api } from '../../../convex/_generated/api';
 import PageShell from '../../components/PageShell';
 import { Id } from '../../../convex/_generated/dataModel';
 import StatusBadge from '../../components/events/StatusBadge';
-import { Calendar, Users, ChevronLeft, MapPin, Search, UserCheck, XCircle, CheckCircle, Trophy, Clock, Play, AlertCircle, Eye, Shield } from 'lucide-react';
+import CompetitionManager from '../../components/events/CompetitionManager';
+import TournamentOperationsDashboard from '../../components/events/TournamentOperationsDashboard';
+import { useAuth } from '../../contexts/AuthContext';
+import { Calendar, Users, ChevronLeft, MapPin, Search, UserCheck, XCircle, CheckCircle, Trophy, Clock, Play, AlertCircle, Eye, Shield, Settings } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export default function ManageEvent() {
   const { id } = useParams();
   const eventId = id as Id<"events">;
+  const { convexUserId } = useAuth();
   
   const event = useQuery(api.events.getEvent, { eventId });
   const registrations = useQuery(api.events.getEventRegistrations, { eventId });
@@ -20,7 +24,7 @@ export default function ManageEvent() {
   const updateStatusMutation = useMutation(api.events.updateEventStatus);
 
   const [activeStatusTab, setActiveStatusTab] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
-  const [selectedTeam, setSelectedTeam] = useState<any | null>(null);
+  const [showOpsDashboard, setShowOpsDashboard] = useState<boolean>(false);
 
   const filteredRegistrations = registrations?.filter((r) => {
     if (activeStatusTab === 'All') return true;
@@ -98,12 +102,22 @@ export default function ManageEvent() {
                     </div>
                   </div>
 
-                  <Link
-                    to={`/events/${eventId}`}
-                    className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-bold text-xs transition-colors flex items-center gap-1.5"
-                  >
-                    <Eye className="w-4 h-4" /> View Public Page
-                  </Link>
+                  <div className="flex gap-2">
+                    {convexUserId && (
+                      <button
+                        onClick={() => setShowOpsDashboard(!showOpsDashboard)}
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Settings className="w-4 h-4" /> {showOpsDashboard ? 'Hide Ops Console' : 'Launch Ops Console'}
+                      </button>
+                    )}
+                    <Link
+                      to={`/events/${eventId}`}
+                      className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-bold text-xs transition-colors flex items-center gap-1.5"
+                    >
+                      <Eye className="w-4 h-4" /> View Public Page
+                    </Link>
+                  </div>
                 </div>
 
                 {/* Status Transition Control Panel */}
@@ -151,6 +165,20 @@ export default function ManageEvent() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Embedded Ops Console */}
+            {showOpsDashboard && convexUserId && (
+              <TournamentOperationsDashboard
+                eventId={eventId}
+                currentUserId={convexUserId as Id<"users">}
+                onClose={() => setShowOpsDashboard(false)}
+              />
+            )}
+
+            {/* COMPETITION ENGINE COMPONENT */}
+            <div className="bg-white md:rounded-[2rem] border-y md:border border-zinc-200 shadow-sm p-6 md:p-8">
+              <CompetitionManager eventId={eventId} isRegistrationClosed={event.status === 'Registration Closed' || event.status === 'Completed'} />
             </div>
 
             {/* Registrations Management */}
