@@ -7,9 +7,10 @@ import StandingsView from './StandingsView';
 import { Loader2, Play, Trophy, Users, RefreshCw, Calendar, Clock, CheckCircle2, AlertTriangle, Settings, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-export default function CompetitionManager({ eventId }: { eventId: Id<"events"> }) {
+export default function CompetitionManager({ eventId, isRegistrationClosed }: { eventId: Id<"events">; isRegistrationClosed?: boolean }) {
   const competition = useQuery(api.competitions.getCompetition, { eventId });
   const event = useQuery(api.events.getEvent, { eventId });
+  const registeredTeams = useQuery(api.events.getEventTeams, { eventId });
 
   const generateSingleElimination = useMutation(api.competitions.generateSingleElimination);
   const generateGroupStageKnockout = useMutation(api.competitions.generateGroupStageKnockout);
@@ -50,7 +51,8 @@ export default function CompetitionManager({ eventId }: { eventId: Id<"events"> 
         })
       );
     } catch (err: any) {
-      setError(err.message || "Failed to generate competition.");
+      const msg = err.message || "Failed to generate competition.";
+      setError(msg.includes("ConvexError") || msg.includes("Uncaught Error") ? msg.split(":")[1]?.trim() || msg : msg);
     } finally {
       setIsGenerating(false);
     }

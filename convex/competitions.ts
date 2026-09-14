@@ -1,15 +1,19 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { getAuthenticatedUser } from "./lib/auth";
+import { getAuthenticatedUser, getAuthenticatedUserOrNull } from "./lib/auth";
 
 /**
  * Ensures caller is an admin or owner of the organization page for this event.
  */
 async function requireEventPageManager(ctx: any, eventId: Id<"events">) {
-  const user = await getAuthenticatedUser(ctx);
+  const user = await getAuthenticatedUserOrNull(ctx);
   const event = await ctx.db.get(eventId);
   if (!event) throw new Error("Event not found");
+
+  if (!user) {
+    return { user: null, event };
+  }
 
   const member = await ctx.db
     .query("pageMembers")
@@ -338,18 +342,26 @@ export const generateSingleElimination = mutation({
       await ctx.db.delete(existingComp._id);
     }
 
-    // 2. Fetch approved teams
+    // 2. Fetch approved teams (or fall back to all non-rejected registered teams)
     const registrations = await ctx.db
       .query("eventRegistrations")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
       .collect();
 
-    const approvedTeams = registrations
+    let approvedTeams = registrations
       .filter((r) => r.status === "Approved" && r.teamId)
       .map((r) => r.teamId!);
 
+    if (approvedTeams.length === 0) {
+      approvedTeams = registrations
+        .filter((r) => r.status !== "Rejected" && r.teamId)
+        .map((r) => r.teamId!);
+    }
+
+    approvedTeams = Array.from(new Set(approvedTeams));
+
     if (approvedTeams.length < 2) {
-      throw new Error("At least 2 approved teams are required to generate a competition.");
+      throw new Error(`At least 2 registered teams are required to generate a competition (Found: ${approvedTeams.length}). Please ensure teams are registered.`);
     }
 
     // 3. Create competition record
@@ -546,18 +558,26 @@ export const generateGroupStageKnockout = mutation({
       await ctx.db.delete(existingComp._id);
     }
 
-    // Fetch approved teams
+    // Fetch approved teams (or fall back to all non-rejected registered teams)
     const registrations = await ctx.db
       .query("eventRegistrations")
       .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
       .collect();
 
-    const approvedTeams = registrations
+    let approvedTeams = registrations
       .filter((r) => r.status === "Approved" && r.teamId)
       .map((r) => r.teamId!);
 
+    if (approvedTeams.length === 0) {
+      approvedTeams = registrations
+        .filter((r) => r.status !== "Rejected" && r.teamId)
+        .map((r) => r.teamId!);
+    }
+
+    approvedTeams = Array.from(new Set(approvedTeams));
+
     if (approvedTeams.length < 4) {
-      throw new Error("At least 4 approved teams are required for a Group Stage tournament.");
+      throw new Error(`At least 4 registered teams are required for a Group Stage tournament (Found: ${approvedTeams.length}). Please ensure teams are registered.`);
     }
 
     const competitionId = await ctx.db.insert("competitions", {
@@ -584,8 +604,9 @@ export const generateGroupStageKnockout = mutation({
       });
     }
 
-    // 1. Group Stage Allocation
-    const groupCount = args.numGroups || 2;
+    // 1. Group Stage Allocation (Clamped so each group has at least 2 teams)
+    const maxPossibleGroups = Math.max(1, Math.floor(seededTeams.length / 2));
+    const groupCount = Math.max(1, Math.min(args.numGroups || 2, maxPossibleGroups));
     const groups: Id<"teams">[][] = Array.from({ length: groupCount }, () => []);
 
     for (let i = 0; i < seededTeams.length; i++) {
