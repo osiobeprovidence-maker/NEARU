@@ -276,9 +276,11 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   const deleteCommentMut = useMutation(api.rallies.deleteComment);
   const deleteRallyMut  = useMutation(api.rallies.deleteRally);
 
+  const [commentPage, setCommentPage] = useState(0);
+
   const comments = useQuery(
     api.rallies.getComments,
-    showComments ? { rallyId: post.id as any } : 'skip'
+    (post.commentsCount && post.commentsCount > 0) || showComments ? { rallyId: post.id as any } : 'skip'
   );
 
   const isPagePost = post.authorType === 'page' && !!post.pageAuthor;
@@ -1024,7 +1026,59 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
         )}
       </div>
 
-      {/* ── COMMENTS PANEL ─────────────────────────────────────────────── */}
+      {/* ── COMMENTS SUMMARY ──────────────────────────────────────────── */}
+      {!showComments && post.commentsCount > 0 && comments && comments.length > 0 && (
+        <div className="mt-3 text-sm text-zinc-600 bg-zinc-50/50 p-3 rounded-xl border border-zinc-100/80">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold text-zinc-800 text-xs tracking-wide uppercase">
+              Comments ({post.commentsCount})
+            </span>
+            <div className="flex gap-2 items-center">
+              {comments.length > 2 && (
+                <div className="flex gap-1">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setCommentPage(Math.max(0, commentPage - 1)); }}
+                    disabled={commentPage === 0}
+                    className="p-1 rounded bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-800 disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setCommentPage(Math.min(Math.ceil(comments.length / 2) - 1, commentPage + 1)); }}
+                    disabled={commentPage >= Math.ceil(comments.length / 2) - 1}
+                    className="p-1 rounded bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-800 disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            {comments.slice(commentPage * 2, commentPage * 2 + 2).map((c: any) => (
+              <div key={c._id} className="flex gap-2">
+                <Avatar src={c.user?.avatar} name={c.user?.name} size="xs" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs">
+                    <span className="font-bold text-zinc-900 mr-1">{c.user?.name || 'User'}</span>
+                    <span className="text-zinc-600 truncate">{c.text}</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <button 
+            onClick={(e) => { e.stopPropagation(); setShowComments(true); }} 
+            className="text-zinc-400 font-medium hover:text-indigo-600 hover:underline text-[11px] mt-2 block"
+          >
+            View all {post.commentsCount} comments
+          </button>
+        </div>
+      )}
+
+      {/* ── FULL COMMENTS PANEL ─────────────────────────────────────────────── */}
       {showComments && (
         <div
           className="mt-3 pt-3 border-t border-zinc-100 space-y-4"
