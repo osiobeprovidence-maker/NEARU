@@ -186,15 +186,31 @@ export const getMyRegisteredEvents = query({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const registrations = await ctx.db
-      .query("eventRegistrations")
-      .withIndex("by_user", (q) => q.eq("registeredBy", args.userId))
+    const memberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
     const events = await Promise.all(
-      registrations.map(async (reg) => {
-        const event = await ctx.db.get(reg.eventId);
-        return event ? { ...event, registrationStatus: reg.status } : null;
+      memberships.map(async (m) => {
+        const team = await ctx.db.get(m.teamId);
+        if (!team) return null;
+
+        const event = await ctx.db.get(team.eventId);
+        if (!event) return null;
+
+        const registration = await ctx.db
+          .query("eventRegistrations")
+          .withIndex("by_team", (q) => q.eq("teamId", team._id))
+          .first();
+
+        return {
+          ...event,
+          team,
+          playerRole: m.role,
+          registrationStatus: registration?.status || "Pending",
+          registeredAt: registration?.registeredAt,
+        };
       })
     );
 
