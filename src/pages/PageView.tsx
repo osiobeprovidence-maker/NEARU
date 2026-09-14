@@ -26,6 +26,7 @@ import {
   X,
   Upload,
   Camera,
+  Info,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Rally } from '../types';
@@ -596,6 +597,40 @@ export default function PageView() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Mobile Bottom Tabs */}
+      <div className="md:hidden fixed bottom-[60px] left-0 right-0 bg-white border-t border-zinc-100 flex justify-around items-center px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.02)] z-30">
+        <button
+          onClick={() => setActiveTab('posts')}
+          className={cn(
+            "flex flex-col items-center gap-1 p-2 transition-colors",
+            activeTab === 'posts' ? "text-indigo-600" : "text-zinc-500"
+          )}
+        >
+          <FileText className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Posts</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('events')}
+          className={cn(
+            "flex flex-col items-center gap-1 p-2 transition-colors",
+            activeTab === 'events' ? "text-indigo-600" : "text-zinc-500"
+          )}
+        >
+          <Calendar className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Events</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('about')}
+          className={cn(
+            "flex flex-col items-center gap-1 p-2 transition-colors",
+            activeTab === 'about' ? "text-indigo-600" : "text-zinc-500"
+          )}
+        >
+          <Info className="w-5 h-5" />
+          <span className="text-[10px] font-bold">About</span>
+        </button>
       </div>
 
       {/* Post Creation Modal pre-configured to post as this Page */}
